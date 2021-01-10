@@ -1,0 +1,43 @@
+version: "3"
+services:
+  # nginx
+  nginx:
+    hostname: raspberry
+    container_name: nginx
+    image: library/nginx:1.19-alpine
+    restart: unless-stopped
+    ports:
+      - 8080:80 # TODO expose port 80 once host based apache2 is stopped
+      - 444:443 # TODO expose port 443 once host based apache2 is stopped
+      - 8081:8081 # iobroker
+    volumes:
+      - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
+      - /etc/docker/infrastructure/nginx/:/etc/nginx/:ro
+      - /etc/docker/infrastructure/nginx/raspi.crt:/etc/nginx/raspi.crt:ro
+      - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
+    networks:
+      - nginx
+      - default
+  # portainer
+  portainer:
+    hostname: portainer
+    container_name: portainer
+    image: portainer/portainer:1.24.1-alpine
+    restart: unless-stopped
+    ports:
+      - 8000:8000
+      - 9000:9000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/docker/infrastructure/portainer/data:/data
+    networks:
+      - nginx
+      - default
+  # autoheal (?)
+  #autoheal:
+networks:
+  nginx:
+    external:
+      name: nginx
+  default:
+    driver: bridge
