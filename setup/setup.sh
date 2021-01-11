@@ -17,7 +17,7 @@ cp -R ./nginx /etc/docker/infrastructure
 find /etc/docker/infrastructure -type f -exec chmod 600 -- {} +
 
 # self signed SSL certs
-DOMAIN_NAME=raspi
+DOMAIN_NAME=raspi.home
 CERT_FILE=/etc/docker/infrastructure/nginx/$DOMAIN_NAME.crt
 KEY_FILE=/etc/docker/infrastructure/nginx/$DOMAIN_NAME.key
 if [ ! -f "$CERT_FILE" ]; then
