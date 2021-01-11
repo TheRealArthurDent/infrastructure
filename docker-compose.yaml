@@ -7,8 +7,8 @@ services:
     image: library/nginx:1.19-alpine
     restart: unless-stopped
     ports:
-      - 8080:80 # TODO expose port 80 once host based apache2 is stopped
-      - 444:443 # TODO expose port 443 once host based apache2 is stopped
+      - 80:80
+      - 443:443
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
       - /etc/docker/infrastructure/nginx/:/etc/nginx/:ro
