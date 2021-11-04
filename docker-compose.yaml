@@ -34,7 +34,6 @@ services:
   #autoheal:
 networks:
   nginx:
-    external:
-      name: nginx
+    name: nginx
   default:
     driver: bridge
