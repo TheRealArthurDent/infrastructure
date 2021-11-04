@@ -4,14 +4,15 @@ services:
   nginx:
     hostname: raspberry
     container_name: nginx
-    image: library/nginx:1.19-alpine
+    image: library/nginx:1.21-alpine
     restart: unless-stopped
     ports:
-      - 80:80
-      - 443:443
+      - "80:80"
+      - "443:443"
+      - "53:53/udp"
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
-      - /etc/docker/infrastructure/nginx/:/etc/nginx/:ro
+      - /etc/docker/infrastructure/nginx:/etc/nginx:ro
       - /etc/docker/infrastructure/nginx/raspi.crt:/etc/nginx/raspi.crt:ro
       - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
     networks:
@@ -21,7 +22,7 @@ services:
   portainer:
     hostname: portainer
     container_name: portainer
-    image: portainer/portainer:1.24.1-alpine
+    image: portainer/portainer-ce:2.9.2-alpine
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

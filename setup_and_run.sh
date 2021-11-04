@@ -3,7 +3,7 @@
 cd setup
 bash setup.sh
 if [ -z "$WSL_DISTRO_NAME" ]; then
-  sed -i -e 's/raspi[.]home/localhost/g' /etc/docker/infrastructure/nginx/nginx.conf
+  sed -i -e 's/raspi\.\*/localhost/g' /etc/docker/infrastructure/nginx/nginx.conf
 fi
 
 cd ..

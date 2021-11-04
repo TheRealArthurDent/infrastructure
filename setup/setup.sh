@@ -17,12 +17,12 @@ cp -R ./nginx /etc/docker/infrastructure
 find /etc/docker/infrastructure -type f -exec chmod 600 -- {} +
 
 # self signed SSL certs
-DOMAIN_NAME=raspi.home
+DOMAIN_NAME=raspi
 CERT_FILE=/etc/docker/infrastructure/nginx/$DOMAIN_NAME.crt
 KEY_FILE=/etc/docker/infrastructure/nginx/$DOMAIN_NAME.key
 if [ ! -f "$CERT_FILE" ]; then
-  read -n 1 -rp "No SSL certificate file has been found. Create new cert file? [Y/n]: " create
-  echo
+  #read -n 1 -rp "No SSL certificate file has been found. Create new cert file? [Y/n]: " create
+  #echo
   if [ "$create" == "n" ]; then
     echo "No certificate files will be created."
   else
