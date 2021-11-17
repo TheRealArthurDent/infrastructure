@@ -9,7 +9,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "53:53/udp"
+      #- "53:53/tcp"
+      #- "53:53/udp"
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
       - /etc/docker/infrastructure/nginx:/etc/nginx:ro
@@ -18,6 +19,7 @@ services:
     networks:
       - nginx
       - default
+      - siz
   # portainer
   portainer:
     hostname: portainer
@@ -28,12 +30,73 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/docker/infrastructure/portainer/data:/data
     networks:
-      - nginx
-      - default
+      - default # replace with outbound if needed?
+      - siz
   # autoheal (?)
   #autoheal:
+  # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+  pihole:
+    hostname: pihole
+    container_name: pihole
+    image: pihole/pihole:2021.10.1
+    ports:
+      - "8080:80"
+      - "53:53/tcp"
+      - "53:53/udp"
+    env_file:
+      - /etc/docker/infrastructure/.env
+    environment:
+      TZ: 'Europe/Berlin'
+      PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
+      DNSSEC: 'true'
+    # Volumes store your data between container upgrades
+    volumes:
+      - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
+      - /etc/docker/infrastructure/pihole/dnsmasq.d:/etc/dnsmasq.d
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    #cap_add:
+    #  - NET_ADMIN
+    restart: unless-stopped
+    networks:
+      siz:
+        ipv4_address: 172.30.2.53
+      default: {} # replace with outbound if needed
+    dns:
+      - 127.0.0.1
+      - 9.9.9.9
+#  pihole_outbound:
+#    hostname: pihole_outbound
+#    container_name: pihole_outbound
+#    image: pihole/pihole:2021.10.1
+#    env_file:
+#      - /etc/docker/infrastructure/.outbound.env
+#    environment:
+#      TZ: 'Europe/Berlin'
+#      PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
+#      DNSSEC: 'true'
+#    # Volumes store your data between container upgrades
+#    volumes:
+#      - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
+#      - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d:/etc/dnsmasq.d
+#      - /var/run/docker.sock:/var/run/docker.sock
+#    # Recommended but not required (DHCP needs NET_ADMIN)
+#    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+#    #cap_add:
+#    #  - NET_ADMIN
+#    restart: unless-stopped
+#    networks:
+#      - outbound
+#      - siz
+#    dns:
+#      - 127.0.0.1
+#      - 9.9.9.9
 networks:
   nginx:
     name: nginx
+  siz:
+    name: siz
+    external: true
   default:
     driver: bridge

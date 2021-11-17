@@ -1,9 +1,22 @@
 #!/bin/bash
 
 # global
-mkdir -p /etc/docker/infrastructure
-cp .env /etc/docker/infrastructure/.env
-chmod 600 /etc/docker/infrastructure/.env
+export ARTIFACT=infrastructure
+export ENV_FOLDER=/etc/docker/$ARTIFACT
+export ENV_FILE=$ENV_FOLDER/.env
+
+if [ "$1" == "local" ]; then
+  mkdir -p $ENV_FOLDER
+  cp .env $ENV_FILE
+  chmod 600 $ENV_FILE
+  #cp .outbound.env $ENV_FOLDER/.outbound.env
+  #chmod 600 $ENV_FOLDER/.outbound.env
+else
+  if [ ! -f "$ENV_FILE" ]; then
+    echo "WARNING: Global env file $ENV_FILE does not exist. Installation will not work."
+    exit 1
+  fi
+fi
 
 # Get some decent Diffie-Hellman keys https://weakdh.org/
 DH_PARAM_FILE=/etc/ssl/certs/dhparam.pem
@@ -13,13 +26,13 @@ if [ ! -f "$DH_PARAM_FILE" ]; then
 fi
 
 # nginx
-cp -R ./nginx /etc/docker/infrastructure
-find /etc/docker/infrastructure -type f -exec chmod 600 -- {} +
+cp -R ./nginx $ENV_FOLDER
+find $ENV_FOLDER/nginx -type f -exec chmod 600 -- {} +
 
 # self signed SSL certs
 DOMAIN_NAME=raspi
-CERT_FILE=/etc/docker/infrastructure/nginx/$DOMAIN_NAME.crt
-KEY_FILE=/etc/docker/infrastructure/nginx/$DOMAIN_NAME.key
+CERT_FILE=$ENV_FOLDER/nginx/$DOMAIN_NAME.crt
+KEY_FILE=$ENV_FOLDER/nginx/$DOMAIN_NAME.key
 if [ ! -f "$CERT_FILE" ]; then
   #read -n 1 -rp "No SSL certificate file has been found. Create new cert file? [Y/n]: " create
   #echo
@@ -30,4 +43,10 @@ if [ ! -f "$CERT_FILE" ]; then
   fi
 fi
 
-mkdir -p /etc/docker/infrastructure/portainer/data
+# portainer
+mkdir -p $ENV_FOLDER/portainer/data
+
+# pihole
+mkdir -p $ENV_FOLDER/pihole/{pihole,dnsmasq.d}
+find ./pihole -type f -exec chmod 644 -- {} +
+cp -R ./pihole $ENV_FOLDER
