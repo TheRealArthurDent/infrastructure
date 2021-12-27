@@ -30,7 +30,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/docker/infrastructure/portainer/data:/data
     networks:
-      - default # replace with outbound if needed?
+      #- default # replace with outbound if needed?
       - siz
   # autoheal (?)
   #autoheal:
