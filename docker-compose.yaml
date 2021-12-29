@@ -14,7 +14,7 @@ services:
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
       - /etc/docker/infrastructure/nginx:/etc/nginx:ro
-      - /etc/docker/infrastructure/nginx/raspi.crt:/etc/nginx/raspi.crt:ro
+      - /etc/docker/infrastructure/nginx/raspi.pem:/etc/nginx/raspi.pem:ro
       - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
     networks:
       - nginx
