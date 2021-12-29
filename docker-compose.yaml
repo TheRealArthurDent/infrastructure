@@ -1,39 +1,101 @@
-version: "3"
+version: "3.7"
 services:
   # nginx
   nginx:
     hostname: raspberry
     container_name: nginx
-    image: library/nginx:1.19-alpine
+    image: library/nginx:1.21-alpine
     restart: unless-stopped
     ports:
-      - 8080:80 # TODO expose port 80 once host based apache2 is stopped
-      - 444:443 # TODO expose port 443 once host based apache2 is stopped
+      - "80:80"
+      - "443:443"
+      #- "53:53/tcp"
+      #- "53:53/udp"
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
-      - /etc/docker/infrastructure/nginx/:/etc/nginx/:ro
-      - /etc/docker/infrastructure/nginx/raspi.crt:/etc/nginx/raspi.crt:ro
+      - /etc/docker/infrastructure/nginx:/etc/nginx:ro
+      - /etc/docker/infrastructure/nginx/raspi.pem:/etc/nginx/raspi.pem:ro
       - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
     networks:
       - nginx
       - default
+      - siz
   # portainer
   portainer:
     hostname: portainer
     container_name: portainer
-    image: portainer/portainer:1.24.1-alpine
+    image: portainer/portainer-ce:2.11.0-alpine
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/docker/infrastructure/portainer/data:/data
     networks:
-      - nginx
-      - default
+      #- default # replace with outbound if needed?
+      - siz
   # autoheal (?)
   #autoheal:
+  # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+  pihole:
+    hostname: pihole
+    container_name: pihole
+    image: pihole/pihole:2021.12.1
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    env_file:
+      - /etc/docker/infrastructure/.env
+    environment:
+      TZ: 'Europe/Berlin'
+      PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
+      DNSSEC: 'true'
+    # Volumes store your data between container upgrades
+    volumes:
+      - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
+      - /etc/docker/infrastructure/pihole/dnsmasq.d:/etc/dnsmasq.d
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    #cap_add:
+    #  - NET_ADMIN
+    restart: unless-stopped
+    networks:
+      siz:
+        ipv4_address: 172.30.2.53
+      default: {} # replace with outbound if needed
+    dns:
+      - 127.0.0.1
+      - 9.9.9.9
+#  pihole_outbound:
+#    hostname: pihole_outbound
+#    container_name: pihole_outbound
+#    image: pihole/pihole:2021.10.1
+#    env_file:
+#      - /etc/docker/infrastructure/.outbound.env
+#    environment:
+#      TZ: 'Europe/Berlin'
+#      PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
+#      DNSSEC: 'true'
+#    # Volumes store your data between container upgrades
+#    volumes:
+#      - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
+#      - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d:/etc/dnsmasq.d
+#      - /var/run/docker.sock:/var/run/docker.sock
+#    # Recommended but not required (DHCP needs NET_ADMIN)
+#    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+#    #cap_add:
+#    #  - NET_ADMIN
+#    restart: unless-stopped
+#    networks:
+#      - outbound
+#      - siz
+#    dns:
+#      - 127.0.0.1
+#      - 9.9.9.9
 networks:
   nginx:
-    external:
-      name: nginx
+    name: nginx
+  siz:
+    name: siz
+    external: true
   default:
     driver: bridge
