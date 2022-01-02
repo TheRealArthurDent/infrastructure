@@ -48,6 +48,8 @@ services:
       TZ: 'Europe/Berlin'
       PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
       DNSSEC: 'true'
+    security_opt:
+      - no-new-privileges:false
     # Volumes store your data between container upgrades
     volumes:
       - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
