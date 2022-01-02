@@ -34,13 +34,15 @@ DOMAIN_NAME=raspi
 CERT_FILE=$ENV_FOLDER/nginx/$DOMAIN_NAME.pem
 KEY_FILE=$ENV_FOLDER/nginx/$DOMAIN_NAME.key
 if [ ! -f "$CERT_FILE" ]; then
-  read -n 1 -rp "No SSL certificate file has been found. Create new cert file? [Y/n]: " create
-  echo
-  if [ "$create" == "n" ]; then
-    echo "No certificate files will be created."
-  else
+  # blocks the execution when run via ssh
+  #read -n 1 -rp "No SSL certificate file has been found. Create new cert file? [Y/n]: " create
+  #echo
+  #if [ "$create" == "n" ]; then
+  #  echo "No certificate files will be created."
+  #else
+    echo "WARNING: No SSL certificate file has been found. Creating self signed certificate."
     openssl req -x509 -nodes -days 365 -subj "/C=DE/ST=BY/O=None/CN=$DOMAIN_NAME" -addext "subjectAltName=DNS:$DOMAIN_NAME" -newkey rsa:2048 -keyout $KEY_FILE -out $CERT_FILE;
-  fi
+  #fi
 fi
 
 # portainer
