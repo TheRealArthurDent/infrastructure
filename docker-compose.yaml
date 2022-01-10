@@ -46,7 +46,7 @@ services:
       - /etc/docker/infrastructure/.env
     environment:
       TZ: 'Europe/Berlin'
-      PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
+      PIHOLE_DNS_: '172.30.2.52' # unbound
       DNSSEC: 'true'
     security_opt:
       - no-new-privileges:false
@@ -66,7 +66,24 @@ services:
       default: {} # replace with outbound if needed
     dns:
       - 127.0.0.1
+      - 172.30.2.52
       - 9.9.9.9
+    depends_on:
+      - unbound
+  unbound:
+    hostname: unbound
+    container_name: unbound
+    image: klutchell/unbound:v1.14.0-r4
+    restart: unless-stopped
+    networks:
+      siz:
+        ipv4_address: 172.30.2.52
+      nginx: {}
+    dns:
+      - 127.0.0.1
+      - 9.9.9.9
+    healthcheck:
+      test: [ "CMD", "dig", "www.heise.de", "@127.0.0.1" ]
 #  pihole_outbound:
 #    hostname: pihole_outbound
 #    container_name: pihole_outbound
