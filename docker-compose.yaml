@@ -119,6 +119,7 @@ services:
         - /etc/docker/infrastructure/.watchtower.env
       environment:
         TZ: 'Europe/Berlin'
+        WATCHTOWER_NO_STARTUP_MESSAGE: 'true'
         WATCHTOWER_MONITOR_ONLY: 'true'
         WATCHTOWER_NOTIFICATIONS: 'shoutrrr'
       volumes:
