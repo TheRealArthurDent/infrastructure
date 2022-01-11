@@ -119,8 +119,8 @@ services:
         - /etc/docker/infrastructure/.watchtower.env
       environment:
         TZ: 'Europe/Berlin'
-        WATCHTOWER_MONITOR_ONLY: true
-        WATCHTOWER_NOTIFICATIONS: shoutrrr
+        WATCHTOWER_MONITOR_ONLY: 'true'
+        WATCHTOWER_NOTIFICATIONS: 'shoutrrr'
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
       restart: unless-stopped
