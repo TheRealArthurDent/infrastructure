@@ -112,22 +112,34 @@ services:
 #      - 9.9.9.9
   # Monitoring
   watchtower:
-      hostname: watchtower
-      container_name: watchtower
-      image: containrrr/watchtower:1.3.0
-      env_file:
-        - /etc/docker/infrastructure/.watchtower.env
-      environment:
-        TZ: 'Europe/Berlin'
-        WATCHTOWER_NO_STARTUP_MESSAGE: 'true'
-        WATCHTOWER_MONITOR_ONLY: 'true'
-        WATCHTOWER_NOTIFICATIONS: 'shoutrrr'
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-      restart: unless-stopped
-      networks:
-        - siz
-        - default
+    hostname: watchtower
+    container_name: watchtower
+    image: containrrr/watchtower:1.3.0
+    env_file:
+      - /etc/docker/infrastructure/.watchtower.env
+    environment:
+      TZ: 'Europe/Berlin'
+      WATCHTOWER_NO_STARTUP_MESSAGE: 'true'
+      WATCHTOWER_MONITOR_ONLY: 'true'
+      WATCHTOWER_NOTIFICATIONS: 'shoutrrr'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - siz
+      - default
+  healthmonitor:
+    hostname: healthmonitor
+    container_name: healthmonitor
+    image: ghcr.io/rafhaanshah/container-mon:latest
+    env_file:
+      - /etc/docker/infrastructure/.healthmonitor.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - siz
+      - default
 networks:
   nginx:
     name: nginx
