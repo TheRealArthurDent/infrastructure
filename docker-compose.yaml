@@ -4,7 +4,7 @@ services:
   nginx:
     hostname: raspberry
     container_name: nginx
-    image: library/nginx:1.21-alpine
+    image: nginx:1.21-alpine
     restart: unless-stopped
     ports:
       - "80:80"
@@ -110,6 +110,24 @@ services:
 #    dns:
 #      - 127.0.0.1
 #      - 9.9.9.9
+  # Monitoring
+  watchtower:
+      hostname: watchtower
+      container_name: watchtower
+      image: containrrr/watchtower:1.3.0
+      env_file:
+        - /etc/docker/infrastructure/.watchtower.env
+      environment:
+        TZ: 'Europe/Berlin'
+        WATCHTOWER_NO_STARTUP_MESSAGE: 'true'
+        WATCHTOWER_MONITOR_ONLY: 'true'
+        WATCHTOWER_NOTIFICATIONS: 'shoutrrr'
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      restart: unless-stopped
+      networks:
+        - siz
+        - default
 networks:
   nginx:
     name: nginx
