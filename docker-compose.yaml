@@ -4,7 +4,7 @@ services:
   nginx:
     hostname: raspberry
     container_name: nginx
-    image: library/nginx:1.21-alpine
+    image: nginx:1.21-alpine
     restart: unless-stopped
     ports:
       - "80:80"
