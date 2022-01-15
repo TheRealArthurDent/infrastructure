@@ -20,6 +20,8 @@ services:
       - nginx
       - default
       - siz
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost/index.html" ]
   # portainer
   portainer:
     hostname: portainer
@@ -32,6 +34,8 @@ services:
     networks:
       #- default # replace with outbound if needed?
       - siz
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "--no-check-certificate", "http://localhost:9000" ]
   # autoheal (?)
   #autoheal:
   # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
