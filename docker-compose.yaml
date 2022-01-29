@@ -107,8 +107,9 @@ services:
 #    #  - NET_ADMIN
     restart: unless-stopped
     networks:
-      - outbound
-      - siz
+      outbound:
+        ipv4_address: 172.30.1.153
+      siz: {}
     dns:
       - 127.0.0.1
       - 172.30.2.52
