@@ -8,6 +8,11 @@ if [ -f "$ENV_FILE" ]; then
       #docker network create --subnet 172.30.2.0/24 --ip-range 172.30.2.128/25 --internal siz
       docker network create --subnet 172.30.2.0/24 --internal siz
     fi
+    networkid=$(docker network ls -q -f 'name=outbound')
+    if [ -z "$networkid" ]; then
+      echo 'Network "outbound" does not exist. Creating it now...'
+      docker network create --subnet 172.30.1.128/25 --ip-range 172.30.1.192/26 outbound
+    fi
     docker-compose up -d
 else
     echo "$ENV_FILE does not exist."

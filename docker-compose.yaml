@@ -88,32 +88,38 @@ services:
       - 9.9.9.9
     healthcheck:
       test: [ "CMD", "dig", "www.heise.de", "@127.0.0.1" ]
-#  pihole_outbound:
-#    hostname: pihole_outbound
-#    container_name: pihole_outbound
-#    image: pihole/pihole:2021.10.1
-#    env_file:
-#      - /etc/docker/infrastructure/.outbound.env
-#    environment:
-#      TZ: 'Europe/Berlin'
-#      PIHOLE_DNS_: '9.9.9.9;149.112.112.112;2620:fe::fe;2620:fe::9' # Quad9
-#      DNSSEC: 'true'
-#    # Volumes store your data between container upgrades
-#    volumes:
-#      - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
-#      - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d:/etc/dnsmasq.d
-#      - /var/run/docker.sock:/var/run/docker.sock
+  outbound:
+    hostname: outbound
+    container_name: outbound
+    image: pihole/pihole:2022.01.1
+    env_file:
+      - /etc/docker/infrastructure/.outbound.env
+    environment:
+      TZ: 'Europe/Berlin'
+      PIHOLE_DNS_: '172.30.2.52' # unbound
+      DNSSEC: 'true'
+    security_opt:
+      - no-new-privileges:false
+    # Volumes store your data between container upgrades
+    volumes:
+      - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
+      - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d:/etc/dnsmasq.d
+      - /var/run/docker.sock:/var/run/docker.sock
 #    # Recommended but not required (DHCP needs NET_ADMIN)
 #    #   https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
 #    #cap_add:
 #    #  - NET_ADMIN
-#    restart: unless-stopped
-#    networks:
-#      - outbound
-#      - siz
-#    dns:
-#      - 127.0.0.1
-#      - 9.9.9.9
+    restart: unless-stopped
+    networks:
+      outbound:
+        ipv4_address: 172.30.1.153
+      siz: {}
+    dns:
+      - 127.0.0.1
+      - 172.30.2.52
+      - 9.9.9.9
+    depends_on:
+      - unbound
   # Monitoring
   watchtower:
     hostname: watchtower
@@ -149,6 +155,9 @@ networks:
     name: nginx
   siz:
     name: siz
+    external: true
+  outbound:
+    name: outbound
     external: true
   default:
     driver: bridge
