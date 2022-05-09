@@ -9,7 +9,6 @@ TARGET_FOLDER=dev/$ARTIFACT
 ssh pi@raspi -p 1357 'mkdir -p ~/dev/infrastructure'
 
 (
-  cd .. || exit
   tar -cf install.tar docker-compose.yaml run.sh setup
   scp -P 1357 install.tar pi@raspi:$TARGET_FOLDER
   rm install.tar
