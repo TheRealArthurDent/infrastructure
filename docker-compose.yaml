@@ -4,7 +4,7 @@ services:
   nginx:
     hostname: raspberry
     container_name: nginx
-    image: nginx:1.21-alpine
+    image: nginx:1.22-alpine
     pull_policy: always
     restart: unless-stopped
     ports:
@@ -26,7 +26,7 @@ services:
     labels:
       diun.watch_repo: 'true'
       diun.include_tags: '^[0-9]+\.[0-9]+-alpine$$'
-      diun.exclude_tags: '.*-perl;1.12-alpine' # there is no armv7 version of 1.12-alpine for what ever reason.
+      diun.exclude_tags: '.*-perl;^[0-1].([01][0-9]|20|21)-alpine$$'
   # portainer
   portainer:
     hostname: portainer
@@ -109,7 +109,7 @@ services:
   outbound:
     hostname: outbound
     container_name: outbound
-    image: pihole/pihole:2022.04.2
+    image: pihole/pihole:2022.05
     pull_policy: always
     env_file:
       - /etc/docker/infrastructure/.outbound.env
