@@ -30,7 +30,7 @@ cp -R ./nginx $ENV_FOLDER
 find $ENV_FOLDER/nginx -type f -exec chmod 600 -- {} +
 
 # self signed SSL certs
-DOMAIN_NAME=raspi
+DOMAIN_NAME=$HOSTNAME
 CERT_FILE=$ENV_FOLDER/nginx/$DOMAIN_NAME.pem
 KEY_FILE=$ENV_FOLDER/nginx/$DOMAIN_NAME.key
 if [ ! -f "$CERT_FILE" ]; then
