@@ -51,7 +51,7 @@ services:
   pihole:
     hostname: pihole
     container_name: pihole
-    image: pihole/pihole:2022.05
+    image: pihole/pihole:2022.07
     #pull_policy: always
     ports:
       - "53:53/tcp"
@@ -109,7 +109,7 @@ services:
   outbound:
     hostname: outbound
     container_name: outbound
-    image: pihole/pihole:2022.05
+    image: pihole/pihole:2022.07
     #pull_policy: always
     env_file:
       - /etc/docker/infrastructure/.outbound.env
