@@ -165,21 +165,21 @@ services:
     labels:
       diun.watch_repo: 'true'
       diun.include_tags: '^[0-9]$$'
-##  healthmonitor:
-##    hostname: healthmonitor
-##    container_name: healthmonitor
-##    image: ghcr.io/rafhaanshah/container-mon:latest
-##    #pull_policy: always
-##    env_file:
-##      - /etc/docker/infrastructure/.healthmonitor.env
-##    volumes:
-##      - /var/run/docker.sock:/var/run/docker.sock
-##    restart: unless-stopped
-##    networks:
-##      - siz
-##      - outbound # internet
-##    dns:
-##      - 172.30.1.153
+  healthmonitor:
+    hostname: healthmonitor
+    container_name: healthmonitor
+    #image: ghcr.io/rafhaanshah/container-mon:latest # no arm image provided
+    build: github.com/RafhaanShah/Container-Mon
+    env_file:
+      - /etc/docker/infrastructure/.healthmonitor.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - siz
+      - outbound # internet
+    dns:
+      - 172.30.1.153
 volumes:
   diun-storage:
 networks:
