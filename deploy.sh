@@ -1,4 +1,5 @@
 #!/bin/bash
+set +x
 
 ARTIFACT=infrastructure
 DEFAULT_TARGET="raspi"
@@ -34,11 +35,14 @@ echo "Deploying $ARTIFACT to $TARGET..."
 
 TARGET_FOLDER=dev/$ARTIFACT
 
-ssh $USER@$TARGET -p $PORT 'mkdir -p ~/dev/infrastructure'
+ssh $USER@$TARGET -p $PORT 'mkdir -p ~/dev/$ARTIFACT'
+
+echo "Deleting old tmp folders"
+find /tmp -type d -regextype egrep -iregex /tmp/$ARTIFACT-[a-z0-9]+ -mtime +30 -exec rm -rf {} + 2>/dev/null
 
 (
-  tmp_dir=$(mktemp -d -t infrastructure-XXXXXXXXXX)
-  echo "$tmp_dir"
+  tmp_dir=$(mktemp -d -t $ARTIFACT-XXXXXXXXXX)
+  echo "Created new tmp folder $tmp_dir"
   cp docker-compose.yaml  $tmp_dir
   cp run.sh               $tmp_dir
   cp -r setup             $tmp_dir
