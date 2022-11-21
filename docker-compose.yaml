@@ -31,7 +31,7 @@ services:
   portainer:
     hostname: portainer
     container_name: portainer
-    image: portainer/portainer-ce:2.16.1-alpine
+    image: portainer/portainer-ce:2.16.2-alpine
     #pull_policy: always
     restart: unless-stopped
     volumes:
