@@ -38,7 +38,7 @@ TARGET_FOLDER=dev/$ARTIFACT
 ssh $USER@$TARGET -p $PORT 'mkdir -p ~/dev/$ARTIFACT'
 
 echo "Deleting old tmp folders"
-find /tmp -type d -regextype egrep -iregex /tmp/$ARTIFACT-[a-z0-9]+ -mtime +30 -exec rm -rf {} + 2>/dev/null
+find /tmp -type d -regextype egrep -iregex "/tmp/$ARTIFACT-[a-z0-9]+" -mtime +30 -exec rm -rf {} + 2>/dev/null
 
 (
   tmp_dir=$(mktemp -d -t $ARTIFACT-XXXXXXXXXX)
