@@ -79,7 +79,7 @@ services:
   unbound:
     hostname: unbound
     container_name: unbound
-    image: klutchell/unbound:v1.17.0
+    image: klutchell/unbound:v1.17.1
     #pull_policy: always
     restart: unless-stopped
     networks:
