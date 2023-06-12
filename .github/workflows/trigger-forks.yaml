@@ -1,0 +1,23 @@
+name: Trigger forks
+
+on:
+  push:
+    branches: main
+  workflow_dispatch:
+
+jobs:
+  trigger-forks:
+    name: Trigger forks
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Add more forks here if applicable
+        repo: ['TheRealArthurDent/erika-infrastructure']
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch to workflows
+        run: |
+            curl -H "Accept: application/vnd.github.everest-preview+json" \
+            -H "Authorization: token ${{ secrets.DISPATCH_TOKEN }}" \
+            --request POST \
+            --data '{"event_type": "push_main", "client_payload": { "foo": "bar" }}' https://api.github.com/repos/${{ matrix.repo }}/dispatches
