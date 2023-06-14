@@ -11,4 +11,3 @@
 )
 bash run.sh
 docker restart nginx
-
