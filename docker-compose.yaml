@@ -125,10 +125,11 @@ services:
   healthmonitor:
     hostname: healthmonitor
     container_name: healthmonitor
-    #image: ghcr.io/rafhaanshah/container-mon:latest # no arm image provided
-    build: github.com/RafhaanShah/Container-Mon
+    image: ghcr.io/rafhaanshah/container-mon:v1.0.5
     env_file:
       - /etc/docker/infrastructure/.healthmonitor.env
+    environment:
+      - CONTAINERMON_CHECK_STOPPED=false
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
