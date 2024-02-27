@@ -13,8 +13,8 @@ services:
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
       - /etc/docker/infrastructure/nginx:/etc/nginx:ro
-      - /etc/docker/infrastructure/nginx/raspi.pem:/etc/nginx/raspi.pem:ro
-      - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
+      - /etc/docker/infrastructure/nginx/${HOSTNAME}.pem:/etc/nginx/${HOSTNAME}.pem:ro
+      - /etc/docker/infrastructure/nginx/${HOSTNAME}.key:/etc/nginx/${HOSTNAME}.key:ro
     networks:
       - nginx
       - siz
@@ -25,7 +25,6 @@ services:
     hostname: portainer
     container_name: portainer
     image: portainer/portainer-ce:2.19.4-alpine
-    #pull_policy: always
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -34,14 +33,11 @@ services:
       - siz
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "--no-check-certificate", "http://localhost:9000" ]
-  # autoheal (?)
-  #autoheal:
   # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
   pihole:
     hostname: pihole
     container_name: pihole
     image: pihole/pihole:2024.02.2
-    #pull_policy: always
     ports:
       - "53:53/tcp"
       - "53:53/udp"
@@ -77,7 +73,6 @@ services:
     hostname: unbound
     container_name: unbound
     image: klutchell/unbound:v1.19.1
-    #pull_policy: always
     restart: unless-stopped
     networks:
       siz:
@@ -92,7 +87,6 @@ services:
     hostname: outbound
     container_name: outbound
     image: pihole/pihole:2024.02.2
-    #pull_policy: always
     env_file:
       - /etc/docker/infrastructure/.outbound.env
     environment:
