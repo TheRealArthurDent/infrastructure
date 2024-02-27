@@ -58,6 +58,7 @@ find /tmp -type d -regextype egrep -iregex "/tmp/$ARTIFACT-[a-z0-9]+" -mtime +30
       sed -i "s/$DEFAULT_TARGET/$TARGET/g" docker-compose.yaml
     fi
     tar -cf install.tar *
+    ssh $USER@$TARGET -p $PORT "mkdir -p $TARGET_FOLDER"
     scp -P $PORT install.tar $USER@$TARGET:$TARGET_FOLDER
     ssh $USER@$TARGET -p $PORT 'cd ~/dev/infrastructure && ls && tar xf install.tar && rm install.tar && cd setup && sudo bash setup.sh && cd .. && sudo bash run.sh && echo "restarting nginx ..." && sudo docker restart nginx'
   )
