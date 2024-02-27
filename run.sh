@@ -13,8 +13,9 @@ if [ -f "$ENV_FILE" ]; then
       echo 'Network "outbound" does not exist. Creating it now...'
       docker network create --subnet 172.30.1.128/25 --ip-range 172.30.1.192/26 outbound
     fi
-    docker-compose pull
-    docker-compose up -d
+    export HOSTNAME
+    docker compose pull
+    docker compose up -d
 else
     echo "$ENV_FILE does not exist."
 fi
