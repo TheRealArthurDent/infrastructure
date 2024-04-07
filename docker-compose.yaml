@@ -37,7 +37,7 @@ services:
   pihole:
     hostname: pihole
     container_name: pihole
-    image: pihole/pihole:2024.03.1
+    image: pihole/pihole:2024.03.2
     ports:
       - "53:53/tcp"
       - "53:53/udp"
@@ -86,7 +86,7 @@ services:
   outbound:
     hostname: outbound
     container_name: outbound
-    image: pihole/pihole:2024.03.1
+    image: pihole/pihole:2024.03.2
     env_file:
       - /etc/docker/infrastructure/.outbound.env
     environment:
