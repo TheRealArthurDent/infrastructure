@@ -123,6 +123,8 @@ services:
       - /etc/docker/infrastructure/.healthmonitor.env
     environment:
       - CONTAINERMON_CHECK_STOPPED=false
+      - DOCKER_API_VERSION=1.41 # set according to the servers Docker API version
+      # run "docker version" on host to determine the matching version
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
