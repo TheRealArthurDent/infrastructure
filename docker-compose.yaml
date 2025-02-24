@@ -36,7 +36,7 @@ services:
   pihole:
     hostname: pihole
     container_name: pihole
-    image: pihole/pihole:2025.02.1
+    image: pihole/pihole:2025.02.4
     ports:
       - "53:53/tcp"
       - "53:53/udp"
@@ -44,8 +44,8 @@ services:
       - /etc/docker/infrastructure/.env
     environment:
       TZ: 'Europe/Berlin'
-      PIHOLE_DNS_: '172.30.2.52' # unbound
-      DNSSEC: 'true'
+      FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
+      FTLCONF_dns_dnssec: 'true'
     security_opt:
       - no-new-privileges:false
     # Volumes store your data between container upgrades
@@ -61,7 +61,7 @@ services:
     networks:
       siz:
         ipv4_address: 172.30.2.53
-      outbound: {} # replace with outbound if needed
+      outbound: {}  # replace with outbound if needed
     dns:
       - 127.0.0.1
       - 172.30.2.52
@@ -85,13 +85,13 @@ services:
   outbound:
     hostname: outbound
     container_name: outbound
-    image: pihole/pihole:2025.02.1
+    image: pihole/pihole:2025.02.4
     env_file:
       - /etc/docker/infrastructure/.outbound.env
     environment:
       TZ: 'Europe/Berlin'
-      PIHOLE_DNS_: '172.30.2.52' # unbound
-      DNSSEC: 'true'
+      FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
+      FTLCONF_dns_dnssec: 'true'
     security_opt:
       - no-new-privileges:false
     # Volumes store your data between container upgrades
@@ -123,14 +123,15 @@ services:
       - /etc/docker/infrastructure/.healthmonitor.env
     environment:
       - CONTAINERMON_CHECK_STOPPED=false
-      - DOCKER_API_VERSION=1.41 # set according to the servers Docker API version
-      # run "docker version" on host to determine the matching version
+      # Set according to the server's Docker API version
+      # Run "docker version" on host to determine the matching version
+      - DOCKER_API_VERSION=1.41
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
       - siz
-      - outbound # internet
+      - outbound  # internet
     dns:
       - 172.30.1.153
 networks:
