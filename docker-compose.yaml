@@ -28,6 +28,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/docker/infrastructure/portainer/data:/data
+    environment:
+      - TRUSTED_ORIGINS=portainer.raspi
     networks:
       - siz
     healthcheck:
