@@ -120,7 +120,7 @@ services:
   healthmonitor:
     hostname: healthmonitor
     container_name: healthmonitor
-    image: ghcr.io/rafhaanshah/container-mon:v1.0.5
+    image: ghcr.io/rafhaanshah/container-mon:v1.1.1
     env_file:
       - /etc/docker/infrastructure/.healthmonitor.env
     environment:
