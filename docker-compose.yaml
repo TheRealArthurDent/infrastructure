@@ -73,7 +73,7 @@ services:
   unbound:
     hostname: unbound
     container_name: unbound
-    image: klutchell/unbound:1.24.1
+    image: klutchell/unbound:1.24.2
     restart: unless-stopped
     networks:
       siz:
