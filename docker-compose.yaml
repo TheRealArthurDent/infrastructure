@@ -54,7 +54,6 @@ services:
     volumes:
       - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
       - /etc/docker/infrastructure/pihole/dnsmasq.d:/etc/dnsmasq.d
-      - /var/run/docker.sock:/var/run/docker.sock
     # Recommended but not required (DHCP needs NET_ADMIN)
     # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
     #cap_add:
@@ -100,7 +99,6 @@ services:
     volumes:
       - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
       - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d:/etc/dnsmasq.d
-      - /var/run/docker.sock:/var/run/docker.sock
     # Recommended but not required (DHCP needs NET_ADMIN)
     # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
     #cap_add:
