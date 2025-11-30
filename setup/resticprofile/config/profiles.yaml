@@ -1,0 +1,19 @@
+global:
+  scheduler: crond
+
+default:
+  password-file: /run/secrets/restic_passphrase
+  repository: sftp:restic@dungeon:./repo/raspi
+  initialize: true
+  backup:
+    source:
+      - '/source/'
+    exclude-caches: true
+    exclude-file:
+      - '/etc/resticprofile/excludes'
+    exclude-if-present: DO_NOT_BACKUP
+    one-file-system: false
+    schedule: "*-*-* 03:00:00"
+    schedule-permission: system
+    schedule-priority: background
+    check-before: true
