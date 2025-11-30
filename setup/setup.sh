@@ -21,7 +21,7 @@ fi
 # Get some decent Diffie-Hellman keys https://weakdh.org/
 DH_PARAM_FILE=/etc/ssl/certs/dhparam.pem
 if [ ! -f "$DH_PARAM_FILE" ]; then
-  "No $DH_PARAM_FILE found. Generating some decent Diffie-Hellman keys..."
+  echo "No $DH_PARAM_FILE found. Generating some decent Diffie-Hellman keys..."
   openssl dhparam -out $DH_PARAM_FILE 4096
 fi
 
