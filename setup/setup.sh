@@ -55,5 +55,5 @@ cp -R ./pihole $ENV_FOLDER
 
 # resticprofile
 mkdir -p $ENV_FOLDER/resticprofile
-find ./resticprofile -type f -exec chmod 400 -- {} +
+find ./resticprofile -type f -exec chmod 600 -- {} +
 cp -R ./resticprofile $ENV_FOLDER
