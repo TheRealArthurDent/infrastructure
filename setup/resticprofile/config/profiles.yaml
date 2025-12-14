@@ -1,19 +1,29 @@
+# yaml-language-server: $schema=https://creativeprojects.github.io/resticprofile/jsonschema/config.json
+
+version: "1"
+
 global:
   scheduler: crond
 
 default:
   password-file: /run/secrets/restic_passphrase
-  repository: sftp:restic@dungeon:./repo/raspi
+  repository: sftp:restic@dungeon:/media/backup/restic/raspi
   initialize: true
   backup:
-    source:
-      - '/source/'
+    source: '/source/'
     exclude-caches: true
-    exclude-file:
-      - '/etc/resticprofile/excludes'
+    exclude-file: '/etc/resticprofile/excludes'
     exclude-if-present: DO_NOT_BACKUP
     one-file-system: false
-    schedule: "*-*-* 03:00:00"
+    schedule: '*-*-* 03:00:00'
     schedule-permission: system
     schedule-priority: background
     check-before: true
+  forget:
+    run-after: backup
+    schedule-permission: system
+    schedule-priority: background
+    keep-within-daily: 7d12h
+    keep-within-weekly: 1m12h
+    keep-within-monthly: 1y12h
+    prune: true
