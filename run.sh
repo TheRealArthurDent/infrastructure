@@ -14,8 +14,11 @@ if [ -f "$ENV_FILE" ]; then
       docker network create --subnet 172.30.1.128/25 --ip-range 172.30.1.192/26 outbound
     fi
     export HOSTNAME
-    docker compose pull
-    docker compose up -d
+
+    nice -n 10 docker compose config --services | while read service; do
+      nice -n 10 docker compose pull "$service"
+    done
+    nice -n 10 docker compose up -d
 else
     echo "$ENV_FILE does not exist."
 fi
