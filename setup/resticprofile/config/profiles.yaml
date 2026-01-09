@@ -9,6 +9,8 @@ default:
   password-file: /run/secrets/restic_passphrase
   repository: sftp:restic@dungeon:/media/backup/restic/raspi
   initialize: true
+  status-file: backup-status.json
+  prometheus-save-to-file: backup.prom
   backup:
     source: '/source/'
     exclude-caches: true
@@ -19,6 +21,7 @@ default:
     schedule-permission: system
     schedule-priority: background
     check-before: true
+    extended-status: true
   retention:
     keep-within-daily: 7d12h
     keep-within-weekly: 1m12h
