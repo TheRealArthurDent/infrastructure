@@ -134,12 +134,13 @@ services:
       - /home:/source/home:ro
       - /etc:/source/etc:ro
       - /var/lib/docker/volumes:/source/docker-volumes:ro
+      # Prom metrics for telegraf
+      - /var/lib/resticprofile/metrics:/metrics
     restart: unless-stopped
     networks:
       - nginx
     extra_hosts:
       dungeon: '192.168.1.5'
-    #entrypoint: "sleep infinity" # just keep it running for now
     entrypoint: '/bin/sh'
     command:
       - '-c'
