@@ -23,7 +23,7 @@ services:
   portainer:
     hostname: portainer
     container_name: portainer
-    image: portainer/portainer-ce:2.37.0-alpine
+    image: portainer/portainer-ce:2.38.0-alpine
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
