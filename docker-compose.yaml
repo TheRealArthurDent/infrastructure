@@ -18,7 +18,7 @@ services:
       - nginx
       - siz
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost/index.html" ]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
   # portainer
   portainer:
     hostname: portainer
