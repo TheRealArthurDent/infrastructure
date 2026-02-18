@@ -1,0 +1,18 @@
+# Maybe somehow automate that down the road
+
+1. Set vm overcommit_memory to 1 - needed for redis
+    a >> create /etc/sysctl.d/90-overcommit-memory.conf with content:
+        ###################################################################
+        # Allow redis to use memory overcommit
+        vm.overcommit_memory = 1
+    b # Restart sysctl to apply
+      systemctl restart systemd-sysctl
+
+2. Install docker and docker-compose
+
+3. Install rsnapshot and add config file to /etc/rsnapshot.conf
+
+4. Make user smarthome a passwordless sudoer
+    a >> copy /etc/sudoers.d/smarthome to raspi:/etc/sudoers.d/smarthome
+    b >> chown root:root /etc/sudoers.d/smarthome
+    c >> chmod 440 /etc/sudoers.d/smarthome
