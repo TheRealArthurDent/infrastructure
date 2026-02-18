@@ -29,7 +29,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/docker/infrastructure/portainer/data:/data
     environment:
-      - TRUSTED_ORIGINS=portainer.raspi
+      - TRUSTED_ORIGINS=portainer.${HOSTNAME}
     networks:
       - siz
     healthcheck:
@@ -140,7 +140,7 @@ services:
     networks:
       - nginx
     extra_hosts:
-      dungeon: '192.168.1.5'
+      dungeon: "${DUNGEON_IP}"
     entrypoint: '/bin/sh'
     command:
       - '-c'
