@@ -1,3 +1,7 @@
+Set DNS resolver in Fritzbox to something else than 192.168.1.2 (e.g. 9.9.9.9)
+If only FritzBox would support alternative DNS...
+
+
 # Maybe somehow automate that down the road
 
 1. Set vm overcommit_memory to 1 - needed for redis
@@ -8,7 +12,13 @@
     b # Restart sysctl to apply
       systemctl restart systemd-sysctl
 
-2. Install docker and docker-compose
+2. Install docker
+~~~
+(as root) curl -sSL https://get.docker.com | sh
+
+sudo usermod -aG docker $USER
+sudo reboot
+~~~
 
 3. Install rsnapshot and add config file to /etc/rsnapshot.conf
 
@@ -16,3 +26,27 @@
     a >> copy /etc/sudoers.d/smarthome to raspi:/etc/sudoers.d/smarthome
     b >> chown root:root /etc/sudoers.d/smarthome
     c >> chmod 440 /etc/sudoers.d/smarthome
+
+5. Restore from remote backup
+
+from raspi:
+Login un dungeon once in order to get the known host entry
+~~~
+ssh restic@192.168.1.5 -p 1359
+~~~
+
+~~~
+sudo docker run --rm \
+  --name restic-restore \
+  --entrypoint restic \
+  --add-host=dungeon:192.168.1.5 \
+  -v /etc/docker/infrastructure/restic/.ssh:/root/.ssh \
+  -v /restore:/restore-target \
+  -e RESTIC_PASSWORD=test \
+  creativeprojects/resticprofile:latest \
+  -r sftp:restic@dungeon:/media/backup/restic/raspi \
+  --option sftp.command="ssh -p 1359 -l restic dungeon -s sftp" \
+  restore \
+  latest \
+  --target /restore-target
+~~~
