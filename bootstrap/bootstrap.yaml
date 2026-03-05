@@ -1,0 +1,24 @@
+- name: Bootstrap Raspberry Pi
+  hosts: testbed
+  become: true
+
+#  vars:
+#    kp_db: "~/secrets.kdbx"
+#    kp_password: "{{ lookup('env','KEEPASS_MASTER') }}"
+#
+#    app_password: >
+#      {{ lookup('community.general.keepass',
+#                'app-secrets password',
+#                db=kp_db,
+#                password=kp_password) }}
+#
+#    app_api_key: >
+#      {{ lookup('community.general.keepass',
+#                'app-secrets api_key',
+#                db=kp_db,
+#                password=kp_password) }}
+
+  roles:
+    - base
+    - docker
+    # - app

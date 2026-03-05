@@ -1,0 +1,46 @@
+---
+name: Ansible Lint
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'bootstrap/**'
+      - '.ansible-lint'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/ansible-lint.yaml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'bootstrap/**'
+      - '.ansible-lint'
+
+jobs:
+  lint:
+    name: Lint Ansible Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-lint ansible
+
+      - name: Run ansible-lint
+        run: |
+          ansible-lint --strict bootstrap/

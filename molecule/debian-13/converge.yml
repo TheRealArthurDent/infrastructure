@@ -1,0 +1,11 @@
+---
+# Converge playbook - applies roles to test hosts
+
+- name: Bootstrap test instance
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  roles:
+    - base
+    - docker

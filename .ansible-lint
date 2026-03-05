@@ -1,0 +1,30 @@
+---
+# Ansible-lint configuration
+# See: https://ansible-lint.readthedocs.io/
+
+# Exclude common non-Ansible directories
+exclude_paths:
+  - .git
+  - .github
+  - .venv
+  - venv
+  - .molecule
+  - .env
+  - secrets/
+
+# Warn about deprecated features
+warn_list:
+  - var-naming
+  - role-name
+  - no-handler
+
+# Verbosity level (0 is quietest)
+verbosity: 1
+
+# Enable specific rules for Debian/Raspberry Pi context
+enable_list:
+  - name[casing]  # Task names should start with uppercase
+  - name[template] # Task names should follow template
+  - command-instead-of-module  # Prefer Ansible modules over raw commands
+  - no-tabs  # No tabs in YAML
+  - truthy  # Only use yes/no in special cases

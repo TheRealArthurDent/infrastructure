@@ -1,0 +1,12 @@
+---
+# Ansible Galaxy requirements for bootstrap roles
+# Define any external roles or collections used by the playbook
+
+# Example: community.general collection for additional modules
+- name: community.general
+  version: ">=5.0.0"
+
+# Example: external role
+# - name: geerlingguy.java
+#   src: https://github.com/geerlingguy/ansible-role-java.git
+#   version: main

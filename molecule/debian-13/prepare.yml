@@ -1,0 +1,30 @@
+---
+# Prepare playbook - sets up the test environment
+
+- name: Prepare test environment
+  hosts: all
+  gather_facts: yes
+  become: yes
+
+  tasks:
+    - name: Install system dependencies
+      apt:
+        update_cache: yes
+        name:
+          - python3
+          - sudo
+        state: present
+
+    - name: Ensure testuser exists
+      user:
+        name: testuser
+        state: present
+        shell: /bin/bash
+        createhome: yes
+
+    - name: Configure sudoers for testuser
+      lineinfile:
+        path: /etc/sudoers
+        line: 'testuser ALL=(ALL) NOPASSWD: ALL'
+        state: present
+        validate: 'visudo -cf %s'

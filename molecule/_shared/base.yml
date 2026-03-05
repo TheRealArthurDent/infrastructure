@@ -1,0 +1,20 @@
+---
+# Molecule shared configuration
+# This file contains common settings for all Molecule test scenarios
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+      force_handlers: true
+  inventory:
+    links:
+      hosts: ../../../bootstrap/inventory/hosts.yaml
+      ansible_cfg: ../../../bootstrap/ansible.cfg
+  env:
+    ANSIBLE_PIPELINING: "true"
+
+verifier:
+  name: ansible
+  directory: ../../tests
