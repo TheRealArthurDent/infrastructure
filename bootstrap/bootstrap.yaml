@@ -2,9 +2,14 @@
   hosts: testbed
   become: true
 
+  vars_prompt:
+    - name: keepass_password
+      prompt: "KeePass master password"
+      private: yes
   vars:
-    some_password: "{{ lookup('keepass', 'term2', term3='bla', group='TestGroup/SubGroup', title='TopSecret', db='test/testdata/keepass.kdbx', password='test1234') }}"
-    something_fancy: "{{ lookup('keepass', group='TestGroup/SubGroup', title='TopSecret', field='fancyAttribute', db='test/testdata/keepass.kdbx', password='test1234') }}"
+    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
+    keepass_key: "/home/mika/.keepass/raspberry.key"
+    pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='pihole') }}"
 
   roles:
     - base

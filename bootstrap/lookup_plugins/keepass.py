@@ -6,8 +6,9 @@ class LookupModule(LookupBase):
   def run(self, terms, variables=None, **kwargs):
     db = kwargs.get("db")
     password = kwargs.get("password")
+    key = kwargs.get("key")
 
-    kp = PyKeePass(db, password=password)
+    kp = PyKeePass(db, password=password, keyfile=key)
 
     group_name = kwargs.get('group')
     title = kwargs.get('title')
