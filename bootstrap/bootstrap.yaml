@@ -11,7 +11,23 @@
     keepass_key: "/home/mika/.keepass/raspberry.key"
     pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='pihole') }}"
 
+    # smart-home
+    iobroker_states_redis_port: TBD
+    iobroker_objects_redis_port: TBD
+    influxdb_admin_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/Influx DB', title='Influx admin') }}"
+    influxdb_read_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/Influx DB', title='Influx read') }}"
+    influxdb_write_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/Influx DB', title='Influx write') }}"
+    grafana_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='Grafana') }}"
+    mosquitto_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='mosquitto') }}"
+    deconz_vnc_password: TBD
+    #deconz_vnc_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='Deconz VNC') }}"
+    github_user: TBD
+    github_email: TBD
+
+  gather_facts: false
+
   roles:
+    - ssh
     - base
     - docker
     - secrets

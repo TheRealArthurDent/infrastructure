@@ -1,3 +1,4 @@
+from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
 from pykeepass import PyKeePass
 
@@ -16,8 +17,12 @@ class LookupModule(LookupBase):
 
     group = kp.find_groups(name=group_name, first=True)
     #print(group)
+    #if group is None:
+    #  raise AnsibleError(f'Group "{group_name}" not found.')
     entry = kp.find_entries(title=title, group=group, first=True)
     #print(entry)
+    if entry is None:
+      raise AnsibleError(f'Entry "{group_name}/{title}" not found.')
     #print(f'Field: {field}')
     results = []
     if field is None or field == 'password':
