@@ -128,7 +128,7 @@ services:
     environment:
       TZ: 'Europe/Berlin'
     volumes:
-      - /etc/docker/infrastructure/restic/.ssh:/root/.ssh
+      - /etc/docker/infrastructure/resticprofile/.ssh:/root/.ssh # TODO ansible
       - /etc/docker/infrastructure/resticprofile/ssh_config:/etc/ssh/ssh_config:ro
       - /etc/docker/infrastructure/resticprofile/config:/etc/resticprofile:ro
       - /home:/source/home:ro
