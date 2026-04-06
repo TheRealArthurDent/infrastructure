@@ -134,6 +134,7 @@ services:
       - /home:/source/home:ro
       - /etc:/source/etc:ro
       - /var/lib/docker/volumes:/source/docker-volumes:ro
+      - /var/restore:/restore-target:rw
       # Prom metrics for telegraf
       - /var/lib/resticprofile/metrics:/metrics
     restart: unless-stopped

@@ -1,0 +1,15 @@
+- name: Check certificate expiration
+  #hosts: webservers
+  block:
+    - name: Read certificate info
+      community.crypto.x509_certificate_info:
+        path: /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem
+      register: cert_info
+
+    - name: Show expiration date
+      debug:
+        msg: "Certificate {{ inventory_hostname }}.pem expires on {{ cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') }} UTC"
+
+    - name: Show days until expiration
+      debug:
+        msg: "Certificate {{ inventory_hostname }}.pem expires in {{ (cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') - now()).days }} days"

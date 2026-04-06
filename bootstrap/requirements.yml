@@ -3,8 +3,11 @@
 # Define any external roles or collections used by the playbook
 
 # Example: community.general collection for additional modules
-- name: community.general
-  version: ">=5.0.0"
+#- name: community.general
+#  version: ">=5.0.0"
+
+#- name: debops.debops
+#  version: ">=3.2.5"
 
 # Example: external role
 # - name: geerlingguy.java

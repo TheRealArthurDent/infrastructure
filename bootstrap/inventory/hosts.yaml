@@ -2,13 +2,21 @@ all:
   hosts:
     raspi:
       ansible_host: 192.168.1.2
-      ansible_port: TODO
+      ansible_port: 1357
       ansible_user: smarthome
       ansible_ssh_private_key_file: ~/.ssh/id_ed25519
       ansible_become: true
+      ansible_distribution_release: trixie
+      ansible_distribution: debian
+      ansible_architecture: arm64
+      dhparameter_bits: 4096
     testbed:
       ansible_host: 192.168.1.7
       ansible_port: 4242
       ansible_user: testuser
       ansible_ssh_private_key_file: ~/.ssh/id_ed25519
       ansible_become: true
+      distribution_release: trixie
+      distribution: debian
+      architecture: arm64
+      dhparameter_bits: 1024

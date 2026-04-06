@@ -1,7 +1,36 @@
+- name:
+  ansible.builtin.debug:
+    msg: "Add Docker repository for {{distribution}} {{ distribution_release }} ({{architecture}})"
+
+- name: download the package signing key for the Docker Debian repository
+  get_url:
+    url: https://download.docker.com/linux/{{distribution}}/gpg
+    dest: /tmp/docker.asc
+    checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
+
+- name: dearmor the downloaded signing key file
+  shell: gpg --batch --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg /tmp/docker.asc
+  args:
+    creates: /etc/apt/trusted.gpg.d/docker.gpg
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch={{architecture}} signed-by=/etc/apt/trusted.gpg.d/docker.gpg] https://download.docker.com/linux/{{distribution}} {{ distribution_release }} stable"
+    state: present
+    filename: docker
+    update_cache: yes
+
 - name: Install Docker
   ansible.builtin.apt:
     name:
       - docker.io
+    state: present
+
+# Keep this a separate task to avoid dependency conflicts.
+- name: Install Docker Compose Plugin
+  ansible.builtin.apt:
+    name:
+      - docker-compose-plugin
     state: present
 
 - name: Add user to docker group

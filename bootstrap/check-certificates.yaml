@@ -1,0 +1,6 @@
+- name: Bootstrap Raspberry Pi
+  hosts: raspi
+  become: true
+
+  roles:
+    - certificate_check

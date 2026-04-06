@@ -3,8 +3,16 @@
     update_cache: true
     upgrade: dist
 
+- name: "Generate Diffie-Hellman parameters with the default size ({{ dhparameter_bits }} bits)"
+  community.crypto.openssl_dhparam:
+    path: /etc/ssl/certs/dhparam.pem
+    owner: root
+    group: root
+    mode: '0644'
+    size: "{{ dhparameter_bits }}"
+
 - name: Install base packages
-  apt:
+  ansible.builtin.apt:
     name:
       - rsnapshot
     state: present
@@ -27,15 +35,24 @@
         group: root
         mode: '0440'
 
-    - name: Copy redis overcommit config
+    - name: Copy rsnapshot config
       ansible.builtin.copy:
-        src: templates/etc/sysctl.d/90-overcommit-memory.conf
-        dest: /etc/sysctl.d/90-overcommit-memory.conf
+        src: templates/etc/rsnapshot.conf
+        dest: /etc/rsnapshot.conf
         owner: root
         group: root
         mode: '0644'
 
-# TODO crontab (rsnapshot)
-#- name: Enable UFW
-#  ufw:
-#    state: enabled
+    - name: Ensure cron job "rsnapshot daily" exists
+      ansible.builtin.cron:
+        name: "rsnapshot daily"
+        minute: "0"
+        hour: "2"
+        job: "rsnapshot daily"
+    - name: Ensure cron job "rsnapshot weekly" exists
+      ansible.builtin.cron:
+        name: "rsnapshot weekly"
+        minute: "0"
+        hour: "2"
+        weekday: "0"
+        job: "rsnapshot weekly"
