@@ -118,7 +118,7 @@ services:
   resticprofile:
     hostname: resticprofile
     container_name: resticprofile
-    image: creativeprojects/resticprofile:0.33.0
+    image: creativeprojects/resticprofile:0.33.1
     deploy:
       resources:
         limits:
