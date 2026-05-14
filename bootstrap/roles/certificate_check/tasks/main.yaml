@@ -1,15 +1,150 @@
-- name: Check certificate expiration
-  #hosts: webservers
+- name: Check certificate expiration and renew if needed
   block:
+    - name: Set certificate renewal threshold (days)
+      set_fact:
+        cert_renewal_threshold_days: 30
+        cert_validity_days: 365
+        cert_key_size: 2048
+        nginx_container_name: nginx
+        certificate_dir: /etc/docker/infrastructure/nginx
+
     - name: Read certificate info
       community.crypto.x509_certificate_info:
-        path: /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem
+        path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
       register: cert_info
+      ignore_errors: true
 
     - name: Show expiration date
       debug:
         msg: "Certificate {{ inventory_hostname }}.pem expires on {{ cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') }} UTC"
+      when: not cert_info.failed
+
+    - name: Calculate days until expiration
+      set_fact:
+        days_until_expiration: "{{ (cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') - now()).days }}"
+      when: not cert_info.failed
 
     - name: Show days until expiration
       debug:
-        msg: "Certificate {{ inventory_hostname }}.pem expires in {{ (cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') - now()).days }} days"
+        msg: "Certificate {{ inventory_hostname }}.pem expires in {{ days_until_expiration }} days"
+      when: not cert_info.failed
+
+    - name: Renew certificate if needed
+      block:
+        - name: Certificate renewal needed
+          debug:
+            msg: "Certificate expires in {{ days_until_expiration }} days (threshold: {{ cert_renewal_threshold_days }} days). Starting renewal process..."
+
+        - name: Backup old certificate
+          ansible.builtin.copy:
+            src: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            dest: "{{ certificate_dir }}/{{ inventory_hostname }}.pem.bak"
+            remote_src: true
+          ignore_errors: true
+
+        - name: Backup old key
+          ansible.builtin.copy:
+            src: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+            dest: "{{ certificate_dir }}/{{ inventory_hostname }}.key.bak"
+            remote_src: true
+          ignore_errors: true
+
+        - name: Generate new self-signed certificate
+          community.crypto.x509_certificate:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+            privatekey_type: RSA
+            privatekey_size: "{{ cert_key_size }}"
+            provider: selfsigned
+            selfsigned_version: 3
+            selfsigned_digest: sha256
+            subject:
+              C: DE
+              ST: BY
+              O: None
+              CN: "{{ inventory_hostname }}"
+            subject_alt_name:
+              - "DNS:{{ inventory_hostname }}"
+            valid_in: 0
+            days: "{{ cert_validity_days }}"
+            force: true
+          register: cert_created
+
+        - name: Set proper permissions on certificate and key
+          ansible.builtin.file:
+            path: "{{ item }}"
+            mode: '0600'
+            owner: root
+            group: root
+          loop:
+            - "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            - "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+
+        - name: Certificate renewal completed
+          debug:
+            msg: "Certificate successfully renewed. Valid for {{ cert_validity_days }} days."
+          when: cert_created.changed
+
+        - name: Restart nginx container to load new certificate
+          community.docker.docker_container:
+            name: "{{ nginx_container_name }}"
+            state: restarted
+          register: nginx_restart
+          ignore_errors: true
+
+        - name: Wait for nginx to be ready
+          ansible.builtin.wait_for:
+            port: 443
+            delay: 2
+            timeout: 30
+          when: nginx_restart.changed
+          ignore_errors: true
+
+      when:
+        - not cert_info.failed
+        - days_until_expiration | int < cert_renewal_threshold_days | int
+
+    - name: Certificate still valid
+      debug:
+        msg: "Certificate is valid for {{ days_until_expiration }} more days. No renewal needed."
+      when:
+        - not cert_info.failed
+        - days_until_expiration | int >= cert_renewal_threshold_days | int
+
+    - name: Certificate file missing - generate new one
+      block:
+        - name: Warning - certificate file not found
+          debug:
+            msg: "WARNING: Certificate file not found at {{ certificate_dir }}/{{ inventory_hostname }}.pem. Creating new certificate."
+
+        - name: Generate new self-signed certificate
+          community.crypto.x509_certificate:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+            privatekey_type: RSA
+            privatekey_size: "{{ cert_key_size }}"
+            provider: selfsigned
+            selfsigned_version: 3
+            selfsigned_digest: sha256
+            subject:
+              C: DE
+              ST: BY
+              O: None
+              CN: "{{ inventory_hostname }}"
+            subject_alt_name:
+              - "DNS:{{ inventory_hostname }}"
+            valid_in: 0
+            days: "{{ cert_validity_days }}"
+            force: true
+
+        - name: Set proper permissions on certificate and key
+          ansible.builtin.file:
+            path: "{{ item }}"
+            mode: '0600'
+            owner: root
+            group: root
+          loop:
+            - "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            - "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+
+      when: cert_info.failed
