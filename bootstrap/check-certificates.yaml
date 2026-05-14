@@ -11,7 +11,7 @@
     keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
     keepass_key: "/home/mika/.keepass/raspberry.key"
     # Hole die Root CA Passphrase aus KeePass (falls benötigt)
-    root_ca_passphrase: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Domain', title='rootCA.key') }}"
+    root_ca_passphrase: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Domain', title='rootCA') }}"
 
   gather_facts: true
 

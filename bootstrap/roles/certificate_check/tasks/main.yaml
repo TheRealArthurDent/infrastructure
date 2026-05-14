@@ -12,6 +12,112 @@
         nginx_container_name: nginx
         root_ca_cert: "/etc/ssl/certs/rootCA.pem"
         root_ca_key: "/etc/ssl/private/rootCA.key"
+        temp_dir: "/tmp/keepass_exports"
+
+    - name: Get root CA passphrase from KeePass
+      set_fact:
+        root_ca_passphrase_value: "{{ lookup('keepass', 
+            db=keepass_db, 
+            password=keepass_password, 
+            key=keepass_key, 
+            group='Domain', 
+            title='rootCA') }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: List available attachments in rootCA entry
+      debug:
+        msg: "Available attachments: {{ lookup('keepass', 
+            db=keepass_db, 
+            password=keepass_password, 
+            key=keepass_key, 
+            group='Domain', 
+            title='rootCA',
+            attachment='list') }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Export rootCA.pem from KeePass (local)
+      set_fact:
+        temp_root_ca_pem: "{{ lookup('keepass', 
+            db=keepass_db, 
+            password=keepass_password, 
+            key=keepass_key, 
+            group='Domain', 
+            title='rootCA',
+            attachment='rootCA.pem',
+            output_path='/tmp/keepass_exports/rootCA.pem') }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Check exported rootCA.pem on localhost
+      ansible.builtin.stat:
+        path: "/tmp/keepass_exports/rootCA.pem"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      register: pem_stat
+
+    - name: Show rootCA.pem info
+      debug:
+        msg: "rootCA.pem size: {{ pem_stat.stat.size }} bytes"
+      run_once: true
+
+    - name: Export rootCA.key from KeePass (local)
+      set_fact:
+        temp_root_ca_key: "{{ lookup('keepass', 
+            db=keepass_db, 
+            password=keepass_password, 
+            key=keepass_key, 
+            group='Domain', 
+            title='rootCA',
+            attachment='rootCA.key',
+            output_path='/tmp/keepass_exports/rootCA.key') }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Check exported rootCA.key on localhost
+      ansible.builtin.stat:
+        path: "/tmp/keepass_exports/rootCA.key"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      register: key_stat
+
+    - name: Show rootCA.key info
+      debug:
+        msg: "rootCA.key size: {{ key_stat.stat.size }} bytes"
+      run_once: true
+
+    - name: Copy rootCA.pem to remote host
+      ansible.builtin.copy:
+        src: "/tmp/keepass_exports/rootCA.pem"
+        dest: "{{ root_ca_cert }}"
+        owner: root
+        group: root
+        mode: '0644'
+      ignore_errors: true
+
+    - name: Copy rootCA.key to remote host
+      ansible.builtin.copy:
+        src: "/tmp/keepass_exports/rootCA.key"
+        dest: "{{ root_ca_key }}"
+        owner: root
+        group: root
+        mode: '0600'
+      ignore_errors: true
+
+    - name: Clean up temporary exports (local)
+      ansible.builtin.file:
+        path: "/tmp/keepass_exports"
+        state: absent
+      delegate_to: localhost
+      become: false
+      run_once: true
 
     - name: Read certificate info
       community.crypto.x509_certificate_info:
@@ -59,27 +165,36 @@
             remote_src: true
           ignore_errors: true
 
-        - name: Generate new certificate signed by root CA
-          community.crypto.x509_certificate:
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+        - name: Generate private key for certificate
+          community.crypto.openssl_privatekey:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+            type: RSA
+            size: "{{ cert_key_size }}"
+            force: true
+
+        - name: Generate CSR for certificate
+          community.crypto.openssl_csr:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
             privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            privatekey_type: RSA
-            privatekey_size: "{{ cert_key_size }}"
-            provider: ownca
-            ca_cert_path: "{{ root_ca_cert }}"
-            ca_privatekey_path: "{{ root_ca_key }}"
-            ca_privatekey_passphrase: "{{ root_ca_passphrase }}"
-            ownca_version: 3
-            ownca_digest: sha256
-            subject:
-              C: DE
-              ST: BY
-              O: None
-              CN: "{{ inventory_hostname }}"
+            common_name: "{{ inventory_hostname }}"
+            country_name: DE
+            state_or_province_name: BY
+            organization_name: None
             subject_alt_name:
               - "DNS:{{ inventory_hostname }}"
-            valid_in: 0
-            days: "{{ cert_validity_days }}"
+            force: true
+
+        - name: Generate certificate signed by root CA
+          community.crypto.x509_certificate:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            csr_path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
+            ownca_path: "{{ root_ca_cert }}"
+            ownca_privatekey_path: "{{ root_ca_key }}"
+            ownca_privatekey_passphrase: "{{ root_ca_passphrase_value }}"
+            ownca_not_after: "+{{ cert_validity_days }}d"
+            ownca_digest: sha256
+            ownca_version: 3
+            provider: ownca
             force: true
           register: cert_created
 
@@ -135,29 +250,37 @@
           debug:
             msg: "WARNING: Certificate file not found at {{ certificate_dir }}/{{ inventory_hostname }}.pem. Creating new certificate."
 
-        - name: Generate new certificate signed by root CA
-          community.crypto.x509_certificate:
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+        - name: Generate private key for certificate
+          community.crypto.openssl_privatekey:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
+            type: RSA
+            size: "{{ cert_key_size }}"
+            force: true
+
+        - name: Generate CSR for certificate
+          community.crypto.openssl_csr:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
             privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            privatekey_type: RSA
-            privatekey_size: "{{ cert_key_size }}"
-            provider: ownca
-            ca_cert_path: "{{ root_ca_cert }}"
-            ca_privatekey_path: "{{ root_ca_key }}"
-            ca_privatekey_passphrase: "{{ root_ca_passphrase }}"
-            ownca_version: 3
-            ownca_digest: sha256
-            subject:
-              C: DE
-              ST: BY
-              O: None
-              CN: "{{ inventory_hostname }}"
+            common_name: "{{ inventory_hostname }}"
+            country_name: DE
+            state_or_province_name: BY
+            organization_name: None
             subject_alt_name:
               - "DNS:{{ inventory_hostname }}"
-            valid_in: 0
-            days: "{{ cert_validity_days }}"
             force: true
-          register: cert_created
+
+        - name: Generate certificate signed by root CA
+          community.crypto.x509_certificate:
+            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+            csr_path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
+            ownca_path: "{{ root_ca_cert }}"
+            ownca_privatekey_path: "{{ root_ca_key }}"
+            ownca_privatekey_passphrase: "{{ root_ca_passphrase_value }}"
+            ownca_not_after: "+{{ cert_validity_days }}d"
+            ownca_digest: sha256
+            ownca_version: 3
+            provider: ownca
+            force: true
 
         - name: Set proper permissions on certificate and key
           ansible.builtin.file:
@@ -171,7 +294,6 @@
 
         - name: Append root CA to certificate for full chain
           ansible.builtin.shell: cat "{{ root_ca_cert }}" >> "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-          when: cert_created.changed
 
       when: cert_info.failed
 
