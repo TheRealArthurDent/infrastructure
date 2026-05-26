@@ -3,7 +3,7 @@
     update_cache: true
     upgrade: dist
 
-- name: "Generate Diffie-Hellman parameters with the default size ({{ dhparameter_bits }} bits)"
+- name: "Generate Diffie-Hellman parameters with {{ dhparameter_bits }} bits"
   community.crypto.openssl_dhparam:
     path: /etc/ssl/certs/dhparam.pem
     owner: root

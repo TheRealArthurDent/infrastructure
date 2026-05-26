@@ -76,6 +76,14 @@
     msg: "The SSH port is neither 22 nor {{ ansible_port }}."
   when: ssh_port_set is undefined
 
+- name: Create sudoers file for user
+  ansible.builtin.template:
+    src: templates/etc/sudoers.d/user.j2
+    dest: /etc/sudoers.d/{{ ansible_user }}
+    owner: root
+    group: root
+    mode: '0440'
+
 # Sanity check, make sure Ansible is able to connect to the host
 - name: Confirm host connection works
   ping:

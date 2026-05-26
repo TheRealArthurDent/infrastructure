@@ -4,6 +4,13 @@
       set_fact:
         certificate_dir: /etc/docker/infrastructure/nginx
 
+    - name: Create temporary certs directory
+      ansible.builtin.tempfile:
+        state: directory
+      register: temp_dir
+      delegate_to: localhost
+      become: false
+
     - name: Set certificate renewal threshold (days)
       set_fact:
         cert_renewal_threshold_days: 30
@@ -12,7 +19,7 @@
         nginx_container_name: nginx
         root_ca_cert: "/etc/ssl/certs/rootCA.pem"
         root_ca_key: "/etc/ssl/private/rootCA.key"
-        temp_dir: "/tmp/keepass_exports"
+        #temp_dir: "/tmp/keepass_exports"
 
     - name: Get root CA passphrase from KeePass
       set_fact:
@@ -48,14 +55,14 @@
             group='Domain', 
             title='rootCA',
             attachment='rootCA.pem',
-            output_path='/tmp/keepass_exports/rootCA.pem') }}"
+            output_path=temp_dir.path + '/rootCA.pem') }}"
       delegate_to: localhost
       become: false
       run_once: true
 
     - name: Check exported rootCA.pem on localhost
       ansible.builtin.stat:
-        path: "/tmp/keepass_exports/rootCA.pem"
+        path: "{{ temp_dir.path }}/rootCA.pem"
       delegate_to: localhost
       become: false
       run_once: true
@@ -75,14 +82,14 @@
             group='Domain', 
             title='rootCA',
             attachment='rootCA.key',
-            output_path='/tmp/keepass_exports/rootCA.key') }}"
+            output_path=temp_dir.path + '/rootCA.key') }}"
       delegate_to: localhost
       become: false
       run_once: true
 
     - name: Check exported rootCA.key on localhost
       ansible.builtin.stat:
-        path: "/tmp/keepass_exports/rootCA.key"
+        path: "{{ temp_dir.path }}/rootCA.key"
       delegate_to: localhost
       become: false
       run_once: true
@@ -95,7 +102,7 @@
 
     - name: Copy rootCA.pem to remote host
       ansible.builtin.copy:
-        src: "/tmp/keepass_exports/rootCA.pem"
+        src: "{{ temp_dir.path }}/rootCA.pem"
         dest: "{{ root_ca_cert }}"
         owner: root
         group: root
@@ -104,20 +111,20 @@
 
     - name: Copy rootCA.key to remote host
       ansible.builtin.copy:
-        src: "/tmp/keepass_exports/rootCA.key"
+        src: "{{ temp_dir.path }}/rootCA.key"
         dest: "{{ root_ca_key }}"
         owner: root
         group: root
         mode: '0600'
       ignore_errors: true
 
-    - name: Clean up temporary exports (local)
-      ansible.builtin.file:
-        path: "/tmp/keepass_exports"
-        state: absent
-      delegate_to: localhost
-      become: false
-      run_once: true
+    #- name: Clean up temporary directory
+    #  ansible.builtin.file:
+    #    path: "{{ temp_dir.path }}"
+    #    state: absent
+    #  delegate_to: localhost
+    #  become: true
+    #  run_once: true
 
     - name: Read certificate info
       community.crypto.x509_certificate_info:
@@ -151,22 +158,9 @@
           debug:
             msg: "Certificate expires in {{ days_until_expiration }} days (threshold: {{ cert_renewal_threshold_days }} days) or is not signed by root CA. Starting renewal process..."
 
-        - name: Backup old certificate
-          ansible.builtin.copy:
-            src: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-            dest: "{{ certificate_dir }}/{{ inventory_hostname }}.pem.bak"
-            remote_src: true
-          ignore_errors: true
-
-        - name: Backup old key
-          ansible.builtin.copy:
-            src: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            dest: "{{ certificate_dir }}/{{ inventory_hostname }}.key.bak"
-            remote_src: true
-          ignore_errors: true
-
         - name: Generate private key for certificate
           community.crypto.openssl_privatekey:
+            backup: true
             path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
             type: RSA
             size: "{{ cert_key_size }}"
@@ -174,18 +168,31 @@
 
         - name: Generate CSR for certificate
           community.crypto.openssl_csr:
+            backup: true
             path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
             privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
             common_name: "{{ inventory_hostname }}"
             country_name: DE
             state_or_province_name: BY
-            organization_name: None
+            organization_name: "{{ inventory_hostname }}"
             subject_alt_name:
               - "DNS:{{ inventory_hostname }}"
+              - "DNS:pihole.{{ inventory_hostname }}"
+              - "DNS:portainer.{{ inventory_hostname }}"
+              - "DNS:nextcloud.{{ inventory_hostname }}"
+              - "DNS:iobroker.{{ inventory_hostname }}"
+              - "DNS:node-red.{{ inventory_hostname }}"
+              - "DNS:grafana.{{ inventory_hostname }}"
+              - "DNS:chronograf.{{ inventory_hostname }}"
+              - "DNS:outbound.{{ inventory_hostname }}"
+              - "DNS:deconz.{{ inventory_hostname }}"
+              - "DNS:deconz-ui.{{ inventory_hostname }}"
+              - "DNS:ui.{{ inventory_hostname }}"
             force: true
 
         - name: Generate certificate signed by root CA
           community.crypto.x509_certificate:
+            backup: true
             path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
             csr_path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
             ownca_path: "{{ root_ca_cert }}"

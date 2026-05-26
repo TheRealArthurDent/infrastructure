@@ -7,7 +7,7 @@ global:
 
 default:
   password-file: /run/secrets/restic_passphrase
-  repository: sftp:restic@dungeon:/media/backup/restic/raspi
+  repository: sftp:restic@dungeon:/media/backup/restic/%HOSTNAME%
   initialize: true
   prometheus-save-to-file: /metrics/backup.prom
   backup:

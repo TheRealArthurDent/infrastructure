@@ -19,4 +19,4 @@ all:
       distribution_release: trixie
       distribution: debian
       architecture: arm64
-      dhparameter_bits: 1024
+      dhparameter_bits: 2048

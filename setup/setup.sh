@@ -48,11 +48,6 @@ fi
 # portainer
 mkdir -p $ENV_FOLDER/portainer/data
 
-# pihole
-mkdir -p $ENV_FOLDER/pihole/{pihole,dnsmasq.d}
-find ./pihole -type f -exec chmod 644 -- {} +
-cp -R ./pihole $ENV_FOLDER
-
 # resticprofile
 mkdir -p $ENV_FOLDER/resticprofile
 find ./resticprofile -type f -exec chmod 600 -- {} +
