@@ -1,0 +1,99 @@
+---
+# Modular task to manage Pi-hole DNS records (hosts, cnames, lists, upstreams, etc.)
+# Parameters:
+#   - api_endpoint: API endpoint path (e.g., /api/config/dns/hosts)
+#   - list_type: Type of list to manage (e.g., "block", "allow")
+#   - desired_records: Array of objects or strings
+#   - record_format: "objects" for {domain, address/target}, "simple" for plain strings
+#   - value_attribute: Attribute name for value ("address" for hosts, "target" for cnames)
+#   - domain_first: true for "domain,target", false for "address,domain" (default: true)
+#   - separator: Separator for joining records (" " for hosts, "," for cnames, "" for upstreams)
+#   - url_separator: URL separator ("%20" for hosts, "%2C" for cnames, "" for upstreams)
+
+- name: "Get existing {{list_type}} lists from API"
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}?type={{list_type}}"
+    method: GET
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 200
+    validate_certs: false
+  register: api_response
+
+- name: "Extract existing list records"
+  set_fact:
+    existing_lists_extracted: >-
+      {{ api_response.json.lists
+         | map(attribute='address')
+         | list }}
+
+- name: "Show existing lists"
+  debug:
+    msg: "Existing lists: {{ existing_lists_extracted }}"
+
+- name: "Format desired lists (simple list)"
+  set_fact:
+    desired_records_formatted: "{{ desired_records }}"
+  when: record_format == "simple"
+
+- name: "Show desired lists"
+  debug:
+    msg: "Desired lists: {{ desired_records_formatted }}"
+
+- name: "Identify lists to delete"
+  set_fact:
+    records_to_delete: "{{ existing_lists_extracted | difference(desired_records_formatted | default(desired_records)) }}"
+
+- name: "Identify lists to add"
+  set_fact:
+    records_to_add: "{{ (desired_records_formatted | default(desired_records)) | difference(existing_lists_extracted) }}"
+
+- name: "Show lists to delete"
+  debug:
+    msg: "Lists to delete: {{ records_to_delete }}"
+  when: records_to_delete | length > 0
+
+- name: "Show lists to add"
+  debug:
+    msg: "Lists to add: {{ records_to_add }}"
+  when: records_to_add | length > 0
+
+- name: "Delete old {{ list_type }} lists"
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ item }}?type={{list_type}}"
+    method: DELETE
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 204
+    validate_certs: false
+  loop: "{{ records_to_delete }}"
+  when: records_to_delete | length > 0
+  register: delete_result
+
+- name: "Add {{ list_type }} lists"
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}?type={{list_type}}"
+    method: POST
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    body_format: json
+    body:
+      address: "{{ item }}"
+      comment: "Added by Ansible on {{ ansible_facts['date_time']['iso8601'] }}"
+      groups: [0]
+      enabled: true
+    status_code: 201
+    validate_certs: false
+  until: add_result.status == 201
+  retries: 3
+  delay: 5
+  loop: "{{ records_to_add }}"
+  when: records_to_add | length > 0
+  register: add_result
+
+- name: "{{ list_type | capitalize }} lists summary"
+  debug:
+    msg: |
+      {{ list_type | capitalize }} lists Configuration:
+      - Lists to delete: {{ records_to_delete | length }}
+      - Lists to add: {{ records_to_add | length }}

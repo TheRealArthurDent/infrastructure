@@ -2,10 +2,6 @@
 - name: Configure Pi-hole via REST API
   hosts: testbed
   gather_facts: true
-  vars_prompt:
-    - name: keepass_password
-      prompt: "KeePass master password"
-      private: yes
   vars:
     #pihole_host: "{{ pihole_ip | default('pihole.{{ inventory_hostname }}') }}"
     pihole_host: "{{ pihole_ip | default('pihole.testbed') }}"
@@ -16,6 +12,21 @@
     keepass_key: "/home/mika/.keepass/raspberry.key"
 
   tasks:
+    - name: Get KeePass password from environment variable
+      set_fact:
+        keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
+
+    - name: Prompt for KeePass password if not in environment
+      pause:
+        prompt: "KeePass master password"
+        echo: no
+      register: prompted_password
+      when: not keepass_password
+
+    - name: Use prompted password if env not set
+      set_fact:
+        keepass_password: "{{ prompted_password.user_input }}"
+      when: not keepass_password
     - name: Get Pi-hole password from KeePass
       set_fact:
         pihole_password: "{{ lookup('keepass', 
@@ -43,51 +54,6 @@
         pihole_session: "{{ auth_response.json.session.sid }}"
       no_log: false # TODO true
 
-    - name: Extract csrf token
-      set_fact:
-        pihole_csrf: "{{ auth_response.json.session.csrf }}"
-      no_log: false # TODO true
-
-    - name: Get existing address records
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/config/dns/hosts"
-        method: GET
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
-        status_code: 200
-        validate_certs: false # TODO remove
-      register: hosts_response
-
-    - name: Extract existing A records
-      set_fact:
-        existing_address_records: "{{ hosts_response.json.config.dns.hosts }}"
-      no_log: false # TODO true
-
-    - name: Show existing A records
-      debug:
-        msg: "Existing A records: {{ existing_address_records }}"
-
-    - name: Get existing CNAME records
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/config/dns/cnameRecords"
-        method: GET
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
-        status_code: 200
-        validate_certs: false # TODO remove
-      register: cname_records_response
-
-    - name: Extract existing CNAME records
-      set_fact:
-        existing_cname_records: "{{ cname_records_response.json.config.dns.cnameRecords }}"
-      no_log: false # TODO true
-
-    - name: Show existing CNAME records
-      debug:
-        msg: "Existing CNAME records: {{ existing_cname_records }}"
-
     - name: Define desired DNS A records
       set_fact:
         dns_a_records:
@@ -104,98 +70,46 @@
           - domain: "test.erdbeere"
             target: "erdbeere"
 
-    - name: Identify A records to delete (not in desired list)
-      set_fact:
-        a_records_to_delete: "{{ existing_address_records | default([]) | difference(dns_a_records | map(attribute='address') | zip(dns_a_records | map(attribute='domain')) | map('join', ' ') | list) }}"
+    - name: Manage A records (hosts)
+      include_tasks: tasks/manage_pihole_records.yaml
+      vars:
+        record_type: "hosts"
+        api_endpoint: "/api/config/dns/hosts"
+        desired_records: "{{ dns_a_records }}"
+        record_format: "objects"
+        value_attribute: "address"
+        domain_first: false
+        separator: " "
+        url_separator: "%20"
 
-    - name: Identify A records to add (not in existing list)
-      set_fact:
-        a_records_to_add: "{{ dns_a_records | map(attribute='address') | zip(dns_a_records | map(attribute='domain')) | map('join', ' ') | list | difference(existing_address_records | default([])) }}"
+    - name: Manage CNAME records
+      include_tasks: tasks/manage_pihole_records.yaml
+      vars:
+        record_type: "cnameRecords"
+        api_endpoint: "/api/config/dns/cnameRecords"
+        desired_records: "{{ dns_cname_records }}"
+        record_format: "objects"
+        value_attribute: "target"
+        domain_first: true
+        separator: ","
+        url_separator: "%2C"
 
-    - name: Show A records to delete
-      debug:
-        msg: "A records to delete {{ a_records_to_delete }}"
-
-    - name: Show A records to add
-      debug:
-        msg: "A records to add {{ a_records_to_add }}"
-
-    - name: Identify CNAME records to delete (not in desired list)
-      set_fact:
-        cname_records_to_delete: "{{ existing_cname_records | default([]) | difference(dns_cname_records | map(attribute='domain') | zip(dns_cname_records | map(attribute='target')) | map('join', ',') | list) }}"
-
-    - name: Identify CNAME records to add (not in existing list)
-      set_fact:
-        cname_records_to_add: "{{ dns_cname_records | map(attribute='domain') | zip(dns_cname_records | map(attribute='target')) | map('join', ',') | list | difference(existing_cname_records | default([])) }}"
-
-    - name: Show CNAME records to delete
-      debug:
-        msg: "CNAME records to delete {{ cname_records_to_delete }}"
-
-    - name: Show CNAME records to add
-      debug:
-        msg: "CNAME records to add {{ cname_records_to_add }}"
-
-    - name: Show CNAME records to delete
-      debug:
-        msg: "CNAME records to delete {{ cname_records_to_delete }}"
-
-    - name: Delete old A records
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/config/dns/hosts/{{ item | replace(' ', '%20') }}"
-        method: DELETE
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
-        status_code: 204
-        validate_certs: false # TODO remove
-      loop: "{{ a_records_to_delete }}"
-      when: a_records_to_delete | length > 0
-
-    - name: Delete old CNAME records
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/config/dns/cnameRecords/{{ item | replace(',', '%2C') }}"
-        method: DELETE
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
-        status_code: 204
-        validate_certs: false # TODO remove
-      loop: "{{ cname_records_to_delete }}"
-      when: cname_records_to_delete | length > 0
-
-    - name: Add DNS A records
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/config/dns/hosts/{{ item | replace(' ', '%20') }}"
-        method: PUT
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
-        status_code: 201
-        validate_certs: false # TODO remove
-      loop: "{{ a_records_to_add }}"
-      register: add_a_records_response
-
-    - name: Add CNAME records
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/config/dns/cnameRecords/{{ item | replace(',', '%2C') }}"
-        method: PUT
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
-        status_code: 201
-        validate_certs: false # TODO remove
-      loop: "{{ cname_records_to_add }}"
-      register: add_cname_records_response
-
-    - name: Show summary
-      debug:
-        msg: |
-          DNS Configuration Summary:
-          - A records to delete: {{ a_records_to_delete | length }}
-          - CNAME records to delete: {{ cname_records_to_delete | length }}
-          - A records added/updated: {{ dns_a_records | length }}
-          - CNAME records added/updated: {{ dns_cname_records | length }}
+    - name: Manage block lists
+      include_tasks: tasks/manage_pihole_lists.yaml
+      vars:
+        list_type: "block"
+        api_endpoint: "/api/lists"
+        desired_records:
+          - "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+          - "https://raw.githubusercontent.com/BBcan177/minerchk/master/hosts.txt"
+          - "https://raw.githubusercontent.com/anudeepND/blacklist/master/CoinMiner.txt"
+          - "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/hosts.txt"
+          - "https://raw.githubusercontent.com/azet12/KADhosts/master/hosts.txt"
+          - "https://raw.githubusercontent.com/betterwebleon/slovenian-list/master/hosts.txt"
+          - "https://raw.githubusercontent.com/bigdargon/hostsVN/master/hosts.txt"
+          - "https://raw.githubusercontent.com/bigdargon/hostsVN/master/hosts.txt2"
+          - "https://raw.githubusercontent.com/bigdargon/hostsVN/master/hosts.txt4"
+        record_format: "simple"
 
     - name: Logout from Pi-hole API
       ansible.builtin.uri:
@@ -203,7 +117,6 @@
         method: DELETE
         headers:
           X-FTL-SID: "{{ pihole_session }}"
-          X-FTL-CSRF: "{{ pihole_csrf }}"
         status_code: 204
         validate_certs: false # TODO remove
       ignore_errors: true
