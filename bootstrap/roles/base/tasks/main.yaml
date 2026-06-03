@@ -2,6 +2,8 @@
   ansible.builtin.apt:
     update_cache: true
     upgrade: dist
+    autoclean: true
+    autoremove: true
 
 - name: "Generate Diffie-Hellman parameters with {{ dhparameter_bits }} bits"
   community.crypto.openssl_dhparam:

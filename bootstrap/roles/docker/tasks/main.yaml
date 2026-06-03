@@ -1,15 +1,15 @@
-- name:
+- name: Debug
   ansible.builtin.debug:
     msg: "Add Docker repository for {{distribution}} {{ distribution_release }} ({{architecture}})"
 
 - name: download the package signing key for the Docker Debian repository
-  get_url:
+  ansible.builtin.get_url:
     url: https://download.docker.com/linux/{{distribution}}/gpg
     dest: /tmp/docker.asc
     checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
 
 - name: dearmor the downloaded signing key file
-  shell: gpg --batch --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg /tmp/docker.asc
+  ansible.builtin.shell: gpg --batch --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg /tmp/docker.asc
   args:
     creates: /etc/apt/trusted.gpg.d/docker.gpg
 
@@ -23,7 +23,9 @@
 - name: Install Docker
   ansible.builtin.apt:
     name:
-      - docker.io
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
     state: present
 
 # Keep this a separate task to avoid dependency conflicts.
@@ -35,6 +37,6 @@
 
 - name: Add user to docker group
   ansible.builtin.user:
-    name: testuser
+    name: "{{ ansible_user }}"
     groups: docker
     append: true

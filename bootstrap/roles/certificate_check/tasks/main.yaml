@@ -227,7 +227,8 @@
         - name: Restart nginx container to load new certificate
           community.docker.docker_container:
             name: "{{ nginx_container_name }}"
-            state: restarted
+            state: started
+            restart: true
           register: nginx_restart
           ignore_errors: true
 
@@ -266,14 +267,26 @@
 
         - name: Generate CSR for certificate
           community.crypto.openssl_csr:
+            backup: true
             path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
             privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
             common_name: "{{ inventory_hostname }}"
             country_name: DE
             state_or_province_name: BY
-            organization_name: None
+            organization_name: "{{ inventory_hostname }}"
             subject_alt_name:
               - "DNS:{{ inventory_hostname }}"
+              - "DNS:pihole.{{ inventory_hostname }}"
+              - "DNS:portainer.{{ inventory_hostname }}"
+              - "DNS:nextcloud.{{ inventory_hostname }}"
+              - "DNS:iobroker.{{ inventory_hostname }}"
+              - "DNS:node-red.{{ inventory_hostname }}"
+              - "DNS:grafana.{{ inventory_hostname }}"
+              - "DNS:chronograf.{{ inventory_hostname }}"
+              - "DNS:outbound.{{ inventory_hostname }}"
+              - "DNS:deconz.{{ inventory_hostname }}"
+              - "DNS:deconz-ui.{{ inventory_hostname }}"
+              - "DNS:ui.{{ inventory_hostname }}"
             force: true
 
         - name: Generate certificate signed by root CA
@@ -301,6 +314,22 @@
 
         - name: Append root CA to certificate for full chain
           ansible.builtin.shell: cat "{{ root_ca_cert }}" >> "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
+
+        - name: Restart nginx container to load new certificate
+          community.docker.docker_container:
+            name: "{{ nginx_container_name }}"
+            state: started
+            restart: true
+          register: nginx_restart
+          ignore_errors: true
+
+        - name: Wait for nginx to be ready
+          ansible.builtin.wait_for:
+            port: 443
+            delay: 2
+            timeout: 30
+          when: nginx_restart.changed
+          ignore_errors: true
 
       when: cert_info.failed
 
