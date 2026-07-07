@@ -28,6 +28,6 @@ jobs:
           reporter: github-pr-review
 
       - name: Markdown lint
-        uses: reviewdog/action-markdownlint@v0.26.2
+        uses: reviewdog/action-markdownlint@v0.27.0
         with:
           reporter: github-pr-review
