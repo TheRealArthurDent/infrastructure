@@ -12,6 +12,10 @@
     keepass_key: "/home/mika/.keepass/raspberry.key"
 
   tasks:
+    - name: Load Pi-hole configuration
+      include_vars:
+        file: configs/pihole.yaml
+
     - name: Get KeePass password from environment variable
       set_fact:
         keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
@@ -54,21 +58,6 @@
         pihole_session: "{{ auth_response.json.session.sid }}"
       no_log: false # TODO true
 
-    - name: Define desired DNS A records
-      set_fact:
-        dns_a_records:
-          - domain: "fritz.box"
-            address: "192.168.1.1"
-          - domain: "erdbeere"
-            address: "192.168.1.3"
-
-    - name: Define desired CNAME records
-      set_fact:
-        dns_cname_records:
-          - domain: "pihole.erdbeere"
-            target: "erdbeere"
-          - domain: "test.erdbeere"
-            target: "erdbeere"
 
     - name: Manage A records (hosts)
       include_tasks: tasks/manage_pihole_records.yaml
@@ -99,17 +88,10 @@
       vars:
         list_type: "block"
         api_endpoint: "/api/lists"
-        desired_records:
-          - "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
-          - "https://raw.githubusercontent.com/BBcan177/minerchk/master/hosts.txt"
-          - "https://raw.githubusercontent.com/anudeepND/blacklist/master/CoinMiner.txt"
-          - "https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/hosts.txt"
-          - "https://raw.githubusercontent.com/azet12/KADhosts/master/hosts.txt"
-          - "https://raw.githubusercontent.com/betterwebleon/slovenian-list/master/hosts.txt"
-          - "https://raw.githubusercontent.com/bigdargon/hostsVN/master/hosts.txt"
-          - "https://raw.githubusercontent.com/bigdargon/hostsVN/master/hosts.txt2"
-          - "https://raw.githubusercontent.com/bigdargon/hostsVN/master/hosts.txt4"
+        desired_records: "{{ dns_block_lists }}"
         record_format: "simple"
+
+    # TODO: Clients, Groups and Domains
 
     - name: Logout from Pi-hole API
       ansible.builtin.uri:
