@@ -23,7 +23,7 @@
   block:
     - name: Copy redis overcommit config
       ansible.builtin.copy:
-        src: templates/etc/sysctl.d/90-overcommit-memory.conf
+        src: etc/sysctl.d/90-overcommit-memory.conf
         dest: /etc/sysctl.d/90-overcommit-memory.conf
         owner: root
         group: root
@@ -31,7 +31,7 @@
 
     - name: Create sudoers file for user
       ansible.builtin.template:
-        src: templates/etc/sudoers.d/user.j2
+        src: etc/sudoers.d/user.j2
         dest: /etc/sudoers.d/{{ ansible_user }}
         owner: root
         group: root
@@ -39,7 +39,7 @@
 
     - name: Copy rsnapshot config
       ansible.builtin.copy:
-        src: templates/etc/rsnapshot.conf
+        src: etc/rsnapshot.conf
         dest: /etc/rsnapshot.conf
         owner: root
         group: root
