@@ -1,0 +1,11 @@
+# Approximates a fresh Raspberry Pi OS Lite (trixie): python, sudo, cron, procps (/etc/sysctl.d), gpg, openssl, ssh client.
+FROM {{ item.image }}
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      python3 sudo cron procps gnupg openssl openssh-client ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash smarthome \
+ && echo 'smarthome ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/bootstrap \
+ && chmod 0440 /etc/sudoers.d/bootstrap

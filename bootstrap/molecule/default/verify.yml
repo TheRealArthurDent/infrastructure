@@ -1,0 +1,81 @@
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+
+    - name: Check required packages are installed
+      ansible.builtin.assert:
+        that: item in ansible_facts.packages
+        fail_msg: "{{ item }} is not installed"
+      loop:
+        - rsnapshot
+        - docker-ce
+        - docker-compose-plugin
+
+    - name: Validate the deployed sudoers file
+      ansible.builtin.command: visudo -cf /etc/sudoers.d/smarthome
+      changed_when: false
+
+    - name: Read deploy user groups
+      ansible.builtin.command: id -nG smarthome
+      register: user_groups
+      changed_when: false
+
+    - name: Check deploy user is in the docker group
+      ansible.builtin.assert:
+        that: "'docker' in user_groups.stdout.split()"
+
+    - name: Read root crontab
+      ansible.builtin.command: crontab -l -u root
+      register: crontab
+      changed_when: false
+
+    - name: Check rsnapshot cron jobs exist
+      ansible.builtin.assert:
+        that:
+          - "'rsnapshot daily' in crontab.stdout"
+          - "'rsnapshot weekly' in crontab.stdout"
+
+    - name: Stat secret files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: secret_files
+      loop:
+        - /etc/docker/infrastructure/.env
+        - /etc/docker/infrastructure/.outbound.env
+        - /etc/docker/infrastructure/.healthmonitor.env
+        - /etc/docker/infrastructure/secrets/restic_passphrase
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
+        - /etc/docker/smart-home/.env
+
+    - name: Check secret files exist, are owned by root and are not world-readable
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+        fail_msg: "{{ item.item }} is missing or has wrong ownership/mode"
+      loop: "{{ secret_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read infrastructure .env
+      ansible.builtin.slurp:
+        src: /etc/docker/infrastructure/.env
+      register: infra_env
+
+    - name: Check pihole password is rendered
+      ansible.builtin.assert:
+        that: "'FTLCONF_webserver_api_password=test-pihole' in (infra_env.content | b64decode)"
+
+    - name: Stat DH parameters
+      ansible.builtin.stat:
+        path: /etc/ssl/certs/dhparam.pem
+      register: dhparam
+
+    - name: Check DH parameters exist
+      ansible.builtin.assert:
+        that: dhparam.stat.exists

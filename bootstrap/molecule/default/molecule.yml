@@ -1,0 +1,39 @@
+# Container-based tests for the roles that don't depend on Pi hardware or a real sshd.
+# Run from bootstrap/: molecule test
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: raspi-trixie
+    image: debian:trixie
+    dockerfile: Dockerfile.j2
+    pre_build_image: false
+    command: sleep infinity
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/roles
+    # JUnit XML per playbook run (create, converge, idempotence, verify, ...) in <repo>/test-results/molecule
+    ANSIBLE_CALLBACKS_ENABLED: ansible.builtin.junit
+    JUNIT_OUTPUT_DIR: ${MOLECULE_PROJECT_DIRECTORY}/../test-results/molecule
+    JUNIT_TASK_CLASS: "true"
+    JUNIT_HIDE_TASK_ARGUMENTS: "true"
+  inventory:
+    host_vars:
+      raspi-trixie:
+        # Connect as the unprivileged deploy user, like on the real Pi.
+        ansible_user: smarthome
+        ansible_become: true
+        distribution: debian
+        distribution_release: trixie
+        # Fast DH params for tests; production uses inventory values.
+        dhparameter_bits: 1024
+
+verifier:
+  name: ansible

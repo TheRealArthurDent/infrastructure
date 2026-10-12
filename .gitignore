@@ -17,7 +17,7 @@ pip-delete-this-directory.txt
 # Molecule test artifacts
 .molecule/
 molecule/*/inventory.yml
-molecule/*/.pytest_cache/
+.pytest_cache/
 
 # Pre-commit
 .pre-commit-config.local.yaml
@@ -32,3 +32,4 @@ molecule/*/.pytest_cache/
 .DS_Store
 .AppleDouble
 .LSOverride
+test-results/
