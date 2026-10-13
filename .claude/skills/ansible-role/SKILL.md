@@ -101,7 +101,8 @@ never from files in the repo and not from ansible-vault.
   referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (#235).
 - Private keys of the root CA never go to the Pi. Sign on the control node (`delegate_to: localhost`) and copy
   only the leaf cert and key (#229).
-- In Molecule, replace lookups with plain dummy values in `converge.yaml` vars (e.g. `pihole_password: LEAKCANARY-pihole`),
+- In Molecule, replace lookups with plain dummy values in `converge.yaml` vars
+  (e.g. `pihole_password: LEAKCANARY-pihole`),
   so tests never need the real KeePass DB.
 
 ## Testing every change

@@ -41,7 +41,8 @@ molecule destroy       # remove the container when done
 
 - Molecule prints a summary of all steps at the end of each run.
 - JUnit XML reports are written to `test-results/` (gitignored):
-  - `test-results/molecule/<playbook>-<timestamp>.xml`, one per playbook run (`create`, `converge`, `verify`, `destroy`).
+  - `test-results/molecule/<playbook>-<timestamp>.xml`, one per playbook run
+    (`create`, `converge`, `verify`, `destroy`).
     The idempotence step shows up as a second `converge` file; Molecule itself fails that step if anything changed.
   - `pytest ... --junitxml=test-results/pytest.xml` for the unit tests.
 - In GitHub Actions, the reports are published as check runs ("Unit test report", "Molecule test report") with a
