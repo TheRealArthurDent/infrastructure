@@ -2,23 +2,57 @@
   ansible.builtin.debug:
     msg: "Add Docker repository for {{distribution}} {{ distribution_release }} ({{architecture}})"
 
-- name: download the package signing key for the Docker Debian repository
-  ansible.builtin.get_url:
-    url: https://download.docker.com/linux/{{distribution}}/gpg
-    dest: /tmp/docker.asc
-    checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
-
-- name: dearmor the downloaded signing key file
-  ansible.builtin.shell: gpg --batch --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg /tmp/docker.asc
-  args:
-    creates: /etc/apt/trusted.gpg.d/docker.gpg
-
-- name: Add Docker repository
-  ansible.builtin.apt_repository:
-    repo: "deb [arch={{architecture}} signed-by=/etc/apt/trusted.gpg.d/docker.gpg] https://download.docker.com/linux/{{distribution}} {{ distribution_release }} stable"
+# deb822_repository needs python3-debian on the host.
+- name: Ensure python3-debian is installed
+  ansible.builtin.apt:
+    name: python3-debian
     state: present
-    filename: docker
-    update_cache: yes
+
+- name: Ensure /etc/apt/keyrings exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# A key in its own keyring is only trusted for the repository that names it
+# in Signed-By.
+- name: Ensure the Docker package signing key is in its own keyring
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/{{ distribution }}/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
+    owner: root
+    group: root
+    mode: '0644'
+
+# Left behind by earlier versions of this role. The key in trusted.gpg.d is
+# trusted for every repository, and docker.list next to docker.sources makes
+# apt fail with conflicting Signed-By values (#231).
+- name: Ensure the old Docker key and repository files are absent
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/trusted.gpg.d/docker.gpg
+    - /etc/apt/sources.list.d/docker.list
+
+- name: Ensure the Docker apt repository is present
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/{{ distribution }}
+    suites: "{{ distribution_release }}"
+    components: stable
+    architectures: "{{ architecture }}"
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+  notify: Update apt cache
+
+# Docker packages can only be installed once apt knows the repository.
+- name: Flush handlers so apt knows the Docker repository
+  ansible.builtin.meta: flush_handlers
 
 - name: Install Docker
   ansible.builtin.apt:
