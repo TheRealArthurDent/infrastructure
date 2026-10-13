@@ -48,6 +48,7 @@ services:
       TZ: 'Europe/Berlin'
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
       FTLCONF_dns_dnssec: 'true'
+      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Volumes store your data between container upgrades
     volumes:
       - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
@@ -90,6 +91,7 @@ services:
       TZ: 'Europe/Berlin'
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
       FTLCONF_dns_dnssec: 'true'
+      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Volumes store your data between container upgrades
     volumes:
       - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
