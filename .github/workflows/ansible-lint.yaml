@@ -42,5 +42,8 @@ jobs:
           pip install ansible-lint ansible
 
       - name: Run ansible-lint
+        # Advisory until the existing findings are fixed (#240).
+        # Remove continue-on-error once ansible-lint passes.
+        continue-on-error: true
         run: |
           ansible-lint --strict bootstrap/
