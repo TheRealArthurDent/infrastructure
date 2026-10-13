@@ -3,20 +3,21 @@
   gather_facts: true
   vars:
     architecture: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
-    # Dummy secrets instead of KeePass lookups.
-    pihole_password: test-pihole
-    outbound_password: test-outbound
-    containermonitor_notification_url: discord://token@id
-    restic_passphrase: test-restic
+    # Dummy secrets instead of KeePass lookups. Every value containing LEAKCANARY is a secret;
+    # verify.yml fails if one of them shows up in the Ansible log (#230).
+    pihole_password: LEAKCANARY-pihole
+    outbound_password: LEAKCANARY-outbound
+    containermonitor_notification_url: discord://LEAKCANARY-webhook-token@id
+    restic_passphrase: LEAKCANARY-restic
     dungeon_ssh_port: 2222
     iobroker_states_redis_port: 9000
     iobroker_objects_redis_port: 9001
-    influxdb_admin_password: test-influx-admin
-    influxdb_read_password: test-influx-read
-    influxdb_write_password: test-influx-write
-    grafana_password: test-grafana
-    mosquitto_password: test-mosquitto
-    deconz_vnc_password: test-vnc
+    influxdb_admin_password: LEAKCANARY-influx-admin
+    influxdb_read_password: LEAKCANARY-influx-read
+    influxdb_write_password: LEAKCANARY-influx-write
+    grafana_password: LEAKCANARY-grafana
+    mosquitto_password: LEAKCANARY-mosquitto
+    deconz_vnc_password: LEAKCANARY-vnc
     nodered_github_user: test-user
     nodered_github_email: test@example.com
   roles:

@@ -3,6 +3,19 @@
   become: true
   gather_facts: false
   tasks:
+    - name: Check no secret was printed (-v and --diff, see molecule.yml)
+      vars:
+        # Read inside the assert so the log itself is never printed.
+        log_path: "{{ lookup('ansible.builtin.env', 'ANSIBLE_LOG_PATH') }}"
+        run_log: "{{ lookup('ansible.builtin.file', log_path) }}"
+        leaked: "{{ run_log | regex_findall('LEAKCANARY[\\w-]*') | unique }}"
+      ansible.builtin.assert:
+        that: run_log is not search('LEAKCANARY')
+        fail_msg: >-
+          Secrets leaked into the Ansible output: {{ leaked | join(', ') }}.
+          Find the task printing them and add no_log: true.
+        success_msg: No secrets in the Ansible log
+
     - name: Gather package facts
       ansible.builtin.package_facts:
 
@@ -69,7 +82,7 @@
 
     - name: Check pihole password is rendered
       ansible.builtin.assert:
-        that: "'FTLCONF_webserver_api_password=test-pihole' in (infra_env.content | b64decode)"
+        that: "'FTLCONF_webserver_api_password=LEAKCANARY-pihole' in (infra_env.content | b64decode)"
 
     - name: Stat DH parameters
       ansible.builtin.stat:

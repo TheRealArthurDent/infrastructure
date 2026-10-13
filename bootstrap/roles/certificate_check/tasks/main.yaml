@@ -32,6 +32,7 @@
       delegate_to: localhost
       become: false
       run_once: true
+      no_log: true
 
     - name: List available attachments in rootCA entry
       debug:

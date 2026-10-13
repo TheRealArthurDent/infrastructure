@@ -96,3 +96,11 @@ def test_attachment_export(kdbx, tmp_path):
 def test_missing_attachment_raises(kdbx, tmp_path):
     with pytest.raises(AnsibleError, match="not found"):
         lookup(kdbx, group="Domain", title="rootCA", attachment="nope.pem", output_path=str(tmp_path / "x"))
+
+
+def test_attachment_export_prints_nothing(kdbx, tmp_path, capfd):
+    # Lookup output ends up in terminals and CI logs; the plugin must stay silent (#230).
+    lookup(kdbx, group="Domain", title="rootCA", attachment="rootCA.pem", output_path=str(tmp_path / "rootCA.pem"))
+    out, err = capfd.readouterr()
+    assert out == ""
+    assert err == ""

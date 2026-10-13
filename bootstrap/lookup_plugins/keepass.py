@@ -54,12 +54,6 @@ class LookupModule(LookupBase):
       if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, mode=0o700)
 
-      # Debug: print attachment info
-      import sys
-      print(f"DEBUG: Attachment object: {attachment}", file=sys.stderr)
-      print(f"DEBUG: Attachment attributes: {dir(attachment)}", file=sys.stderr)
-      print(f"DEBUG: Output path: {output_path}", file=sys.stderr)
-
       # Write attachment to file
       try:
         with open(output_path, 'wb') as f:
@@ -77,7 +71,6 @@ class LookupModule(LookupBase):
             raise AnsibleError(f'Could not extract data from attachment "{attachment_name}"')
 
           f.write(data)
-          print(f"DEBUG: Wrote {len(data)} bytes to {output_path}", file=sys.stderr)
       except Exception as e:
         raise AnsibleError(f'Failed to write attachment to {output_path}: {str(e)}')
 
