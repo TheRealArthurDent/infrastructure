@@ -93,9 +93,9 @@ never from files in the repo and not from ansible-vault.
   writing `.env` files, `uri` calls with passwords or session tokens in body/headers, and `set_fact` holding a
   secret. `no_log` also hides the `--diff` output, so no extra `diff: false` is needed. A `set_fact` holding a
   secret prints it at `-v`, so it needs `no_log` too.
-- Molecule's `verify.yml` fails if any dummy secret (values containing `LEAKCANARY`) appears in the Ansible log of
+- Molecule's `verify.yaml` fails if any dummy secret (values containing `LEAKCANARY`) appears in the Ansible log of
   the test run, which runs at `-v` with `--diff`. When you add a role variable holding a secret, give its dummy
-  value in `converge.yml` the `LEAKCANARY-` prefix so the leak test covers it.
+  value in `converge.yaml` the `LEAKCANARY-` prefix so the leak test covers it.
 - Secret files on the host: `owner: root`, `mode: '0600'`, below `/etc/docker/<stack>/`.
 - Resolve each secret **once** (e.g. a single `set_fact` with `no_log: true` at the start of the play) instead of
   referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (#235).
