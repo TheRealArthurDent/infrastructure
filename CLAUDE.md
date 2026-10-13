@@ -64,3 +64,10 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
 - Commit messages: conventional style (`feat:`, `fix:`, `test:`, `chore:`), referencing issues (`Refs #238`).
 - Work on feature branches; `main` is the default branch.
 - Container images in `docker-compose.yaml` are pinned and updated by Renovate; keep them pinned.
+- Everything in the repo is written in English (code, comments, docs, commit messages), even when the user
+  chats in German.
+
+## Working with the user
+
+- Whenever a task would benefit from a skill you don't have, say so: which skill, what it would be for, and
+  whether a ready-made one exists or it would have to be written.
