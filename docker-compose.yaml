@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /etc/docker/infrastructure/portainer/data:/data # TODO move to storage
+      - /etc/docker/infrastructure/portainer/data:/data  # TODO move to storage
     environment:
       - TRUSTED_ORIGINS=https://portainer.${HOSTNAME}
     networks:
