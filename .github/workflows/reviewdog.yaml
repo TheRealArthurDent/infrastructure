@@ -16,6 +16,8 @@ jobs:
         uses: reviewdog/action-misspell@v1.30.2
         with:
           reporter: github-pr-review
+          # MQTT broker name, not a typo of "mosquito"
+          ignore: mosquitto
 
       - name: Action lint
         uses: reviewdog/action-actionlint@v1.80.0
