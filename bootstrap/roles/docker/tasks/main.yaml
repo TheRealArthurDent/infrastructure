@@ -2,11 +2,13 @@
   ansible.builtin.debug:
     msg: "Add Docker repository for {{distribution}} {{ distribution_release }} ({{architecture}})"
 
-# deb822_repository needs python3-debian on the host.
+# deb822_repository needs python3-debian on the host, and refuses to run in
+# check mode without it. So this one package is installed even with --check.
 - name: Ensure python3-debian is installed
   ansible.builtin.apt:
     name: python3-debian
     state: present
+  check_mode: false
 
 - name: Ensure /etc/apt/keyrings exists
   ansible.builtin.file:
