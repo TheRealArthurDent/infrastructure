@@ -20,7 +20,7 @@ jobs:
           ignore: mosquitto
 
       - name: Action lint
-        uses: reviewdog/action-actionlint@v1.80.0
+        uses: reviewdog/action-actionlint@v1.80.1
         with:
           reporter: github-pr-review
 
