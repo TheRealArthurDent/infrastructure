@@ -1,5 +1,5 @@
 # Exclude private keys
-/etc/ssl/private
+/source/etc/ssl/private
 # Exclude .env files potentially containing secrets
 /source/etc/docker/*/.*env
 # Exclude everything looking like a secret
