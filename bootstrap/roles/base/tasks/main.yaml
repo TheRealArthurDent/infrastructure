@@ -29,13 +29,16 @@
         group: root
         mode: '0644'
 
-    - name: Create sudoers file for user
+    # A broken sudoers file locks out sudo, so it's checked before it's
+    # put in place (#231).
+    - name: Ensure sudoers entry for deploy user
       ansible.builtin.template:
         src: etc/sudoers.d/user.j2
         dest: /etc/sudoers.d/{{ ansible_user }}
         owner: root
         group: root
         mode: '0440'
+        validate: 'visudo -cf %s'
 
     - name: Copy rsnapshot config
       ansible.builtin.copy:
