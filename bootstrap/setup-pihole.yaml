@@ -32,11 +32,11 @@
       no_log: true
     - name: Get Pi-hole password from KeePass
       set_fact:
-        pihole_password: "{{ lookup('keepass', 
-            db=keepass_db, 
-            password=keepass_password, 
-            key=keepass_key, 
-            group='smart-home', 
+        pihole_password: "{{ lookup('keepass',
+            db=keepass_db,
+            password=keepass_password,
+            key=keepass_key,
+            group='smart-home',
             title='pihole') }}"
       no_log: true
 
@@ -48,7 +48,7 @@
         body:
           password: "{{ pihole_password }}"
         status_code: 200
-        validate_certs: false # TODO remove
+        validate_certs: false  # TODO remove
       register: auth_response
       no_log: true
 
@@ -99,5 +99,5 @@
         headers:
           X-FTL-SID: "{{ pihole_session }}"
         status_code: 204
-        validate_certs: false # TODO remove
+        validate_certs: false  # TODO remove
       ignore_errors: true
