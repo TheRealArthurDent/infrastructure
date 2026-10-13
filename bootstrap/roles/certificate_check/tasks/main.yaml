@@ -1,0 +1,118 @@
+# Issues the nginx certificate for inventory_hostname from the root CA. The CA private key never leaves
+# the control node: the host creates its own key and CSR, the control node signs the CSR in memory, and
+# only the leaf certificate and the full chain are copied back (#229).
+
+- name: Check root CA variables are set
+  ansible.builtin.assert:
+    that:
+      - certificate_check_root_ca_cert | length > 0
+      - certificate_check_root_ca_key | length > 0
+    fail_msg: certificate_check_root_ca_cert and certificate_check_root_ca_key must be set by the playbook
+    quiet: true
+
+# cryptography for community.crypto, requests for the community.docker calls in the nginx reload handler
+- name: Ensure Python libraries for the crypto and Docker modules are installed
+  ansible.builtin.apt:
+    name:
+      - python3-cryptography
+      - python3-requests
+    state: present
+
+- name: Ensure root CA private key is absent from the host
+  ansible.builtin.file:
+    path: /etc/ssl/private/rootCA.key
+    state: absent
+
+- name: Ensure root CA certificate is present
+  ansible.builtin.copy:
+    content: "{{ certificate_check_root_ca_cert }}"
+    dest: "{{ certificate_check_root_ca_cert_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure certificate directory exists
+  ansible.builtin.file:
+    path: "{{ certificate_check_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Ensure private key for the host certificate exists
+  community.crypto.openssl_privatekey:
+    path: "{{ certificate_check_dir }}/{{ inventory_hostname }}.key"
+    type: RSA
+    size: "{{ certificate_check_key_size }}"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Reload nginx
+
+- name: Create CSR for the host certificate
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ certificate_check_dir }}/{{ inventory_hostname }}.key"
+    common_name: "{{ inventory_hostname }}"
+    country_name: DE
+    state_or_province_name: BY
+    organization_name: "{{ inventory_hostname }}"
+    subject_alt_name: >-
+      {{ ['DNS:' ~ inventory_hostname]
+         + certificate_check_subdomains | map('regex_replace', '^(.*)$', 'DNS:\1.' ~ inventory_hostname) | list }}
+  register: certificate_check_csr
+  # Only returns the CSR, nothing on the host changes.
+  changed_when: false
+
+- name: Check for an existing host certificate
+  ansible.builtin.stat:
+    path: "{{ certificate_check_dir }}/{{ inventory_hostname }}.crt"
+  register: certificate_check_cert_stat
+
+- name: Read existing host certificate
+  ansible.builtin.slurp:
+    src: "{{ certificate_check_dir }}/{{ inventory_hostname }}.crt"
+  register: certificate_check_cert_existing
+  when: certificate_check_cert_stat.stat.exists
+
+- name: Read expiry of existing host certificate
+  community.crypto.x509_certificate_info:
+    content: "{{ certificate_check_cert_existing.content | b64decode }}"
+    valid_at:
+      renewal: "+{{ certificate_check_renewal_threshold_days }}d"
+  register: certificate_check_cert_info
+  when: certificate_check_cert_stat.stat.exists
+
+# Without force, x509_certificate_pipe only reissues when the certificate doesn't match the CSR or the CA.
+# Expiry isn't part of that check, so force a reissue inside the renewal threshold.
+- name: Sign host certificate with the root CA on the control node
+  community.crypto.x509_certificate_pipe:
+    provider: ownca
+    content: "{{ (certificate_check_cert_existing.content | b64decode) if certificate_check_cert_stat.stat.exists else omit }}"
+    csr_content: "{{ certificate_check_csr.csr }}"
+    ownca_content: "{{ certificate_check_root_ca_cert }}"
+    ownca_privatekey_content: "{{ certificate_check_root_ca_key }}"
+    ownca_privatekey_passphrase: "{{ certificate_check_root_ca_passphrase or omit }}"
+    ownca_not_after: "+{{ certificate_check_validity_days }}d"
+    ownca_digest: sha256
+    force: "{{ certificate_check_cert_stat.stat.exists and not certificate_check_cert_info.valid_at.renewal }}"
+  register: certificate_check_cert
+  delegate_to: localhost
+  become: false
+  no_log: true
+
+- name: Ensure host certificate is present
+  ansible.builtin.copy:
+    content: "{{ certificate_check_cert.certificate }}"
+    dest: "{{ certificate_check_dir }}/{{ inventory_hostname }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure full chain for nginx is present
+  ansible.builtin.copy:
+    content: "{{ certificate_check_cert.certificate | trim }}\n{{ certificate_check_root_ca_cert | trim }}\n"
+    dest: "{{ certificate_check_dir }}/{{ inventory_hostname }}.pem"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload nginx

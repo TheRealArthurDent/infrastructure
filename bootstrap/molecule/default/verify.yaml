@@ -1,0 +1,212 @@
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check no secret was printed (-v and --diff, see molecule.yml)
+      vars:
+        # Read inside the assert so the log itself is never printed.
+        log_path: "{{ lookup('ansible.builtin.env', 'ANSIBLE_LOG_PATH') }}"
+        run_log: "{{ lookup('ansible.builtin.file', log_path) }}"
+        leaked: "{{ run_log | regex_findall('LEAKCANARY[\\w-]*') | unique }}"
+      ansible.builtin.assert:
+        that: run_log is not search('LEAKCANARY')
+        fail_msg: >-
+          Secrets leaked into the Ansible output: {{ leaked | join(', ') }}.
+          Find the task printing them and add no_log: true.
+        success_msg: No secrets in the Ansible log
+
+    - name: Gather package facts
+      ansible.builtin.package_facts:
+
+    - name: Check required packages are installed
+      ansible.builtin.assert:
+        that: item in ansible_facts.packages
+        fail_msg: "{{ item }} is not installed"
+      loop:
+        - rsnapshot
+        - docker-ce
+        - docker-compose-plugin
+
+    - name: Validate the deployed sudoers file
+      ansible.builtin.command: visudo -cf /etc/sudoers.d/smarthome
+      changed_when: false
+
+    - name: Stat the deployed sudoers file
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/smarthome
+      register: sudoers_file
+
+    - name: Check sudoers file is owned by root and read-only
+      ansible.builtin.assert:
+        that:
+          - sudoers_file.stat.exists
+          - sudoers_file.stat.pw_name == 'root'
+          - sudoers_file.stat.mode == '0440'
+        fail_msg: /etc/sudoers.d/smarthome is missing or has wrong ownership/mode
+
+    - name: Stat Docker apt key files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: docker_apt_files
+      loop:
+        - /etc/apt/keyrings/docker.asc
+        - /etc/apt/trusted.gpg.d/docker.gpg
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/sources.list.d/docker.sources
+
+    - name: Check Docker key is only in its own keyring, not trusted for every repo (#231)
+      vars:
+        stats: "{{ docker_apt_files.results | items2dict(key_name='item', value_name='stat') }}"
+      ansible.builtin.assert:
+        that:
+          - stats['/etc/apt/keyrings/docker.asc'].exists
+          - stats['/etc/apt/keyrings/docker.asc'].pw_name == 'root'
+          - stats['/etc/apt/keyrings/docker.asc'].mode == '0644'
+          - not stats['/etc/apt/trusted.gpg.d/docker.gpg'].exists
+          - not stats['/etc/apt/sources.list.d/docker.list'].exists
+          - stats['/etc/apt/sources.list.d/docker.sources'].exists
+        fail_msg: >-
+          Expected the Docker key at /etc/apt/keyrings/docker.asc and the repository in docker.sources,
+          with the old trusted.gpg.d/docker.gpg and docker.list removed
+
+    - name: Read Docker apt repository
+      ansible.builtin.slurp:
+        src: /etc/apt/sources.list.d/docker.sources
+      register: docker_sources
+
+    - name: Check Docker repository is signed by its own keyring
+      ansible.builtin.assert:
+        that: "'Signed-By: /etc/apt/keyrings/docker.asc' in (docker_sources.content | b64decode)"
+        fail_msg: docker.sources does not pin Signed-By to /etc/apt/keyrings/docker.asc
+
+    - name: Read deploy user groups
+      ansible.builtin.command: id -nG smarthome
+      register: user_groups
+      changed_when: false
+
+    - name: Check deploy user is in the docker group
+      ansible.builtin.assert:
+        that: "'docker' in user_groups.stdout.split()"
+
+    - name: Read root crontab
+      ansible.builtin.command: crontab -l -u root
+      register: crontab
+      changed_when: false
+
+    - name: Check rsnapshot cron jobs exist
+      ansible.builtin.assert:
+        that:
+          - "'rsnapshot daily' in crontab.stdout"
+          - "'rsnapshot weekly' in crontab.stdout"
+
+    - name: Stat secret files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: secret_files
+      loop:
+        - /etc/docker/infrastructure/.env
+        - /etc/docker/infrastructure/.outbound.env
+        - /etc/docker/infrastructure/.healthmonitor.env
+        - /etc/docker/infrastructure/secrets/restic_passphrase
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
+        - /etc/docker/smart-home/.env
+
+    - name: Check secret files exist, are owned by root and are not world-readable
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+        fail_msg: "{{ item.item }} is missing or has wrong ownership/mode"
+      loop: "{{ secret_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read infrastructure .env
+      ansible.builtin.slurp:
+        src: /etc/docker/infrastructure/.env
+      register: infra_env
+
+    - name: Check pihole password is rendered
+      ansible.builtin.assert:
+        that: "'FTLCONF_webserver_api_password=LEAKCANARY-pihole' in (infra_env.content | b64decode)"
+
+    - name: Stat DH parameters
+      ansible.builtin.stat:
+        path: /etc/ssl/certs/dhparam.pem
+      register: dhparam
+
+    - name: Check DH parameters exist
+      ansible.builtin.assert:
+        that: dhparam.stat.exists
+
+    - name: Stat root CA private key on the host
+      ansible.builtin.stat:
+        path: /etc/ssl/private/rootCA.key
+      register: root_ca_key
+
+    - name: Check root CA private key is not on the host
+      ansible.builtin.assert:
+        that: not root_ca_key.stat.exists
+        fail_msg: /etc/ssl/private/rootCA.key must not exist on the host (#229)
+
+    - name: Stat host certificate files
+      ansible.builtin.stat:
+        path: "/etc/docker/infrastructure/nginx/{{ inventory_hostname }}.{{ item.ext }}"
+      register: cert_files
+      loop:
+        - {ext: key, mode: '0600'}
+        - {ext: crt, mode: '0644'}
+        - {ext: pem, mode: '0644'}
+
+    - name: Check host certificate files exist with owner and mode
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == item.item.mode
+        fail_msg: "{{ item.item.ext }} file is missing or has wrong ownership/mode"
+      loop: "{{ cert_files.results }}"
+      loop_control:
+        label: "{{ item.item.ext }}"
+
+    - name: Verify host certificate against the root CA
+      ansible.builtin.command: >-
+        openssl verify -CAfile /etc/ssl/certs/rootCA.pem
+        /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      changed_when: false
+
+    - name: Read public key of the host certificate
+      ansible.builtin.command: openssl x509 -noout -pubkey -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      register: cert_pubkey
+      changed_when: false
+
+    - name: Read public key of the host private key
+      ansible.builtin.command: openssl pkey -pubout -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.key
+      register: key_pubkey
+      changed_when: false
+
+    - name: Check host certificate matches its private key
+      ansible.builtin.assert:
+        that: cert_pubkey.stdout == key_pubkey.stdout
+
+    - name: Read SANs of the host certificate
+      ansible.builtin.command: openssl x509 -noout -ext subjectAltName -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      register: cert_san
+      changed_when: false
+
+    - name: Check host certificate covers the host and its subdomains
+      ansible.builtin.assert:
+        that:
+          - "'DNS:' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
+
+    - name: Count certificates in the nginx full chain
+      ansible.builtin.command: grep -c 'BEGIN CERTIFICATE' /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem
+      register: chain_count
+      changed_when: false
+
+    - name: Check full chain holds leaf and root CA exactly once
+      ansible.builtin.assert:
+        that: chain_count.stdout == '2'

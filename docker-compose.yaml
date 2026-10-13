@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /etc/docker/infrastructure/portainer/data:/data
+      - /etc/docker/infrastructure/portainer/data:/data  # TODO move to storage
     environment:
       - TRUSTED_ORIGINS=https://portainer.${HOSTNAME}
     networks:
@@ -48,12 +48,10 @@ services:
       TZ: 'Europe/Berlin'
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
       FTLCONF_dns_dnssec: 'true'
-    security_opt:
-      - no-new-privileges:false
+      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Volumes store your data between container upgrades
     volumes:
       - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
-      - /etc/docker/infrastructure/pihole/dnsmasq.d:/etc/dnsmasq.d
     # Recommended but not required (DHCP needs NET_ADMIN)
     # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
     #cap_add:
@@ -93,8 +91,7 @@ services:
       TZ: 'Europe/Berlin'
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
       FTLCONF_dns_dnssec: 'true'
-    security_opt:
-      - no-new-privileges:false
+      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Volumes store your data between container upgrades
     volumes:
       - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
@@ -134,6 +131,7 @@ services:
       - /home:/source/home:ro
       - /etc:/source/etc:ro
       - /var/lib/docker/volumes:/source/docker-volumes:ro
+      - /var/restore:/restore-target:rw
       # Prom metrics for telegraf
       - /var/lib/resticprofile/metrics:/metrics
     restart: unless-stopped

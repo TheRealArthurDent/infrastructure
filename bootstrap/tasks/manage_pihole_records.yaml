@@ -1,0 +1,96 @@
+---
+# Modular task to manage Pi-hole DNS records (hosts, cnames, lists, upstreams, etc.)
+# Parameters:
+#   - record_type: "hosts", "cnameRecords", "lists", "upstreams"
+#   - api_endpoint: API endpoint path (e.g., /api/config/dns/hosts)
+#   - desired_records: Array of objects or strings
+#   - record_format: "objects" for {domain, address/target}, "simple" for plain strings
+#   - value_attribute: Attribute name for value ("address" for hosts, "target" for cnames)
+#   - domain_first: true for "domain,target", false for "address,domain" (default: true)
+#   - separator: Separator for joining records (" " for hosts, "," for cnames, "" for upstreams)
+#   - url_separator: URL separator ("%20" for hosts, "%2C" for cnames, "" for upstreams)
+
+- name: "Get existing {{ record_type }} from API"
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}"
+    method: GET
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 200
+    validate_certs: false
+  register: api_response
+
+- name: "Extract existing {{ record_type }} records"
+  set_fact:
+    existing_records_extracted: "{{ api_response.json.config.dns[record_type] | default([]) }}"
+
+- name: "Show existing {{ record_type }}"
+  debug:
+    msg: "Existing {{ record_type }}: {{ existing_records_extracted }}"
+
+- name: "Format desired {{ record_type }} records (domain first)"
+  set_fact:
+    desired_records_formatted: "{{ desired_records | map(attribute='domain') | zip(desired_records | map(attribute=value_attribute)) | map('join', separator) | list }}"
+  when: record_format == "objects" and separator != "" and domain_first | default(true)
+
+- name: "Format desired {{ record_type }} records (value first)"
+  set_fact:
+    desired_records_formatted: "{{ desired_records | map(attribute=value_attribute) | zip(desired_records | map(attribute='domain')) | map('join', separator) | list }}"
+  when: record_format == "objects" and separator != "" and not (domain_first | default(true))
+
+- name: "Format desired {{ record_type }} records (simple list)"
+  set_fact:
+    desired_records_formatted: "{{ desired_records }}"
+  when: record_format == "simple"
+
+- name: "Identify {{ record_type }} to delete"
+  set_fact:
+    records_to_delete: "{{ existing_records_extracted | difference(desired_records_formatted | default(desired_records)) }}"
+
+- name: "Identify {{ record_type }} to add"
+  set_fact:
+    records_to_add: "{{ (desired_records_formatted | default(desired_records)) | difference(existing_records_extracted) }}"
+
+- name: "Show {{ record_type }} to delete"
+  debug:
+    msg: "{{ record_type | capitalize }} to delete: {{ records_to_delete }}"
+  when: records_to_delete | length > 0
+
+- name: "Show {{ record_type }} to add"
+  debug:
+    msg: "{{ record_type | capitalize }} to add: {{ records_to_add }}"
+  when: records_to_add | length > 0
+
+- name: "Delete old {{ record_type }}"
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ item | replace(separator, url_separator) if separator else item }}"
+    method: DELETE
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 204
+    validate_certs: false
+  loop: "{{ records_to_delete }}"
+  when: records_to_delete | length > 0
+  register: delete_result
+
+- name: "Add {{ record_type }}"
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ item | replace(separator, url_separator) if separator else item }}"
+    method: PUT
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 201
+    validate_certs: false
+  until: add_result.status == 201
+  retries: 3
+  delay: 5
+  loop: "{{ records_to_add }}"
+  when: records_to_add | length > 0
+  register: add_result
+
+- name: "{{ record_type | capitalize }} summary"
+  debug:
+    msg: |
+      {{ record_type | capitalize }} Configuration:
+      - Records to delete: {{ records_to_delete | length }}
+      - Records to add: {{ records_to_add | length }}

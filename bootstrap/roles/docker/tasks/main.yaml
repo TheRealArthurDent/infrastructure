@@ -1,0 +1,78 @@
+- name: Debug
+  ansible.builtin.debug:
+    msg: "Add Docker repository for {{distribution}} {{ distribution_release }} ({{architecture}})"
+
+# deb822_repository needs python3-debian on the host, and refuses to run in
+# check mode without it. So this one package is installed even with --check.
+- name: Ensure python3-debian is installed
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+  check_mode: false
+
+- name: Ensure /etc/apt/keyrings exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# A key in its own keyring is only trusted for the repository that names it
+# in Signed-By.
+- name: Ensure the Docker package signing key is in its own keyring
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/{{ distribution }}/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
+    owner: root
+    group: root
+    mode: '0644'
+
+# Left behind by earlier versions of this role. The key in trusted.gpg.d is
+# trusted for every repository, and docker.list next to docker.sources makes
+# apt fail with conflicting Signed-By values (#231).
+- name: Ensure the old Docker key and repository files are absent
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/trusted.gpg.d/docker.gpg
+    - /etc/apt/sources.list.d/docker.list
+
+- name: Ensure the Docker apt repository is present
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/{{ distribution }}
+    suites: "{{ distribution_release }}"
+    components: stable
+    architectures: "{{ architecture }}"
+    signed_by: /etc/apt/keyrings/docker.asc
+    state: present
+  notify: Update apt cache
+
+# Docker packages can only be installed once apt knows the repository.
+- name: Flush handlers so apt knows the Docker repository
+  ansible.builtin.meta: flush_handlers
+
+- name: Install Docker
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present
+
+# Keep this a separate task to avoid dependency conflicts.
+- name: Install Docker Compose Plugin
+  ansible.builtin.apt:
+    name:
+      - docker-compose-plugin
+    state: present
+
+- name: Add user to docker group
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true

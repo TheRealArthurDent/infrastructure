@@ -1,0 +1,113 @@
+---
+- name: Require --limit
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure the run is limited to explicit hosts
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Run with --limit <host>"
+        quiet: true
+
+- name: Configure Pi-hole via REST API
+  hosts: all
+  gather_facts: true
+  vars:
+    pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"
+    pihole_port: 443
+    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
+    keepass_key: "/home/mika/.keepass/raspberry.key"
+
+  tasks:
+    - name: Load Pi-hole configuration
+      include_vars:
+        file: configs/pihole.yaml
+
+    - name: Get KeePass password from environment variable
+      set_fact:
+        keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
+      no_log: true
+
+    - name: Prompt for KeePass password if not in environment
+      pause:
+        prompt: "KeePass master password"
+        echo: false
+      register: prompted_password
+      when: not keepass_password
+
+    - name: Use prompted password if env not set
+      set_fact:
+        keepass_password: "{{ prompted_password.user_input }}"
+      when: not keepass_password
+      no_log: true
+    - name: Get Pi-hole password from KeePass
+      set_fact:
+        pihole_password: "{{ lookup('keepass',
+            db=keepass_db,
+            password=keepass_password,
+            key=keepass_key,
+            group='smart-home',
+            title='pihole') }}"
+      no_log: true
+
+    - name: Authenticate with Pi-hole API
+      ansible.builtin.uri:
+        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
+        method: POST
+        body_format: json
+        body:
+          password: "{{ pihole_password }}"
+        status_code: 200
+        validate_certs: false  # TODO remove
+      register: auth_response
+      no_log: true
+
+    - name: Extract session token
+      set_fact:
+        pihole_session: "{{ auth_response.json.session.sid }}"
+      no_log: true
+
+
+    - name: Manage A records (hosts)
+      include_tasks: tasks/manage_pihole_records.yaml
+      vars:
+        record_type: "hosts"
+        api_endpoint: "/api/config/dns/hosts"
+        desired_records: "{{ dns_a_records }}"
+        record_format: "objects"
+        value_attribute: "address"
+        domain_first: false
+        separator: " "
+        url_separator: "%20"
+
+    - name: Manage CNAME records
+      include_tasks: tasks/manage_pihole_records.yaml
+      vars:
+        record_type: "cnameRecords"
+        api_endpoint: "/api/config/dns/cnameRecords"
+        desired_records: "{{ dns_cname_records }}"
+        record_format: "objects"
+        value_attribute: "target"
+        domain_first: true
+        separator: ","
+        url_separator: "%2C"
+
+    - name: Manage block lists
+      include_tasks: tasks/manage_pihole_lists.yaml
+      vars:
+        list_type: "block"
+        api_endpoint: "/api/lists"
+        desired_records: "{{ dns_block_lists }}"
+        record_format: "simple"
+
+    # TODO: Clients, Groups and Domains
+
+    - name: Logout from Pi-hole API
+      ansible.builtin.uri:
+        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
+        method: DELETE
+        headers:
+          X-FTL-SID: "{{ pihole_session }}"
+        status_code: 204
+        validate_certs: false  # TODO remove
+      ignore_errors: true

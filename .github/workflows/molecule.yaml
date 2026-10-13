@@ -1,0 +1,89 @@
+name: Ansible Tests
+
+on:
+  push:
+    paths:
+      - 'bootstrap/**'
+      - 'requirements.txt'
+      - '.github/workflows/molecule.yaml'
+  pull_request:
+    paths:
+      - 'bootstrap/**'
+      - 'requirements.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write  # publish test reports as check runs
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # The --limit guard tests load the playbooks, which need the collections.
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r bootstrap/requirements.yml
+
+      - name: Run pytest
+        run: pytest -v bootstrap/tests/unit --junitxml=test-results/pytest.xml
+
+      - name: Publish test report
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v5
+        with:
+          check_name: Unit test report
+          report_paths: test-results/pytest.xml
+          detailed_summary: true
+          include_passed: true
+
+  molecule:
+    name: Molecule
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Molecule tests
+        working-directory: bootstrap
+        run: molecule test
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+      - name: Publish test report
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v5
+        with:
+          check_name: Molecule test report
+          report_paths: test-results/molecule/*.xml
+          detailed_summary: true
+          include_passed: true
+
+      - name: Upload raw reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: molecule-reports
+          path: test-results/
