@@ -64,6 +64,10 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
 - Commit messages: conventional style (`feat:`, `fix:`, `test:`, `chore:`), referencing issues (`Refs #238`).
 - Work on feature branches; `main` is the default branch.
 - Container images in `docker-compose.yaml` are pinned and updated by Renovate; keep them pinned.
+- Work test-driven, unless something speaks against it (then say why). Write the test first and watch it fail
+  for the right reason before changing the code: pytest for Python, `verify.yml` checks for Ansible roles,
+  run against the old role. Since a Molecule run takes minutes, one red/green cycle may cover a group of
+  related checks.
 - Everything in the repo is written in English (code, comments, docs, commit messages), even when the user
   chats in German.
 
