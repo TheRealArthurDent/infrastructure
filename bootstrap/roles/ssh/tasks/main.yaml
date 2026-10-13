@@ -76,23 +76,33 @@
     msg: "The SSH port is neither 22 nor {{ ansible_port }}."
   when: ssh_port_set is undefined
 
-- name: Create sudoers file for user
-  ansible.builtin.template:
-    src: etc/sudoers.d/user.j2
-    dest: /etc/sudoers.d/{{ ansible_user }}
-    owner: root
-    group: root
-    mode: '0440'
-
 # Sanity check, make sure Ansible is able to connect to the host
 - name: Confirm host connection works
   ping:
 
-- name: Setup alternate SSH port
+# sshd -t only checks the drop-in on its own, but that catches typos before
+# they can lock us out (#231).
+- name: Ensure sshd listens on the configured port
   ansible.builtin.copy:
-    content: |
-      Port {{ configured_port }}
-    dest: "/etc/ssh/sshd_config.d/custom-port.conf"
+    content: "Port {{ configured_port }}\n"
+    dest: /etc/ssh/sshd_config.d/custom-port.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'sshd -t -f %s'
+  notify: "Restart sshd"
+
+# sshd uses the first value it reads for each option. The 10- prefix sorts
+# before drop-ins like 50-cloud-init.conf from Raspberry Pi Imager, which can
+# re-enable password logins.
+- name: Ensure sshd only allows key-based logins and no root login
+  ansible.builtin.copy:
+    src: etc/ssh/sshd_config.d/10-hardening.conf
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'sshd -t -f %s'
   notify: "Restart sshd"
 
 # We notified "Restart sshd" if we modified the sshd config.
