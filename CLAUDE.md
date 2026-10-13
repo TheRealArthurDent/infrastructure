@@ -69,7 +69,7 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
   run against the old role. Since a Molecule run takes minutes, one red/green cycle may cover a group of
   related checks.
 - YAML files use the `.yaml` extension, not `.yml`. Exceptions only where a tool requires a fixed name
-  (e.g. Molecule's `molecule.yml`). Rename existing `.yml` files only when a change touches them anyway.
+  (e.g. Molecule's `molecule.yml`).
 - Everything in the repo is written in English (code, comments, docs, commit messages), even when the user
   chats in German.
 
