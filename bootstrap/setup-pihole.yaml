@@ -21,7 +21,7 @@
     - name: Prompt for KeePass password if not in environment
       pause:
         prompt: "KeePass master password"
-        echo: no
+        echo: false
       register: prompted_password
       when: not keepass_password
 
