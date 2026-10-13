@@ -3,8 +3,7 @@
   hosts: testbed
   gather_facts: true
   vars:
-    #pihole_host: "{{ pihole_ip | default('pihole.{{ inventory_hostname }}') }}"
-    pihole_host: "{{ pihole_ip | default('pihole.testbed') }}"
+    pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"
     pihole_port: 443
     #keepass_db: "{{ lookup('env', 'KEEPASS_DB') }}"
     #keepass_key: "{{ lookup('env', 'KEEPASS_KEY') }}"
