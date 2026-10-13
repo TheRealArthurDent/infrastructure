@@ -88,14 +88,17 @@ never from files in the repo and not from ansible-vault.
 
 - Every task that **receives, renders or sends** a secret gets `no_log: true`. That includes `copy`/`template`
   writing `.env` files, `uri` calls with passwords or session tokens in body/headers, and `set_fact` holding a
-  secret. Also set `diff: false` on tasks writing secret files, because `--diff` prints file contents even with
-  `no_log`.
+  secret. `no_log` also hides the `--diff` output, so no extra `diff: false` is needed. A `set_fact` holding a
+  secret prints it at `-v`, so it needs `no_log` too.
+- Molecule's `verify.yml` fails if any dummy secret (values containing `LEAKCANARY`) appears in the Ansible log of
+  the test run, which runs at `-v` with `--diff`. When you add a role variable holding a secret, give its dummy
+  value in `converge.yml` the `LEAKCANARY-` prefix so the leak test covers it.
 - Secret files on the host: `owner: root`, `mode: '0600'`, below `/etc/docker/<stack>/`.
 - Resolve each secret **once** (e.g. a single `set_fact` with `no_log: true` at the start of the play) instead of
   referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (#235).
 - Private keys of the root CA never go to the Pi. Sign on the control node (`delegate_to: localhost`) and copy
   only the leaf cert and key (#229).
-- In Molecule, replace lookups with plain dummy values in `converge.yml` vars (e.g. `pihole_password: test-pihole`),
+- In Molecule, replace lookups with plain dummy values in `converge.yml` vars (e.g. `pihole_password: LEAKCANARY-pihole`),
   so tests never need the real KeePass DB.
 
 ## Testing every change
