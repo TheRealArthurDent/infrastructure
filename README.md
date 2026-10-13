@@ -32,7 +32,7 @@ keep the container around instead (all commands from `bootstrap/`):
 ```sh
 molecule converge      # create the container if needed and apply the roles; repeat after every change
 molecule idempotence   # run again and fail if anything changes
-molecule verify        # run the checks in molecule/default/verify.yml
+molecule verify        # run the checks in molecule/default/verify.yaml
 molecule login         # open a shell in the container to look around
 molecule destroy       # remove the container when done
 ```

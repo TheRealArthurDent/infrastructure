@@ -17,6 +17,11 @@ platforms:
 
 provisioner:
   name: ansible
+  # Molecule defaults to *.yml; this repo uses .yaml (molecule.yml itself is a fixed name).
+  playbooks:
+    prepare: prepare.yaml
+    converge: converge.yaml
+    verify: verify.yaml
   env:
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/roles
     # JUnit XML per playbook run (create, converge, idempotence, verify, ...) in <repo>/test-results/molecule

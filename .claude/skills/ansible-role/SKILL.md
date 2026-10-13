@@ -1,6 +1,6 @@
 ---
 name: ansible-role
-description: Conventions and checklist for writing, changing or reviewing Ansible roles, tasks and playbooks in this repo's bootstrap/ directory, including how to cover them with Molecule tests. Use this whenever you add or modify anything under bootstrap/ (roles, tasks, handlers, templates, playbooks, inventory), migrate a bash step from deploy.sh/setup.sh/run.sh into Ansible, fix an idempotency or ansible-lint problem, or add or extend a Molecule scenario or verify.yml, even if the user only says something like "add X to the pi setup" or "automate this step".
+description: Conventions and checklist for writing, changing or reviewing Ansible roles, tasks and playbooks in this repo's bootstrap/ directory, including how to cover them with Molecule tests. Use this whenever you add or modify anything under bootstrap/ (roles, tasks, handlers, templates, playbooks, inventory), migrate a bash step from deploy.sh/setup.sh/run.sh into Ansible, fix an idempotency or ansible-lint problem, or add or extend a Molecule scenario or verify.yaml, even if the user only says something like "add X to the pi setup" or "automate this step".
 ---
 
 # Ansible roles in this repo
@@ -22,9 +22,12 @@ bootstrap/
     defaults/main.yaml       # every variable the role reads, with a sane default, prefixed <role>_
     files/...                # static files, referenced as src: etc/foo.conf
     templates/...            # Jinja templates (*.j2), referenced as src: etc/foo.conf.j2
-  molecule/default/          # converge.yml, verify.yml, molecule.yml, Dockerfile.j2
+  molecule/default/          # converge.yaml, prepare.yaml, verify.yaml, molecule.yml, Dockerfile.j2
   tests/unit/                # pytest for Python plugins
 ```
+
+YAML files use `.yaml`. Molecule's only fixed name is `molecule.yml`; its playbooks are mapped to `.yaml` under
+`provisioner.playbooks` in `molecule.yml`, so a new Molecule playbook (e.g. `side_effect`) needs an entry there.
 
 Reference role files by paths **relative to the role's own `files/` or `templates/` directory**
 (`src: etc/sysctl.d/90-overcommit-memory.conf`). Paths like `templates/etc/...` that resolve relative to the
@@ -98,7 +101,7 @@ never from files in the repo and not from ansible-vault.
   referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (#235).
 - Private keys of the root CA never go to the Pi. Sign on the control node (`delegate_to: localhost`) and copy
   only the leaf cert and key (#229).
-- In Molecule, replace lookups with plain dummy values in `converge.yml` vars (e.g. `pihole_password: LEAKCANARY-pihole`),
+- In Molecule, replace lookups with plain dummy values in `converge.yaml` vars (e.g. `pihole_password: LEAKCANARY-pihole`),
   so tests never need the real KeePass DB.
 
 ## Testing every change
@@ -106,11 +109,11 @@ never from files in the repo and not from ansible-vault.
 Each role change comes with a matching test change. That's what keeps the roles trustworthy as the migration
 from bash continues.
 
-1. **Add the role to Molecule** in `bootstrap/molecule/default/converge.yml` (`roles:` list), plus dummy values
+1. **Add the role to Molecule** in `bootstrap/molecule/default/converge.yaml` (`roles:` list), plus dummy values
    for any variables it needs that aren't in `defaults/`. If the role needs something a fresh Pi OS Lite has but
    `debian:trixie` lacks, install it in `molecule/default/Dockerfile.j2` with a comment (that's what `procps`
    for `/etc/sysctl.d` is). Never change the role just to suit the container.
-2. **Add checks to `verify.yml`** that prove the *outcome*, not that the task ran: package installed (via
+2. **Add checks to `verify.yaml`** that prove the *outcome*, not that the task ran: package installed (via
    `package_facts`), file exists with owner and mode, rendered content contains the expected line, config passes
    its validator (`visudo -cf`, `nginx -t`), user in group, cron entry present. Use `ansible.builtin.assert` with a
    clear `fail_msg`. Never `register:` into reserved names like `groups`.
@@ -134,7 +137,7 @@ from bash continues.
    any real host, and never target `raspi` without explicit instruction.
 
 If Docker isn't available, say so and still do the static parts (syntax check with
-`ANSIBLE_ROLES_PATH=roles ansible-playbook -i localhost, --syntax-check molecule/default/converge.yml`, lint),
+`ANSIBLE_ROLES_PATH=roles ansible-playbook -i localhost, --syntax-check molecule/default/converge.yaml`, lint),
 instead of claiming the tests passed.
 
 ## Migrating a step from the bash scripts
