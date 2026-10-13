@@ -93,6 +93,13 @@ def test_attachment_export(kdbx, tmp_path):
     assert out.read_bytes() == b"-----BEGIN CERTIFICATE-----\n"
 
 
+def test_attachment_content_without_output_path(kdbx):
+    # Returns the attachment as text instead of writing it to disk (#229).
+    assert lookup(kdbx, group="Domain", title="rootCA", attachment="rootCA.pem") == [
+        "-----BEGIN CERTIFICATE-----\n"
+    ]
+
+
 def test_missing_attachment_raises(kdbx, tmp_path):
     with pytest.raises(AnsibleError, match="not found"):
         lookup(kdbx, group="Domain", title="rootCA", attachment="nope.pem", output_path=str(tmp_path / "x"))

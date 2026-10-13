@@ -92,3 +92,73 @@
     - name: Check DH parameters exist
       ansible.builtin.assert:
         that: dhparam.stat.exists
+
+    - name: Stat root CA private key on the host
+      ansible.builtin.stat:
+        path: /etc/ssl/private/rootCA.key
+      register: root_ca_key
+
+    - name: Check root CA private key is not on the host
+      ansible.builtin.assert:
+        that: not root_ca_key.stat.exists
+        fail_msg: /etc/ssl/private/rootCA.key must not exist on the host (#229)
+
+    - name: Stat host certificate files
+      ansible.builtin.stat:
+        path: "/etc/docker/infrastructure/nginx/{{ inventory_hostname }}.{{ item.ext }}"
+      register: cert_files
+      loop:
+        - {ext: key, mode: '0600'}
+        - {ext: crt, mode: '0644'}
+        - {ext: pem, mode: '0644'}
+
+    - name: Check host certificate files exist with owner and mode
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == item.item.mode
+        fail_msg: "{{ item.item.ext }} file is missing or has wrong ownership/mode"
+      loop: "{{ cert_files.results }}"
+      loop_control:
+        label: "{{ item.item.ext }}"
+
+    - name: Verify host certificate against the root CA
+      ansible.builtin.command: >-
+        openssl verify -CAfile /etc/ssl/certs/rootCA.pem
+        /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      changed_when: false
+
+    - name: Read public key of the host certificate
+      ansible.builtin.command: openssl x509 -noout -pubkey -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      register: cert_pubkey
+      changed_when: false
+
+    - name: Read public key of the host private key
+      ansible.builtin.command: openssl pkey -pubout -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.key
+      register: key_pubkey
+      changed_when: false
+
+    - name: Check host certificate matches its private key
+      ansible.builtin.assert:
+        that: cert_pubkey.stdout == key_pubkey.stdout
+
+    - name: Read SANs of the host certificate
+      ansible.builtin.command: openssl x509 -noout -ext subjectAltName -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      register: cert_san
+      changed_when: false
+
+    - name: Check host certificate covers the host and its subdomains
+      ansible.builtin.assert:
+        that:
+          - "'DNS:' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
+
+    - name: Count certificates in the nginx full chain
+      ansible.builtin.command: grep -c 'BEGIN CERTIFICATE' /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem
+      register: chain_count
+      changed_when: false
+
+    - name: Check full chain holds leaf and root CA exactly once
+      ansible.builtin.assert:
+        that: chain_count.stdout == '2'

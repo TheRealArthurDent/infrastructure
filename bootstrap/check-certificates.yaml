@@ -1,19 +1,32 @@
-- name: Bootstrap Raspberry Pi
+- name: Check and renew host certificates
   hosts: testbed
   become: true
 
   vars_prompt:
     - name: keepass_password
       prompt: "KeePass master password"
-      private: yes
+      private: true
 
   vars:
     keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
     keepass_key: "/home/mika/.keepass/raspberry.key"
-    # Hole die Root CA Passphrase aus KeePass (falls benötigt)
-    root_ca_passphrase: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Domain', title='rootCA') }}"
 
   gather_facts: true
+
+  pre_tasks:
+    # Resolved once into memory on the control node; nothing is exported to disk (#229).
+    - name: Read root CA from KeePass
+      ansible.builtin.set_fact:
+        certificate_check_root_ca_passphrase: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Domain', title='rootCA') }}
+        certificate_check_root_ca_cert: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Domain', title='rootCA', attachment='rootCA.pem') }}
+        certificate_check_root_ca_key: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Domain', title='rootCA', attachment='rootCA.key') }}
+      no_log: true
 
   roles:
     - certificate_check

@@ -1,0 +1,13 @@
+- name: Prepare
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    # Simulates a host set up before #229, so verify can check the role removes the CA key.
+    - name: Plant a root CA private key like the old certificate_check role left behind
+      ansible.builtin.copy:
+        content: "old root CA key\n"
+        dest: /etc/ssl/private/rootCA.key
+        owner: root
+        group: root
+        mode: '0600'

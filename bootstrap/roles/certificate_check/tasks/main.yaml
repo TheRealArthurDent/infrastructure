@@ -1,345 +1,118 @@
-- name: Check certificate expiration and renew if needed
-  block:
-    - name: Set certificate directory
-      set_fact:
-        certificate_dir: /etc/docker/infrastructure/nginx
+# Issues the nginx certificate for inventory_hostname from the root CA. The CA private key never leaves
+# the control node: the host creates its own key and CSR, the control node signs the CSR in memory, and
+# only the leaf certificate and the full chain are copied back (#229).
 
-    - name: Create temporary certs directory
-      ansible.builtin.tempfile:
-        state: directory
-      register: temp_dir
-      delegate_to: localhost
-      become: false
+- name: Check root CA variables are set
+  ansible.builtin.assert:
+    that:
+      - certificate_check_root_ca_cert | length > 0
+      - certificate_check_root_ca_key | length > 0
+    fail_msg: certificate_check_root_ca_cert and certificate_check_root_ca_key must be set by the playbook
+    quiet: true
 
-    - name: Set certificate renewal threshold (days)
-      set_fact:
-        cert_renewal_threshold_days: 30
-        cert_validity_days: 365
-        cert_key_size: 2048
-        nginx_container_name: nginx
-        root_ca_cert: "/etc/ssl/certs/rootCA.pem"
-        root_ca_key: "/etc/ssl/private/rootCA.key"
-        #temp_dir: "/tmp/keepass_exports"
+# cryptography for community.crypto, requests for the community.docker calls in the nginx reload handler
+- name: Ensure Python libraries for the crypto and Docker modules are installed
+  ansible.builtin.apt:
+    name:
+      - python3-cryptography
+      - python3-requests
+    state: present
 
-    - name: Get root CA passphrase from KeePass
-      set_fact:
-        root_ca_passphrase_value: "{{ lookup('keepass', 
-            db=keepass_db, 
-            password=keepass_password, 
-            key=keepass_key, 
-            group='Domain', 
-            title='rootCA') }}"
-      delegate_to: localhost
-      become: false
-      run_once: true
-      no_log: true
+- name: Ensure root CA private key is absent from the host
+  ansible.builtin.file:
+    path: /etc/ssl/private/rootCA.key
+    state: absent
 
-    - name: List available attachments in rootCA entry
-      debug:
-        msg: "Available attachments: {{ lookup('keepass', 
-            db=keepass_db, 
-            password=keepass_password, 
-            key=keepass_key, 
-            group='Domain', 
-            title='rootCA',
-            attachment='list') }}"
-      delegate_to: localhost
-      become: false
-      run_once: true
+- name: Ensure root CA certificate is present
+  ansible.builtin.copy:
+    content: "{{ certificate_check_root_ca_cert }}"
+    dest: "{{ certificate_check_root_ca_cert_path }}"
+    owner: root
+    group: root
+    mode: '0644'
 
-    - name: Export rootCA.pem from KeePass (local)
-      set_fact:
-        temp_root_ca_pem: "{{ lookup('keepass', 
-            db=keepass_db, 
-            password=keepass_password, 
-            key=keepass_key, 
-            group='Domain', 
-            title='rootCA',
-            attachment='rootCA.pem',
-            output_path=temp_dir.path + '/rootCA.pem') }}"
-      delegate_to: localhost
-      become: false
-      run_once: true
+- name: Ensure certificate directory exists
+  ansible.builtin.file:
+    path: "{{ certificate_check_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
 
-    - name: Check exported rootCA.pem on localhost
-      ansible.builtin.stat:
-        path: "{{ temp_dir.path }}/rootCA.pem"
-      delegate_to: localhost
-      become: false
-      run_once: true
-      register: pem_stat
+- name: Ensure private key for the host certificate exists
+  community.crypto.openssl_privatekey:
+    path: "{{ certificate_check_dir }}/{{ inventory_hostname }}.key"
+    type: RSA
+    size: "{{ certificate_check_key_size }}"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Reload nginx
 
-    - name: Show rootCA.pem info
-      debug:
-        msg: "rootCA.pem size: {{ pem_stat.stat.size }} bytes"
-      run_once: true
+- name: Create CSR for the host certificate
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ certificate_check_dir }}/{{ inventory_hostname }}.key"
+    common_name: "{{ inventory_hostname }}"
+    country_name: DE
+    state_or_province_name: BY
+    organization_name: "{{ inventory_hostname }}"
+    subject_alt_name: >-
+      {{ ['DNS:' ~ inventory_hostname]
+         + certificate_check_subdomains | map('regex_replace', '^(.*)$', 'DNS:\1.' ~ inventory_hostname) | list }}
+  register: certificate_check_csr
+  # Only returns the CSR, nothing on the host changes.
+  changed_when: false
 
-    - name: Export rootCA.key from KeePass (local)
-      set_fact:
-        temp_root_ca_key: "{{ lookup('keepass', 
-            db=keepass_db, 
-            password=keepass_password, 
-            key=keepass_key, 
-            group='Domain', 
-            title='rootCA',
-            attachment='rootCA.key',
-            output_path=temp_dir.path + '/rootCA.key') }}"
-      delegate_to: localhost
-      become: false
-      run_once: true
+- name: Check for an existing host certificate
+  ansible.builtin.stat:
+    path: "{{ certificate_check_dir }}/{{ inventory_hostname }}.crt"
+  register: certificate_check_cert_stat
 
-    - name: Check exported rootCA.key on localhost
-      ansible.builtin.stat:
-        path: "{{ temp_dir.path }}/rootCA.key"
-      delegate_to: localhost
-      become: false
-      run_once: true
-      register: key_stat
+- name: Read existing host certificate
+  ansible.builtin.slurp:
+    src: "{{ certificate_check_dir }}/{{ inventory_hostname }}.crt"
+  register: certificate_check_cert_existing
+  when: certificate_check_cert_stat.stat.exists
 
-    - name: Show rootCA.key info
-      debug:
-        msg: "rootCA.key size: {{ key_stat.stat.size }} bytes"
-      run_once: true
+- name: Read expiry of existing host certificate
+  community.crypto.x509_certificate_info:
+    content: "{{ certificate_check_cert_existing.content | b64decode }}"
+    valid_at:
+      renewal: "+{{ certificate_check_renewal_threshold_days }}d"
+  register: certificate_check_cert_info
+  when: certificate_check_cert_stat.stat.exists
 
-    - name: Copy rootCA.pem to remote host
-      ansible.builtin.copy:
-        src: "{{ temp_dir.path }}/rootCA.pem"
-        dest: "{{ root_ca_cert }}"
-        owner: root
-        group: root
-        mode: '0644'
-      ignore_errors: true
+# Without force, x509_certificate_pipe only reissues when the certificate doesn't match the CSR or the CA.
+# Expiry isn't part of that check, so force a reissue inside the renewal threshold.
+- name: Sign host certificate with the root CA on the control node
+  community.crypto.x509_certificate_pipe:
+    provider: ownca
+    content: "{{ (certificate_check_cert_existing.content | b64decode) if certificate_check_cert_stat.stat.exists else omit }}"
+    csr_content: "{{ certificate_check_csr.csr }}"
+    ownca_content: "{{ certificate_check_root_ca_cert }}"
+    ownca_privatekey_content: "{{ certificate_check_root_ca_key }}"
+    ownca_privatekey_passphrase: "{{ certificate_check_root_ca_passphrase or omit }}"
+    ownca_not_after: "+{{ certificate_check_validity_days }}d"
+    ownca_digest: sha256
+    force: "{{ certificate_check_cert_stat.stat.exists and not certificate_check_cert_info.valid_at.renewal }}"
+  register: certificate_check_cert
+  delegate_to: localhost
+  become: false
+  no_log: true
 
-    - name: Copy rootCA.key to remote host
-      ansible.builtin.copy:
-        src: "{{ temp_dir.path }}/rootCA.key"
-        dest: "{{ root_ca_key }}"
-        owner: root
-        group: root
-        mode: '0600'
-      ignore_errors: true
+- name: Ensure host certificate is present
+  ansible.builtin.copy:
+    content: "{{ certificate_check_cert.certificate }}"
+    dest: "{{ certificate_check_dir }}/{{ inventory_hostname }}.crt"
+    owner: root
+    group: root
+    mode: '0644'
 
-    #- name: Clean up temporary directory
-    #  ansible.builtin.file:
-    #    path: "{{ temp_dir.path }}"
-    #    state: absent
-    #  delegate_to: localhost
-    #  become: true
-    #  run_once: true
-
-    - name: Read certificate info
-      community.crypto.x509_certificate_info:
-        path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-      register: cert_info
-      ignore_errors: true
-
-    - name: Show expiration date
-      debug:
-        msg: "Certificate {{ inventory_hostname }}.pem expires on {{ cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') }} UTC"
-      when: not cert_info.failed
-
-    - name: Calculate days until expiration
-      set_fact:
-        days_until_expiration: "{{ (cert_info.not_after | replace('Z','UTC') | to_datetime('%Y%m%d%H%M%S%Z') - now()).days }}"
-      when: not cert_info.failed
-
-    - name: Show days until expiration
-      debug:
-        msg: "Certificate {{ inventory_hostname }}.pem expires in {{ days_until_expiration }} days"
-      when: not cert_info.failed
-
-    - name: Check if certificate is signed by root CA
-      ansible.builtin.shell: openssl verify -CAfile "{{ root_ca_cert }}" "{{ certificate_dir }}/{{ inventory_hostname }}.pem" >/dev/null 2>&1 && echo "yes" || echo "no"
-      register: signed_by_root
-      when: not cert_info.failed
-
-    - name: Renew certificate if needed
-      block:
-        - name: Certificate renewal needed
-          debug:
-            msg: "Certificate expires in {{ days_until_expiration }} days (threshold: {{ cert_renewal_threshold_days }} days) or is not signed by root CA. Starting renewal process..."
-
-        - name: Generate private key for certificate
-          community.crypto.openssl_privatekey:
-            backup: true
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            type: RSA
-            size: "{{ cert_key_size }}"
-            force: true
-
-        - name: Generate CSR for certificate
-          community.crypto.openssl_csr:
-            backup: true
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
-            privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            common_name: "{{ inventory_hostname }}"
-            country_name: DE
-            state_or_province_name: BY
-            organization_name: "{{ inventory_hostname }}"
-            subject_alt_name:
-              - "DNS:{{ inventory_hostname }}"
-              - "DNS:pihole.{{ inventory_hostname }}"
-              - "DNS:portainer.{{ inventory_hostname }}"
-              - "DNS:nextcloud.{{ inventory_hostname }}"
-              - "DNS:iobroker.{{ inventory_hostname }}"
-              - "DNS:node-red.{{ inventory_hostname }}"
-              - "DNS:grafana.{{ inventory_hostname }}"
-              - "DNS:chronograf.{{ inventory_hostname }}"
-              - "DNS:outbound.{{ inventory_hostname }}"
-              - "DNS:deconz.{{ inventory_hostname }}"
-              - "DNS:deconz-ui.{{ inventory_hostname }}"
-              - "DNS:ui.{{ inventory_hostname }}"
-            force: true
-
-        - name: Generate certificate signed by root CA
-          community.crypto.x509_certificate:
-            backup: true
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-            csr_path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
-            ownca_path: "{{ root_ca_cert }}"
-            ownca_privatekey_path: "{{ root_ca_key }}"
-            ownca_privatekey_passphrase: "{{ root_ca_passphrase_value }}"
-            ownca_not_after: "+{{ cert_validity_days }}d"
-            ownca_digest: sha256
-            ownca_version: 3
-            provider: ownca
-            force: true
-          register: cert_created
-
-        - name: Set proper permissions on certificate and key
-          ansible.builtin.file:
-            path: "{{ item }}"
-            mode: '0600'
-            owner: root
-            group: root
-          loop:
-            - "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-            - "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-
-        - name: Append root CA to certificate for full chain
-          ansible.builtin.shell: cat "{{ root_ca_cert }}" >> "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-          when: cert_created.changed
-
-        - name: Certificate renewal completed
-          debug:
-            msg: "Certificate successfully renewed. Valid for {{ cert_validity_days }} days."
-          when: cert_created.changed
-
-        - name: Restart nginx container to load new certificate
-          community.docker.docker_container:
-            name: "{{ nginx_container_name }}"
-            state: started
-            restart: true
-          register: nginx_restart
-          ignore_errors: true
-
-        - name: Wait for nginx to be ready
-          ansible.builtin.wait_for:
-            port: 443
-            delay: 2
-            timeout: 30
-          when: nginx_restart.changed
-          ignore_errors: true
-
-      when:
-        - not cert_info.failed
-        - days_until_expiration | int < cert_renewal_threshold_days | int or signed_by_root.stdout != "yes"
-
-    - name: Certificate still valid
-      debug:
-        msg: "Certificate is valid for {{ days_until_expiration }} more days and signed by root CA. No renewal needed."
-      when:
-        - not cert_info.failed
-        - days_until_expiration | int >= cert_renewal_threshold_days | int
-        - signed_by_root.stdout == "yes"
-
-    - name: Certificate file missing - generate new one
-      block:
-        - name: Warning - certificate file not found
-          debug:
-            msg: "WARNING: Certificate file not found at {{ certificate_dir }}/{{ inventory_hostname }}.pem. Creating new certificate."
-
-        - name: Generate private key for certificate
-          community.crypto.openssl_privatekey:
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            type: RSA
-            size: "{{ cert_key_size }}"
-            force: true
-
-        - name: Generate CSR for certificate
-          community.crypto.openssl_csr:
-            backup: true
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
-            privatekey_path: "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-            common_name: "{{ inventory_hostname }}"
-            country_name: DE
-            state_or_province_name: BY
-            organization_name: "{{ inventory_hostname }}"
-            subject_alt_name:
-              - "DNS:{{ inventory_hostname }}"
-              - "DNS:pihole.{{ inventory_hostname }}"
-              - "DNS:portainer.{{ inventory_hostname }}"
-              - "DNS:nextcloud.{{ inventory_hostname }}"
-              - "DNS:iobroker.{{ inventory_hostname }}"
-              - "DNS:node-red.{{ inventory_hostname }}"
-              - "DNS:grafana.{{ inventory_hostname }}"
-              - "DNS:chronograf.{{ inventory_hostname }}"
-              - "DNS:outbound.{{ inventory_hostname }}"
-              - "DNS:deconz.{{ inventory_hostname }}"
-              - "DNS:deconz-ui.{{ inventory_hostname }}"
-              - "DNS:ui.{{ inventory_hostname }}"
-            force: true
-
-        - name: Generate certificate signed by root CA
-          community.crypto.x509_certificate:
-            path: "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-            csr_path: "{{ certificate_dir }}/{{ inventory_hostname }}.csr"
-            ownca_path: "{{ root_ca_cert }}"
-            ownca_privatekey_path: "{{ root_ca_key }}"
-            ownca_privatekey_passphrase: "{{ root_ca_passphrase_value }}"
-            ownca_not_after: "+{{ cert_validity_days }}d"
-            ownca_digest: sha256
-            ownca_version: 3
-            provider: ownca
-            force: true
-
-        - name: Set proper permissions on certificate and key
-          ansible.builtin.file:
-            path: "{{ item }}"
-            mode: '0600'
-            owner: root
-            group: root
-          loop:
-            - "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-            - "{{ certificate_dir }}/{{ inventory_hostname }}.key"
-
-        - name: Append root CA to certificate for full chain
-          ansible.builtin.shell: cat "{{ root_ca_cert }}" >> "{{ certificate_dir }}/{{ inventory_hostname }}.pem"
-
-        - name: Restart nginx container to load new certificate
-          community.docker.docker_container:
-            name: "{{ nginx_container_name }}"
-            state: started
-            restart: true
-          register: nginx_restart
-          ignore_errors: true
-
-        - name: Wait for nginx to be ready
-          ansible.builtin.wait_for:
-            port: 443
-            delay: 2
-            timeout: 30
-          when: nginx_restart.changed
-          ignore_errors: true
-
-      when: cert_info.failed
-
-    - name: Check number of certificates in the chain
-      ansible.builtin.shell: openssl crl2pkcs7 -nocrl -certfile "{{ certificate_dir }}/{{ inventory_hostname }}.pem" 2>/dev/null | openssl pkcs7 -print_certs -noout | grep -c "subject="
-      register: cert_chain_count
-      ignore_errors: true
-
-    - name: Show certificate chain info
-      debug:
-        msg: "Certificate chain contains {{ cert_chain_count.stdout | default('unknown') }} certificates. Root CA is included if > 1."
-      when: not cert_chain_count.failed
+- name: Ensure full chain for nginx is present
+  ansible.builtin.copy:
+    content: "{{ certificate_check_cert.certificate | trim }}\n{{ certificate_check_root_ca_cert | trim }}\n"
+    dest: "{{ certificate_check_dir }}/{{ inventory_hostname }}.pem"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload nginx

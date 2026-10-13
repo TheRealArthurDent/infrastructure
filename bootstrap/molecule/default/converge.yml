@@ -20,7 +20,52 @@
     deconz_vnc_password: LEAKCANARY-vnc
     nodered_github_user: test-user
     nodered_github_email: test@example.com
+    # No Docker daemon runs inside the test container.
+    certificate_check_reload_nginx: false
+    certificate_check_root_ca_passphrase: test-ca-passphrase
+  pre_tasks:
+    # Throwaway root CA on the control node, kept in the Molecule ephemeral directory so the
+    # idempotence run signs with the same CA.
+    - name: Create test root CA on the control node
+      delegate_to: localhost
+      become: false
+      block:
+        - name: Create test root CA private key
+          community.crypto.openssl_privatekey:
+            path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/rootCA.key"
+            passphrase: "{{ certificate_check_root_ca_passphrase }}"
+            cipher: auto
+            size: 2048
+            mode: '0600'
+
+        - name: Create test root CA CSR
+          community.crypto.openssl_csr_pipe:
+            privatekey_path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/rootCA.key"
+            privatekey_passphrase: "{{ certificate_check_root_ca_passphrase }}"
+            common_name: Molecule Test Root CA
+            basic_constraints: ['CA:TRUE']
+            basic_constraints_critical: true
+            key_usage: [keyCertSign, cRLSign]
+            key_usage_critical: true
+          register: test_ca_csr
+          changed_when: false
+
+        - name: Create test root CA certificate
+          community.crypto.x509_certificate:
+            path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/rootCA.pem"
+            csr_content: "{{ test_ca_csr.csr }}"
+            privatekey_path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/rootCA.key"
+            privatekey_passphrase: "{{ certificate_check_root_ca_passphrase }}"
+            provider: selfsigned
+            mode: '0644'
+
+    - name: Pass the test root CA to certificate_check
+      ansible.builtin.set_fact:
+        certificate_check_root_ca_cert: "{{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/rootCA.pem') }}"
+        certificate_check_root_ca_key: "{{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/rootCA.key') }}"
+      no_log: true
   roles:
     - base
     - docker
     - secrets
+    - certificate_check

@@ -1,0 +1,16 @@
+- name: Read nginx container state
+  community.docker.docker_container_info:
+    name: "{{ certificate_check_nginx_container }}"
+  register: certificate_check_nginx_info
+  listen: Reload nginx
+  when: certificate_check_reload_nginx | bool
+
+- name: Reload nginx configuration
+  community.docker.docker_container_exec:
+    container: "{{ certificate_check_nginx_container }}"
+    command: nginx -s reload
+  listen: Reload nginx
+  when:
+    - certificate_check_reload_nginx | bool
+    - certificate_check_nginx_info.exists
+    - certificate_check_nginx_info.container.State.Running

@@ -1,0 +1,31 @@
+# Where nginx reads its certificate (mounted into the nginx container as /etc/nginx).
+certificate_check_dir: /etc/docker/infrastructure/nginx
+certificate_check_renewal_threshold_days: 30
+certificate_check_validity_days: 365
+certificate_check_key_size: 2048
+certificate_check_nginx_container: nginx
+# Set to false where no Docker daemon runs (Molecule).
+certificate_check_reload_nginx: true
+
+# Subdomains of inventory_hostname added as SANs.
+certificate_check_subdomains:
+  - pihole
+  - portainer
+  - nextcloud
+  - iobroker
+  - node-red
+  - grafana
+  - chronograf
+  - outbound
+  - deconz
+  - deconz-ui
+  - ui
+
+# Root CA certificate on the host, for clients and `openssl verify`. Public, so it's fine on the host.
+certificate_check_root_ca_cert_path: /etc/ssl/certs/rootCA.pem
+
+# Root CA as PEM strings on the control node, set by the playbook. The private key only ever lives
+# in memory on the control node; the leaf certificate is signed there and never on the host (#229).
+certificate_check_root_ca_cert: ""
+certificate_check_root_ca_key: ""
+certificate_check_root_ca_passphrase: ""

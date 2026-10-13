@@ -46,8 +46,9 @@ class LookupModule(LookupBase):
       if not attachment:
         raise AnsibleError(f'Attachment "{attachment_name}" not found in entry "{group_name}/{title}". Available: {[a.filename for a in entry.attachments]}')
 
+      # Without output_path, return the content so secrets never touch the disk (#229)
       if not output_path:
-        raise AnsibleError(f'output_path is required when exporting attachments.')
+        return [attachment.data.decode('utf-8')]
 
       # Create directory if it doesn't exist
       output_dir = os.path.dirname(output_path)
