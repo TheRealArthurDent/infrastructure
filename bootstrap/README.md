@@ -1,12 +1,12 @@
 # Ansible
 
-Ansible sets up the Pi host: SSH port, sudoers, base packages, rsnapshot, Docker, secret `.env` files, the nginx
-certificate and the Pi-hole DNS configuration. The Docker stack itself is still deployed with `deploy.sh` from the
+Ansible sets up the Pi host: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
+the nginx certificate and the Pi-hole DNS configuration. The Docker stack itself is still deployed with `deploy.sh` from the
 repo root (see the [main README](../README.md) and `CLAUDE.md`).
 
 | Playbook | What it does |
 |---|---|
-| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`: SSH port, apt dist-upgrade, packages, sysctl, sudoers, rsnapshot cron, Docker, `.env` files under `/etc/docker/` |
+| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`: SSH port and key-only login, apt dist-upgrade, packages, sysctl, sudoers, rsnapshot cron, Docker, `.env` files under `/etc/docker/` |
 | `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days, restarts nginx |
 | `setup-pihole.yaml` | Syncs A records, CNAME records and block lists from `configs/pihole.yaml` through the Pi-hole REST API |
 
@@ -86,7 +86,9 @@ Booting from USB needs a bootloader with USB boot enabled. If the Pi does not bo
 
 1. Connect the SSD, boot the Pi.
 2. Make sure it gets the IP from the inventory (e.g. a fixed DHCP lease in the router).
-3. The new install has a new host key; remove the old one: `ssh-keygen -R 192.168.1.7`
+3. The new install has a new host key; remove the old ones for both ports:
+   `ssh-keygen -R 192.168.1.7 && ssh-keygen -R '[192.168.1.7]:4242'`. Ansible accepts keys of unknown hosts
+   but refuses changed ones (`StrictHostKeyChecking=accept-new` in `ansible.cfg`).
 4. Check login works on port 22: `ssh testuser@192.168.1.7`
 
 ### 3. Bootstrap
@@ -96,7 +98,8 @@ cd bootstrap
 ansible-playbook bootstrap.yaml --limit testbed
 ```
 
-The `ssh` role finds SSH on port 22, moves it to the port from the inventory and continues there. If `sudo` asks
+The `ssh` role finds SSH on port 22, moves it to the port from the inventory and continues there. It also turns
+off password and root logins, so make sure key login works first (step 2). If `sudo` asks
 for a password on the fresh install, add `--ask-become-pass` to this first run.
 
 Reboot afterwards so the Docker group membership and sysctl settings take effect:
