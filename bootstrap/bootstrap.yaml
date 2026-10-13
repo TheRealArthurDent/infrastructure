@@ -5,7 +5,7 @@
   vars_prompt:
     - name: keepass_password
       prompt: "KeePass master password"
-      private: yes
+      private: true
   vars:
     keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
     keepass_key: "/home/mika/.keepass/raspberry.key"
