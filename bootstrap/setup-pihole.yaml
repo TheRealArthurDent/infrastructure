@@ -1,6 +1,16 @@
 ---
+- name: Require --limit
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure the run is limited to explicit hosts
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Run with --limit <host>"
+        quiet: true
+
 - name: Configure Pi-hole via REST API
-  hosts: testbed
+  hosts: all
   gather_facts: true
   vars:
     pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"

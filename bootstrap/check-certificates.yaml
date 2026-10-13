@@ -1,5 +1,15 @@
+- name: Require --limit
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure the run is limited to explicit hosts
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Run with --limit <host>"
+        quiet: true
+
 - name: Check and renew host certificates
-  hosts: testbed
+  hosts: all
   become: true
 
   vars_prompt:

@@ -19,8 +19,8 @@ Defined in `inventory/hosts.yaml`:
 | `raspi` | 192.168.1.2 | 1357 | `smarthome` (production) |
 | `testbed` | 192.168.1.7 | 4242 | `testuser` |
 
-> All playbooks currently have `hosts: testbed` hard-coded. `--limit` only narrows that down, so to run against
-> `raspi` you have to change `hosts:` in the playbook.
+> All playbooks target `hosts: all` and refuse to run without `--limit <host>`, so a forgotten `--limit`
+> never reaches `raspi` by accident.
 
 ## Control node setup (once)
 

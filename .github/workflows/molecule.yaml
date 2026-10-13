@@ -33,6 +33,10 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      # The --limit guard tests load the playbooks, which need the collections.
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r bootstrap/requirements.yml
+
       - name: Run pytest
         run: pytest -v bootstrap/tests/unit --junitxml=test-results/pytest.xml
 
