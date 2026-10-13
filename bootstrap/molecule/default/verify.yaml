@@ -32,6 +32,54 @@
       ansible.builtin.command: visudo -cf /etc/sudoers.d/smarthome
       changed_when: false
 
+    - name: Stat the deployed sudoers file
+      ansible.builtin.stat:
+        path: /etc/sudoers.d/smarthome
+      register: sudoers_file
+
+    - name: Check sudoers file is owned by root and read-only
+      ansible.builtin.assert:
+        that:
+          - sudoers_file.stat.exists
+          - sudoers_file.stat.pw_name == 'root'
+          - sudoers_file.stat.mode == '0440'
+        fail_msg: /etc/sudoers.d/smarthome is missing or has wrong ownership/mode
+
+    - name: Stat Docker apt key files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: docker_apt_files
+      loop:
+        - /etc/apt/keyrings/docker.asc
+        - /etc/apt/trusted.gpg.d/docker.gpg
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/sources.list.d/docker.sources
+
+    - name: Check Docker key is only in its own keyring, not trusted for every repo (#231)
+      vars:
+        stats: "{{ docker_apt_files.results | items2dict(key_name='item', value_name='stat') }}"
+      ansible.builtin.assert:
+        that:
+          - stats['/etc/apt/keyrings/docker.asc'].exists
+          - stats['/etc/apt/keyrings/docker.asc'].pw_name == 'root'
+          - stats['/etc/apt/keyrings/docker.asc'].mode == '0644'
+          - not stats['/etc/apt/trusted.gpg.d/docker.gpg'].exists
+          - not stats['/etc/apt/sources.list.d/docker.list'].exists
+          - stats['/etc/apt/sources.list.d/docker.sources'].exists
+        fail_msg: >-
+          Expected the Docker key at /etc/apt/keyrings/docker.asc and the repository in docker.sources,
+          with the old trusted.gpg.d/docker.gpg and docker.list removed
+
+    - name: Read Docker apt repository
+      ansible.builtin.slurp:
+        src: /etc/apt/sources.list.d/docker.sources
+      register: docker_sources
+
+    - name: Check Docker repository is signed by its own keyring
+      ansible.builtin.assert:
+        that: "'Signed-By: /etc/apt/keyrings/docker.asc' in (docker_sources.content | b64decode)"
+        fail_msg: docker.sources does not pin Signed-By to /etc/apt/keyrings/docker.asc
+
     - name: Read deploy user groups
       ansible.builtin.command: id -nG smarthome
       register: user_groups

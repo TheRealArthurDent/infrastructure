@@ -11,3 +11,24 @@
         owner: root
         group: root
         mode: '0600'
+
+    # Simulates a host set up before #231: Docker key in trusted.gpg.d (trusted for every repo)
+    # and a one-line docker.list, so verify can check the role migrates both.
+    - name: Download the Docker signing key like the old docker role did
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /tmp/docker.asc
+        mode: '0644'
+
+    - name: Plant the dearmored Docker key in trusted.gpg.d like the old docker role did
+      ansible.builtin.command: gpg --batch --dearmor -o /etc/apt/trusted.gpg.d/docker.gpg /tmp/docker.asc
+      args:
+        creates: /etc/apt/trusted.gpg.d/docker.gpg
+
+    - name: Plant the old one-line Docker repository like the old docker role did
+      ansible.builtin.copy:
+        content: "deb [signed-by=/etc/apt/trusted.gpg.d/docker.gpg] https://download.docker.com/linux/debian trixie stable\n"
+        dest: /etc/apt/sources.list.d/docker.list
+        owner: root
+        group: root
+        mode: '0644'
