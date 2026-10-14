@@ -142,6 +142,16 @@ services:
       - nginx
     extra_hosts:
       dungeon: "${DUNGEON_IP}"
+    # Unhealthy when the last successful backup (daily at 03:00) is older than 26h, so healthmonitor
+    # alerts on a missing backup, not only on a failed one (#259). Also unhealthy before the first backup.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          awk -v now=$$(date +%s)
+          '/^resticprofile_backup_last_success_timestamp_seconds/ { ok = now - $$2 < 26 * 3600 } END { exit !ok }'
+          /metrics/backup_last_success.prom
+      interval: 10m
     entrypoint: '/bin/sh'
     command:
       - '-c'
