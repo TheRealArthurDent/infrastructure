@@ -1,7 +1,7 @@
 # Python tooling for the control node and for tests.
 # Install with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ansible-core==2.20.7
-ansible-lint==26.3.0
+ansible-lint==26.10.1
 pykeepass==4.1.1.post1
 
 # Tests
