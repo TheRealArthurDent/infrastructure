@@ -1,5 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "pre-commit": {
+    "enabled": true
+  },
   "packageRules": [
     {
       "description": "Auto merge all minor and patch updates to github-actions. Do it without a PR to reduce noise.",
@@ -9,6 +12,16 @@
       "automerge": true,
       "addLabels": ["auto-merge"],
       "automergeType": "branch"
+    },
+    {
+      "description": "Update ansible-lint in requirements.txt and .pre-commit-config.yaml together, so local runs, pre-commit and CI use the same version.",
+      "groupName": "ansible-lint",
+      "matchPackageNames": ["ansible-lint", "ansible/ansible-lint"]
+    },
+    {
+      "description": "Update ansible-core in requirements.txt and the ansible-lint pre-commit hook together.",
+      "groupName": "ansible-core",
+      "matchPackageNames": ["ansible-core"]
     }
   ]
 }
