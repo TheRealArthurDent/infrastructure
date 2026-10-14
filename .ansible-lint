@@ -27,4 +27,4 @@ enable_list:
   - name[template] # Task names should follow template
   - command-instead-of-module  # Prefer Ansible modules over raw commands
   - no-tabs  # No tabs in YAML
-  - truthy  # Only use yes/no in special cases
+  - yaml[truthy]  # Only use yes/no in special cases

@@ -20,8 +20,8 @@ repos:
       - id: actionlint-docker
 
   - repo: https://github.com/ansible/ansible-lint
-    rev: v6.27.3
+    rev: v26.10.1  # keep in sync with requirements.txt
     hooks:
       - id: ansible-lint
-        additional_dependencies: ['ansible>=2.12']
+        additional_dependencies: ['ansible-core==2.21.5']
         entry: ansible-lint --strict bootstrap/
