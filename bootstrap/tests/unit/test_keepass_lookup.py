@@ -10,11 +10,16 @@ PLUGIN = Path(__file__).parents[2] / "lookup_plugins" / "keepass.py"
 PASSWORD = "test-master-password"
 
 
-def load_plugin():
+def load_module():
+    """Load a fresh copy of the plugin module, so every test starts with an empty cache."""
     spec = importlib.util.spec_from_file_location("keepass_lookup", PLUGIN)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.LookupModule()
+    return module
+
+
+def load_plugin():
+    return load_module().LookupModule()
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +32,8 @@ def kdbx(tmp_path_factory):
     iobroker = kp.add_group(smart_home, "ioBroker")
     states = kp.add_entry(iobroker, "States Redis", "", "")
     states.set_custom_property("port", "9000")
+    influx = kp.add_group(smart_home, "Influx DB")
+    kp.add_entry(influx, "Influx admin", "", "influx-secret")
 
     backup = kp.add_group(kp.root_group, "Backup")
     restic = kp.add_entry(backup, "Resticprofile", "", "")
@@ -36,6 +43,16 @@ def kdbx(tmp_path_factory):
     other = kp.add_group(kp.root_group, "other")
     kp.add_entry(other, "duplicate", "", "from-other")
     kp.add_entry(smart_home, "duplicate", "", "from-smart-home")
+
+    # A second "ioBroker" group: only the full path tells the two apart.
+    legacy_iobroker = kp.add_group(other, "ioBroker")
+    legacy_states = kp.add_entry(legacy_iobroker, "States Redis", "", "")
+    legacy_states.set_custom_property("port", "1111")
+
+    # Same title twice below one group: ambiguous.
+    twice = kp.add_group(kp.root_group, "twice")
+    kp.add_entry(twice, "entry", "", "first")
+    kp.add_entry(kp.add_group(twice, "sub"), "entry", "", "second")
 
     domain = kp.add_group(kp.root_group, "Domain")
     ca = kp.add_entry(domain, "rootCA", "", "ca-passphrase")
@@ -76,14 +93,75 @@ def test_group_disambiguates_duplicate_titles(kdbx):
 
 
 def test_nested_group_path(kdbx):
-    # Currently passes only via the whole-database fallback, see test_unknown_group_raises.
     assert lookup(kdbx, group="smart-home/ioBroker", title="States Redis", field="port") == ["9000"]
+    assert lookup(kdbx, group="other/ioBroker", title="States Redis", field="port") == ["1111"]
 
 
-@pytest.mark.xfail(strict=True, reason="#235: unknown group silently searches the whole database")
+def test_single_group_name_finds_nested_group(kdbx):
+    # Unambiguous group names keep working without their full path.
+    assert lookup(kdbx, group="Influx DB", title="Influx admin") == ["influx-secret"]
+
+
 def test_unknown_group_raises(kdbx):
-    with pytest.raises(AnsibleError):
+    # Used to fall back to searching the whole database (#235).
+    with pytest.raises(AnsibleError, match='Group "no-such-group" not found'):
         lookup(kdbx, group="no-such-group", title="pihole")
+
+
+def test_unknown_group_path_raises(kdbx):
+    with pytest.raises(AnsibleError, match="not found"):
+        lookup(kdbx, group="Backup/ioBroker", title="States Redis")
+
+
+def test_ambiguous_group_raises(kdbx):
+    with pytest.raises(AnsibleError, match='Group "ioBroker" is ambiguous'):
+        lookup(kdbx, group="ioBroker", title="States Redis")
+
+
+def test_ambiguous_entry_raises(kdbx):
+    with pytest.raises(AnsibleError, match='Entry "twice/entry" is ambiguous'):
+        lookup(kdbx, group="twice", title="entry")
+
+
+def test_database_is_decrypted_once(kdbx, monkeypatch):
+    # Ansible creates a new LookupModule for every lookup call, so the cache must outlive the instance.
+    module = load_module()
+    opened = []
+    real = module.PyKeePass
+
+    def counting(*args, **kwargs):
+        opened.append(args)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, "PyKeePass", counting)
+    for _ in range(3):
+        module.LookupModule().run([], db=kdbx, password=PASSWORD, group="smart-home", title="pihole")
+    module.LookupModule().run([], db=kdbx, password=PASSWORD, group="Backup", title="Resticprofile")
+    assert len(opened) == 1
+
+
+def test_cache_does_not_bypass_the_password(kdbx):
+    module = load_module()
+    module.LookupModule().run([], db=kdbx, password=PASSWORD, group="smart-home", title="pihole")
+    with pytest.raises(Exception):
+        module.LookupModule().run([], db=kdbx, password="wrong", group="smart-home", title="pihole")
+
+
+def test_cache_sees_changes_to_the_database(tmp_path):
+    path = str(tmp_path / "changing.kdbx")
+    kp = create_database(path, password=PASSWORD)
+    entry = kp.add_entry(kp.root_group, "token", "", "old")
+    group = kp.add_group(kp.root_group, "g")
+    kp.move_entry(entry, group)
+    kp.save()
+
+    module = load_module()
+    assert module.LookupModule().run([], db=path, password=PASSWORD, group="g", title="token") == ["old"]
+
+    kp = module.PyKeePass(path, password=PASSWORD)
+    kp.find_entries(title="token", first=True).password = "new-and-longer"
+    kp.save()
+    assert module.LookupModule().run([], db=path, password=PASSWORD, group="g", title="token") == ["new-and-longer"]
 
 
 def test_attachment_export(kdbx, tmp_path):

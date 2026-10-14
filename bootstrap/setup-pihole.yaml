@@ -9,106 +9,113 @@
         fail_msg: "Run with --limit <host>"
         quiet: true
 
+# The Pi-hole is only talked to through its API, so everything runs on the control node: nothing connects to
+# the Pi itself (#234).
 - name: Configure Pi-hole via REST API
   hosts: all
-  gather_facts: true
+  gather_facts: false
   vars:
     pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"
     pihole_port: 443
-    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
-    keepass_key: "/home/mika/.keepass/raspberry.key"
 
   tasks:
     - name: Load Pi-hole configuration
       ansible.builtin.include_vars:
         file: configs/pihole.yaml
 
-    - name: Get KeePass password from environment variable
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
+
+    - name: Get Pi-hole password and root CA certificate from KeePass
       ansible.builtin.set_fact:
-        keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
+        pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                                    group='smart-home', title='pihole') }}"
+        pihole_root_ca: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                                   group='Domain', title='rootCA', attachment='rootCA.pem') }}"
       no_log: true
 
-    - name: Prompt for KeePass password if not in environment
-      ansible.builtin.pause:
-        prompt: "KeePass master password"
-        echo: false
-      register: prompted_password
-      when: not keepass_password
+    - name: Configure Pi-hole from the control node
+      delegate_to: localhost
+      become: false
+      block:
+        # uri can only verify against a CA file, so the certificate goes into a temporary file.
+        - name: Create temporary file for the root CA certificate
+          ansible.builtin.tempfile:
+            suffix: .pem
+          register: pihole_ca_file
+          changed_when: false
 
-    - name: Use prompted password if env not set
-      ansible.builtin.set_fact:
-        keepass_password: "{{ prompted_password.user_input }}"
-      when: not keepass_password
-      no_log: true
-    - name: Get Pi-hole password from KeePass
-      ansible.builtin.set_fact:
-        pihole_password: "{{ lookup('keepass',
-            db=keepass_db,
-            password=keepass_password,
-            key=keepass_key,
-            group='smart-home',
-            title='pihole') }}"
-      no_log: true
+        - name: Ensure the root CA certificate is in the temporary file
+          ansible.builtin.copy:
+            content: "{{ pihole_root_ca }}"
+            dest: "{{ pihole_ca_file.path }}"
+            mode: '0600'
+          changed_when: false
 
-    - name: Authenticate with Pi-hole API
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
-        method: POST
-        body_format: json
-        body:
-          password: "{{ pihole_password }}"
-        status_code: 200
-        validate_certs: false  # TODO remove
-      register: auth_response
-      no_log: true
+        - name: Authenticate with Pi-hole API
+          ansible.builtin.uri:
+            url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
+            method: POST
+            body_format: json
+            body:
+              password: "{{ pihole_password }}"
+            status_code: 200
+            ca_path: "{{ pihole_ca_file.path }}"
+          register: auth_response
+          no_log: true
 
-    - name: Extract session token
-      ansible.builtin.set_fact:
-        pihole_session: "{{ auth_response.json.session.sid }}"
-      no_log: true
+        - name: Extract session token
+          ansible.builtin.set_fact:
+            pihole_session: "{{ auth_response.json.session.sid }}"
+          no_log: true
 
+        # TODO: Clients, Groups and Domains (#234)
+        - name: Manage A records (hosts)
+          ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
+          vars:
+            record_type: "hosts"
+            api_endpoint: "/api/config/dns/hosts"
+            desired_records: "{{ dns_a_records }}"
+            record_format: "objects"
+            value_attribute: "address"
+            domain_first: false
+            separator: " "
 
-    - name: Manage A records (hosts)
-      ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
-      vars:
-        record_type: "hosts"
-        api_endpoint: "/api/config/dns/hosts"
-        desired_records: "{{ dns_a_records }}"
-        record_format: "objects"
-        value_attribute: "address"
-        domain_first: false
-        separator: " "
-        url_separator: "%20"
+        - name: Manage CNAME records
+          ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
+          vars:
+            record_type: "cnameRecords"
+            api_endpoint: "/api/config/dns/cnameRecords"
+            desired_records: "{{ dns_cname_records }}"
+            record_format: "objects"
+            value_attribute: "target"
+            domain_first: true
+            separator: ","
 
-    - name: Manage CNAME records
-      ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
-      vars:
-        record_type: "cnameRecords"
-        api_endpoint: "/api/config/dns/cnameRecords"
-        desired_records: "{{ dns_cname_records }}"
-        record_format: "objects"
-        value_attribute: "target"
-        domain_first: true
-        separator: ","
-        url_separator: "%2C"
+        - name: Manage block lists
+          ansible.builtin.include_tasks: tasks/manage_pihole_lists.yaml
+          vars:
+            list_type: "block"
+            api_endpoint: "/api/lists"
+            desired_records: "{{ dns_block_lists }}"
+            record_format: "simple"
 
-    - name: Manage block lists
-      ansible.builtin.include_tasks: tasks/manage_pihole_lists.yaml
-      vars:
-        list_type: "block"
-        api_endpoint: "/api/lists"
-        desired_records: "{{ dns_block_lists }}"
-        record_format: "simple"
+      # Pi-hole allows only a few API sessions at a time, so log out even when a task above failed.
+      always:
+        - name: Logout from Pi-hole API
+          ansible.builtin.uri:
+            url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
+            method: DELETE
+            headers:
+              X-FTL-SID: "{{ pihole_session }}"
+            # 401: the session has already expired
+            status_code: [204, 401]
+            ca_path: "{{ pihole_ca_file.path }}"
+          when: pihole_session is defined
 
-    # TODO: Clients, Groups and Domains
-
-    - name: Logout from Pi-hole API
-      ansible.builtin.uri:
-        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
-        method: DELETE
-        headers:
-          X-FTL-SID: "{{ pihole_session }}"
-        status_code: 204
-        validate_certs: false  # TODO remove
-      # A failed logout must not fail the play; the session expires on its own.
-      failed_when: false
+        - name: Remove temporary root CA certificate file
+          ansible.builtin.file:
+            path: "{{ pihole_ca_file.path }}"
+            state: absent
+          when: pihole_ca_file.path is defined
+          changed_when: false
