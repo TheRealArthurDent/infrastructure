@@ -1,43 +1,44 @@
 ---
 name: working-with-ansible
-description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml) or the deploy.sh stack, on testbed or raspi, or when deciding what can be checked from a cloud container and what Mika has to run. Writing role code itself is covered by ansible-role.
+description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml) or the deploy.sh stack, on testbed or raspi, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
 ---
 
 # Working with Ansible in this repo
 
 ## Overview
 
-Ansible here changes a real smart home (DNS, SSH, Docker) on two Pis that only Mika's machine can
-reach. Know before you start what you can verify yourself, what only CI can, and what only Mika can run.
+Ansible here changes a real smart home (DNS, SSH, Docker) on two Pis that only machines in the home
+network can reach. Know before you start what you can verify yourself, what only CI can, and what only the user
+can run on their developer machine.
 How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it too when you touch `bootstrap/`.
 
 ## Who can run what
 
-| Check | Cloud container (you) | CI | Mika (WSL, `~/dev/docker/raspberry`) |
+| Check | Cloud container (you) | CI | User's machine in the home network |
 |---|---|---|---|
 | pytest (`bootstrap/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
 | `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes (lint `--strict`, #240) | yes |
 | Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, on every push to `bootstrap/**` | yes |
-| Anything against testbed/raspi | **no**: 192.168.1.x LAN, SSH key and KeePass DB exist only on Mika's machine | no | yes |
+| Anything against testbed/raspi | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | no | yes |
 
 Don't probe the LAN or set up dockerd to find this out again. Never write "Molecule passed" from a local run;
-point to the CI run on your commit. The KeePass master password is typed by Mika into the prompt, never
+point to the CI run on your commit. The KeePass master password is typed by the user into the prompt, never
 into chat, a command line you write, or `KEEPASS_PASSWORD` in a command you hand over.
 
 ## Order of work
 
-1. **Plan first.** Before changing code, give Mika a short plan summary (what, which files, how tested) and
-   check the related issue (#229–#241). Answer in Mika's language.
+1. **Plan first.** Before changing code, give the user a short plan summary (what, which files, how tested) and
+   check the related issue (#229–#241). Answer in the user's language.
 2. **Branch off `main`, PR into `main`**, never push to `main`. Commit style `fix:`/`feat:` + `Refs #<n>`.
 3. **Test first** per CLAUDE.md, then syntax-check and lint locally, then let CI run Molecule and drive it green.
-4. **Hand Mika the rollout** as exact commands, in this order, and say what to look for in each:
+4. **Hand the user the rollout** as exact commands, in this order, and say what to look for in each:
 
 ```sh
 cd bootstrap                                             # ansible.cfg + inventory live here
 ansible-playbook <play>.yaml --limit testbed --check --diff
 ansible-playbook <play>.yaml --limit testbed             # real run
 ansible-playbook <play>.yaml --limit testbed             # must end with changed=0
-# raspi only after Mika says so, same three steps with --limit raspi
+# raspi only after the user says so, same three steps with --limit raspi
 ./deploy.sh testbed 4242 testuser                        # stack, from repo root; ./deploy.sh alone = raspi
 ```
 
@@ -63,4 +64,4 @@ Every playbook is `hosts: all` with an assert that fails without `--limit`. Keep
 ## Reporting back
 
 End with: what changed (files, PR link), what you ran and its result, what CI showed on the head commit,
-and the rollout commands Mika still has to run, testbed before raspi.
+and the rollout commands the user still has to run, testbed before raspi.
