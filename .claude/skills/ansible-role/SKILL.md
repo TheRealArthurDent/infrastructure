@@ -130,8 +130,8 @@ from bash continues.
    of this repo may be active (a second checkout, a parallel agent), give yours its own state directory with
    `MOLECULE_EPHEMERAL_DIRECTORY=$(mktemp -d)`, because the default path is derived from the folder name and
    concurrent runs overwrite each other's inventory.
-4. **Lint** the files you touched: `../.venv/bin/ansible-lint <paths>`. Don't add new violations, even though
-   older code still has many (#240).
+4. **Lint**: `../.venv/bin/ansible-lint --strict` (from `bootstrap/`) must report 0 findings; CI blocks the PR
+   otherwise.
 5. **Things a container can't test** (sshd port switching, real Docker daemon behavior, Pi hardware, Pi-hole API
    against a live instance) go to the testbed Pi: `ansible-playbook <playbook> --limit testbed --check --diff`,
    then a real run, then a second run that must report `changed=0`. Ask the user before running against
