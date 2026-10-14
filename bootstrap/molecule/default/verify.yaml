@@ -94,11 +94,13 @@
       register: crontab
       changed_when: false
 
-    - name: Check rsnapshot cron jobs exist
+    # weekly must run before daily, otherwise both start at once on Sundays and one fails on the lockfile (#232)
+    - name: Check rsnapshot cron jobs run weekly before daily
       ansible.builtin.assert:
         that:
-          - "'rsnapshot daily' in crontab.stdout"
-          - "'rsnapshot weekly' in crontab.stdout"
+          - "'30 1 * * 0 rsnapshot weekly' in crontab.stdout_lines"
+          - "'0 2 * * * rsnapshot daily' in crontab.stdout_lines"
+        fail_msg: "rsnapshot cron schedule is wrong: {{ crontab.stdout_lines | select('search', 'rsnapshot') | list }}"
 
     - name: Stat secret files
       ansible.builtin.stat:

@@ -48,6 +48,7 @@
         group: root
         mode: '0644'
 
+    # weekly runs before daily so the two never overlap on Sundays (rsnapshot shares one lockfile, #232)
     - name: Ensure cron job "rsnapshot daily" exists
       ansible.builtin.cron:
         name: "rsnapshot daily"
@@ -57,7 +58,7 @@
     - name: Ensure cron job "rsnapshot weekly" exists
       ansible.builtin.cron:
         name: "rsnapshot weekly"
-        minute: "0"
-        hour: "2"
+        minute: "30"
+        hour: "1"
         weekday: "0"
         job: "rsnapshot weekly"
