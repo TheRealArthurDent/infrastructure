@@ -15,8 +15,6 @@
   vars:
     pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"
     pihole_port: 443
-    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
-    keepass_key: "/home/mika/.keepass/raspberry.key"
 
   tasks:
     - name: Load Pi-hole configuration

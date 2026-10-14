@@ -1,7 +1,38 @@
 from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
 from pykeepass import PyKeePass
+import hashlib
 import os
+
+# Opened databases, so the key derivation runs once per process instead of on every lookup (#235).
+# Ansible creates a new LookupModule for each lookup call, so this lives at module level.
+# The key covers the file's state and the credentials: a changed file or a wrong password opens anew.
+_databases = {}
+
+
+def _open(db, password, key):
+  stat = os.stat(db)
+  cache_key = (
+    os.path.realpath(db), stat.st_mtime_ns, stat.st_size,
+    os.path.realpath(key) if key else None,
+    hashlib.sha256((password or '').encode()).hexdigest(),
+  )
+  if cache_key not in _databases:
+    _databases[cache_key] = PyKeePass(db, password=password, keyfile=key)
+  return _databases[cache_key]
+
+
+def _find_group(kp, group_name):
+  """Find the one group whose path ends with group_name ("a/b" matches .../a/b)."""
+  segments = group_name.split('/')
+  matches = [g for g in kp.groups if g.path[-len(segments):] == segments]
+  if not matches:
+    raise AnsibleError(f'Group "{group_name}" not found.')
+  if len(matches) > 1:
+    paths = ['/'.join(g.path) for g in matches]
+    raise AnsibleError(f'Group "{group_name}" is ambiguous, use the full path: {paths}')
+  return matches[0]
+
 
 class LookupModule(LookupBase):
 
@@ -10,7 +41,7 @@ class LookupModule(LookupBase):
     password = kwargs.get("password")
     key = kwargs.get("key")
 
-    kp = PyKeePass(db, password=password, keyfile=key)
+    kp = _open(db, password, key)
 
     group_name = kwargs.get('group')
     title = kwargs.get('title')
@@ -18,11 +49,15 @@ class LookupModule(LookupBase):
     attachment_name = kwargs.get('attachment')
     output_path = kwargs.get('output_path')
 
-    group = kp.find_groups(name=group_name, first=True)
-    entry = kp.find_entries(title=title, group=group, first=True)
+    group = _find_group(kp, group_name) if group_name else kp.root_group
+    entries = kp.find_entries(title=title, group=group)
 
-    if entry is None:
+    if not entries:
       raise AnsibleError(f'Entry "{group_name}/{title}" not found.')
+    if len(entries) > 1:
+      paths = ['/'.join(e.path) for e in entries]
+      raise AnsibleError(f'Entry "{group_name}/{title}" is ambiguous: {paths}')
+    entry = entries[0]
 
     # If just querying attachments, list them
     if attachment_name and attachment_name == 'list':

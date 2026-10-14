@@ -36,8 +36,11 @@ ansible-galaxy collection install -r requirements.yaml
 You also need:
 
 - the SSH key `~/.ssh/id_ed25519` (its public key goes onto the Pi),
-- the KeePass database and key file at the paths set in the playbooks
-  (`keepass_db`, `keepass_key`). The master password is asked for at the start of each run.
+- the KeePass database and key file. Their default paths are in `inventory/group_vars/all.yaml`
+  (`keepass_db`, `keepass_key`); set `KEEPASS_DB` / `KEEPASS_KEY` to use other paths.
+  The master password is asked for at the start of each run.
+  Groups in the lookup are paths (`group='smart-home/ioBroker'`); a group or entry that is missing or
+  matches more than once fails the run instead of picking one.
 
 ## Daily business
 
