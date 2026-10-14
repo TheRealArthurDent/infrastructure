@@ -22,3 +22,5 @@
 /source/docker-volumes/nextcloud_storage/**/appdata_*/preview
 # Caches
 /source/home/*/.cache
+# Exclude the SSH key for the backup host: the Ansible secrets role recreates it (#233)
+/source/etc/docker/infrastructure/resticprofile/.ssh
