@@ -36,11 +36,39 @@ ansible-galaxy collection install -r requirements.yaml
 You also need:
 
 - the SSH key `~/.ssh/id_ed25519` (its public key goes onto the Pi),
-- the KeePass database and key file. Their default paths are in `inventory/group_vars/all.yaml`
-  (`keepass_db`, `keepass_key`); set `KEEPASS_DB` / `KEEPASS_KEY` to use other paths.
-  The master password is asked for at the start of each run.
-  Groups in the lookup are paths (`group='smart-home/ioBroker'`); a group or entry that is missing or
-  matches more than once fails the run instead of picking one.
+- the KeePass database and key file (see below).
+
+### KeePass
+
+The paths depend on your machine, so they aren't in the repo. Set them once in a local file that git ignores:
+
+```sh
+cp inventory/group_vars/all/local.example.yaml inventory/group_vars/all/local.yaml
+# then edit local_keepass_db and local_keepass_key
+```
+
+`KEEPASS_DB` / `KEEPASS_KEY` win over `local.yaml`. A run fails at the start if the files aren't found.
+
+Keep the database on a path WSL sees without a mount of its own, i.e. under `/mnt/c`. A Google Drive
+drive letter (`H:`, `/mnt/h` in WSL) needs its own mount, which breaks regularly. With Google Drive for
+desktop, either mirror My Drive, or stream it into a folder on `C:` and make the KeePass folder
+available offline (right click in Explorer).
+
+The master password is asked for at the start of each run, unless `KEEPASS_PASSWORD` is set. On WSL,
+`bin/with-keepass` sets it from Windows Credential Manager, so runs need no prompt:
+
+```sh
+bin/with-keepass --store     # once, and again after changing the master password
+bin/with-keepass ansible-playbook bootstrap.yaml --limit testbed --check --diff
+bin/with-keepass --forget    # remove it again
+```
+
+The password is stored under "Web Credentials" as `raspberry-keepass` (change with `KEEPASS_CREDENTIAL`) and
+protected by your Windows login. Anyone who can run commands as you can read it, just like the database
+itself. Without a stored password, `with-keepass` still runs the command and the playbook asks.
+
+Groups in the lookup are paths (`group='smart-home/ioBroker'`); a group or entry that is missing or matches
+more than once fails the run instead of picking one.
 
 ## Daily business
 
@@ -60,8 +88,8 @@ ansible-playbook check-certificates.yaml --limit testbed
 # Change DNS records or block lists: edit configs/pihole.yaml, then
 ansible-playbook setup-pihole.yaml --limit testbed
 # Pi-hole is reached at pihole.<host>; override with -e pihole_ip=192.168.1.7
-# The KeePass password can come from the environment instead of the prompt:
-KEEPASS_PASSWORD=... ansible-playbook setup-pihole.yaml --limit testbed
+# Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
+bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbed
 
 # Redeploy / update the Docker stack (from the repo root)
 ./deploy.sh testbed 4242 testuser    # ./deploy.sh alone deploys to raspi
