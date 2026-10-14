@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Runs a command with KEEPASS_PASSWORD set from Windows Credential Manager, so playbooks don't prompt (#267).
+# Meant for WSL: it reaches Windows through powershell.exe.
+#
+# Usage:
+#   bin/with-keepass --store     save the master password (asks for it; replaces a stored one)
+#   bin/with-keepass --forget    remove the stored master password
+#   bin/with-keepass <command>   run <command>, e.g. ansible-playbook bootstrap.yaml --limit testbed
+#
+# Without a stored password the command runs anyway and the playbook asks for the password itself.
+# KEEPASS_CREDENTIAL changes the name of the stored credential (default: raspberry-keepass).
+set -euo pipefail
+
+powershell="${KEEPASS_POWERSHELL:-powershell.exe}"
+name="${KEEPASS_CREDENTIAL:-raspberry-keepass}"
+
+usage() {
+  sed -n '/^# Usage:/,/^$/s/^# \{0,1\}//p' "$0" >&2
+  exit 2
+}
+
+# The name goes into the PowerShell script, so it must not be able to end the string.
+if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "with-keepass: KEEPASS_CREDENTIAL may only contain letters, digits, '.', '_' and '-'." >&2
+  exit 2
+fi
+
+# Credentials live in the Windows "Web Credentials" vault, under resource $name and user "keepass".
+# Passwords cross the pipe as raw UTF-8 bytes, independent of the console code page.
+vault_script() {
+  # shellcheck disable=SC2016  # PowerShell code, expanded by PowerShell
+  printf '%s\n' \
+    "\$ErrorActionPreference = 'Stop'" \
+    "\$name = '$name'" \
+    '$null = [Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]' \
+    '$vault = New-Object Windows.Security.Credentials.PasswordVault' \
+    "$1"
+}
+
+# -EncodedCommand (Base64 of UTF-16LE) keeps quotes and newlines intact across the WSL/Windows command line.
+vault() {
+  "$powershell" -NoProfile -NonInteractive -EncodedCommand \
+    "$(vault_script "$1" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0)"
+}
+
+read_password=$(cat <<'PS'
+try { $credential = $vault.Retrieve($name, 'keepass') } catch { exit 3 }
+$credential.RetrievePassword()
+$bytes = [Text.Encoding]::UTF8.GetBytes($credential.Password)
+$stdout = [Console]::OpenStandardOutput()
+$stdout.Write($bytes, 0, $bytes.Length)
+$stdout.Flush()
+PS
+)
+
+store_password=$(cat <<'PS'
+$buffer = New-Object IO.MemoryStream
+[Console]::OpenStandardInput().CopyTo($buffer)
+$password = [Text.Encoding]::UTF8.GetString($buffer.ToArray())
+try { $vault.Remove($vault.Retrieve($name, 'keepass')) } catch { }
+$vault.Add((New-Object Windows.Security.Credentials.PasswordCredential($name, 'keepass', $password)))
+PS
+)
+
+forget_password=$(cat <<'PS'
+try { $vault.Remove($vault.Retrieve($name, 'keepass')) } catch { }
+PS
+)
+
+case "${1:-}" in
+  "" | -h | --help)
+    usage
+    ;;
+  --store)
+    if [[ -t 0 ]]; then
+      read -rsp "KeePass master password: " password && echo >&2
+      read -rsp "Repeat: " repeated && echo >&2
+      if [[ "$password" != "$repeated" ]]; then
+        echo "with-keepass: the passwords don't match." >&2
+        exit 1
+      fi
+    else
+      IFS= read -r password || true
+    fi
+    if [[ -z "$password" ]]; then
+      echo "with-keepass: empty password, nothing stored." >&2
+      exit 1
+    fi
+    # Through stdin, so the password never shows up in a process list.
+    printf '%s' "$password" | vault "$store_password"
+    echo "with-keepass: stored as '$name' in Windows Credential Manager." >&2
+    exit 0
+    ;;
+  --forget)
+    vault "$forget_password"
+    exit 0
+    ;;
+esac
+
+if [[ -z "${KEEPASS_PASSWORD:-}" ]]; then
+  if ! command -v "$powershell" >/dev/null 2>&1; then
+    echo "with-keepass: $powershell not found, can't read Windows Credential Manager; the playbook will ask." >&2
+  elif password=$(vault "$read_password"); then
+    export KEEPASS_PASSWORD="${password%$'\r'}"
+  else
+    echo "with-keepass: no password stored as '$name'; the playbook will ask. Store it with: $0 --store" >&2
+  fi
+fi
+
+exec "$@"

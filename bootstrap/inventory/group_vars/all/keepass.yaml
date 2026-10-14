@@ -1,0 +1,8 @@
+---
+# KeePass database with all secrets, read on the control node by lookup_plugins/keepass.py.
+# The paths depend on your machine, so they aren't in the repo: copy local.example.yaml to local.yaml
+# (ignored by git) and set them there, or set KEEPASS_DB / KEEPASS_KEY, which win over local.yaml (#267).
+keepass_db: >-
+  {{ (lookup('ansible.builtin.env', 'KEEPASS_DB') or local_keepass_db | default('')) | expanduser }}
+keepass_key: >-
+  {{ (lookup('ansible.builtin.env', 'KEEPASS_KEY') or local_keepass_key | default('')) | expanduser }}

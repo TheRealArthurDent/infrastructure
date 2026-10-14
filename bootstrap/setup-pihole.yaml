@@ -21,23 +21,9 @@
       include_vars:
         file: configs/pihole.yaml
 
-    - name: Get KeePass password from environment variable
-      set_fact:
-        keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
-      no_log: true
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
 
-    - name: Prompt for KeePass password if not in environment
-      pause:
-        prompt: "KeePass master password"
-        echo: false
-      register: prompted_password
-      when: not keepass_password
-
-    - name: Use prompted password if env not set
-      set_fact:
-        keepass_password: "{{ prompted_password.user_input }}"
-      when: not keepass_password
-      no_log: true
     - name: Get Pi-hole password from KeePass
       set_fact:
         pihole_password: "{{ lookup('keepass',

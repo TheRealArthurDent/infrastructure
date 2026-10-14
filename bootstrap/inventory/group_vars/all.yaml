@@ -1,9 +1,0 @@
----
-# KeePass database with all secrets, read on the control node by lookup_plugins/keepass.py.
-# Override with KEEPASS_DB / KEEPASS_KEY when the files live somewhere else (#235).
-keepass_db: >-
-  {{ lookup('ansible.builtin.env', 'KEEPASS_DB',
-            default='/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx') }}
-keepass_key: >-
-  {{ lookup('ansible.builtin.env', 'KEEPASS_KEY',
-            default='/home/mika/.keepass/raspberry.key') }}

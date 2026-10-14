@@ -38,8 +38,10 @@ Always pass `--limit <host>`. Before a real run, do `--check --diff` first.
 
 ## Secrets
 
-Secrets come from a KeePass database through the custom `keepass` lookup plugin (pykeepass), with the master
-password prompted at runtime. There is no ansible-vault. Never commit secrets, and never print them:
+Secrets come from a KeePass database through the custom `keepass` lookup plugin (pykeepass). Its paths are in the
+user's git-ignored `bootstrap/inventory/group_vars/all/local.yaml`; the master password comes from `KEEPASS_PASSWORD`
+(`bootstrap/bin/with-keepass` sets it from Windows Credential Manager) or a prompt. There is no ansible-vault (#241
+was dropped). Never run `with-keepass --store` or read the stored password yourself. Never commit secrets, and never print them:
 every task that handles secret values needs `no_log: true`.
 
 ## Commands

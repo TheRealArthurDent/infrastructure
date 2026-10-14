@@ -12,10 +12,6 @@
   hosts: all
   become: true
 
-  vars_prompt:
-    - name: keepass_password
-      prompt: "KeePass master password"
-      private: true
   vars:
     # https://containrrr.dev/shoutrrr/v0.8/services/overview/
     containermonitor_notification_url: "discord://{{ discord_docker_webhook_token }}@{{ discord_docker_webhook_id }}"
@@ -23,6 +19,9 @@
   gather_facts: false
 
   pre_tasks:
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
+
     # Resolved once per host. As play vars, every use would re-run the lookup (#235).
     - name: Read secrets from KeePass
       ansible.builtin.set_fact:
