@@ -30,6 +30,7 @@ fi
 vault_script() {
   # shellcheck disable=SC2016  # PowerShell code, expanded by PowerShell
   printf '%s\n' \
+    "\$ProgressPreference = 'SilentlyContinue'" \
     "\$ErrorActionPreference = 'Stop'" \
     "\$name = '$name'" \
     '$null = [Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]' \
@@ -38,8 +39,10 @@ vault_script() {
 }
 
 # -EncodedCommand (Base64 of UTF-16LE) keeps quotes and newlines intact across the WSL/Windows command line.
+# With redirected output, PowerShell would write progress and errors to stderr as CLIXML; ProgressPreference
+# and -OutputFormat Text keep stderr readable.
 vault() {
-  "$powershell" -NoProfile -NonInteractive -EncodedCommand \
+  "$powershell" -NoProfile -NonInteractive -OutputFormat Text -EncodedCommand \
     "$(vault_script "$1" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0)"
 }
 

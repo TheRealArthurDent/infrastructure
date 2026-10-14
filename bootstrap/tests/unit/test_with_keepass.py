@@ -148,6 +148,18 @@ def test_rejects_a_credential_name_that_would_break_the_powershell_script(fake):
     assert fake.argv_log() == ""
 
 
+def test_powershell_writes_plain_text_without_progress_records(fake):
+    # Otherwise PowerShell writes progress ("preparing modules for first use") as CLIXML to stderr.
+    run(fake, "--store", stdin="secret\n")
+    run(fake, *PRINT_PASSWORD)
+    run(fake, "--forget")
+    for line in fake.argv_log().splitlines():
+        argv = json.loads(line)
+        assert argv[argv.index("-OutputFormat") + 1] == "Text"
+        script = base64.b64decode(argv[argv.index("-EncodedCommand") + 1]).decode("utf-16-le")
+        assert script.startswith("$ProgressPreference = 'SilentlyContinue'")
+
+
 def test_without_a_command_prints_usage(fake):
     result = run(fake)
     assert result.returncode != 0
