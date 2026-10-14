@@ -76,6 +76,3 @@
     name: "{{ ansible_user }}"
     groups: docker
     append: true
-
-- name: deliberate lint violation (revert me)
-  shell: echo "lint check"
