@@ -3,7 +3,7 @@
 dependency:
   name: galaxy
   options:
-    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/requirements.yml
+    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/requirements.yaml
 
 driver:
   name: docker
@@ -30,7 +30,7 @@ provisioner:
     JUNIT_TASK_CLASS: "true"
     JUNIT_HIDE_TASK_ARGUMENTS: "true"
     # Leak test (#230): log every run at -v with --diff;
-    # verify.yml checks the log for secrets.
+    # verify.yaml checks the log for secrets.
     ANSIBLE_VERBOSITY: "1"
     ANSIBLE_DIFF_ALWAYS: "true"
     ANSIBLE_LOG_PATH: ${MOLECULE_EPHEMERAL_DIRECTORY}/ansible.log

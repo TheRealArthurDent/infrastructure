@@ -4,7 +4,7 @@
   vars:
     architecture: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
     # Dummy secrets instead of KeePass lookups. Every value containing LEAKCANARY is a secret;
-    # verify.yml fails if one of them shows up in the Ansible log (#230).
+    # verify.yaml fails if one of them shows up in the Ansible log (#230).
     pihole_password: LEAKCANARY-pihole
     outbound_password: LEAKCANARY-outbound
     containermonitor_notification_url: discord://LEAKCANARY-webhook-token@id

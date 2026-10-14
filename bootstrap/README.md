@@ -30,7 +30,7 @@ Run everything from `bootstrap/`, so that `ansible.cfg` and the inventory are pi
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # in the repo root
 source .venv/bin/activate
 cd bootstrap
-ansible-galaxy collection install -r requirements.yml
+ansible-galaxy collection install -r requirements.yaml
 ```
 
 You also need:
