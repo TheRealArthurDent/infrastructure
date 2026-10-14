@@ -152,9 +152,9 @@ services:
       - /etc/docker/infrastructure/.healthmonitor.env
     environment:
       - CONTAINERMON_CHECK_STOPPED=false
-      # Set according to the server's Docker API version
-      # Run "docker version" on host to determine the matching version
-      - DOCKER_API_VERSION=1.41
+      # container-mon does not negotiate the API version. 1.44 is the oldest version Docker 29+ accepts
+      # and still within the range of Debian's docker.io 26.x. Drop it once all hosts run docker-ce 28.4+.
+      - DOCKER_API_VERSION=1.44
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
