@@ -12,36 +12,68 @@
   hosts: all
   become: true
 
-  vars_prompt:
-    - name: keepass_password
-      prompt: "KeePass master password"
-      private: true
   vars:
-    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
-    keepass_key: "/home/mika/.keepass/raspberry.key"
-    pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='pihole') }}"
-    outbound_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='outbound') }}"
     # https://containrrr.dev/shoutrrr/v0.8/services/overview/
-    discord_docker_webhook_id: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Discord', title='Docker Webhook', field='id') }}"
-    discord_docker_webhook_token: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Discord', title='Docker Webhook', field='token') }}"
     containermonitor_notification_url: "discord://{{ discord_docker_webhook_token }}@{{ discord_docker_webhook_id }}"
-    # Backup
-    restic_passphrase: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Backup', title='Resticprofile', field='passphrase') }}"
-    dungeon_ssh_port: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Backup', title='Dungeon', field='ssh-port') }}"
-
-    # smart-home
-    iobroker_states_redis_port: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/ioBroker', title='States Redis', field='port') }}"
-    iobroker_objects_redis_port: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/ioBroker', title='Objects Redis', field='port') }}"
-    influxdb_admin_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/Influx DB', title='Influx admin') }}"
-    influxdb_read_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/Influx DB', title='Influx read') }}"
-    influxdb_write_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/Influx DB', title='Influx write') }}"
-    grafana_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='Grafana') }}"
-    mosquitto_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home', title='mosquitto') }}"
-    deconz_vnc_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='smart-home/deconz - Phoscon-GW', title='Deconz VNC') }}"
-    nodered_github_user: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='GitHub', title='NodeRed', field='username') }}"
-    nodered_github_email: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='GitHub', title='NodeRed', field='email') }}"
 
   gather_facts: false
+
+  pre_tasks:
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
+
+    # Resolved once per host. As play vars, every use would re-run the lookup (#235).
+    - name: Read secrets from KeePass
+      ansible.builtin.set_fact:
+        pihole_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home', title='pihole') }}
+        outbound_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home', title='outbound') }}
+        discord_docker_webhook_id: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Discord', title='Docker Webhook', field='id') }}
+        discord_docker_webhook_token: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Discord', title='Docker Webhook', field='token') }}
+        restic_passphrase: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title='Resticprofile', field='passphrase') }}
+        dungeon_ssh_port: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title='Dungeon', field='ssh-port') }}
+        iobroker_states_redis_port: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home/ioBroker', title='States Redis', field='port') }}
+        iobroker_objects_redis_port: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home/ioBroker', title='Objects Redis', field='port') }}
+        influxdb_admin_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home/Influx DB', title='Influx admin') }}
+        influxdb_read_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home/Influx DB', title='Influx read') }}
+        influxdb_write_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home/Influx DB', title='Influx write') }}
+        grafana_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home', title='Grafana') }}
+        mosquitto_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home', title='mosquitto') }}
+        deconz_vnc_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home/deconz - Phoscon-GW', title='Deconz VNC') }}
+        nodered_github_user: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='GitHub', title='NodeRed', field='username') }}
+        nodered_github_email: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='GitHub', title='NodeRed', field='email') }}
+      no_log: true
 
   roles:
     - ssh

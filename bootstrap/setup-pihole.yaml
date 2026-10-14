@@ -17,31 +17,14 @@
   vars:
     pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"
     pihole_port: 443
-    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
-    keepass_key: "/home/mika/.keepass/raspberry.key"
 
   tasks:
     - name: Load Pi-hole configuration
       ansible.builtin.include_vars:
         file: configs/pihole.yaml
 
-    - name: Get KeePass password from environment variable
-      ansible.builtin.set_fact:
-        keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
-      no_log: true
-
-    - name: Prompt for KeePass password if not in environment
-      ansible.builtin.pause:
-        prompt: "KeePass master password"
-        echo: false
-      register: prompted_password
-      when: not keepass_password
-
-    - name: Use prompted password if env not set
-      ansible.builtin.set_fact:
-        keepass_password: "{{ prompted_password.user_input }}"
-      when: not keepass_password
-      no_log: true
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
 
     - name: Get Pi-hole password and root CA certificate from KeePass
       ansible.builtin.set_fact:

@@ -12,18 +12,12 @@
   hosts: all
   become: true
 
-  vars_prompt:
-    - name: keepass_password
-      prompt: "KeePass master password"
-      private: true
-
-  vars:
-    keepass_db: "/mnt/h/Meine Ablage/SmartHome/KeePass/Raspberry.kdbx"
-    keepass_key: "/home/mika/.keepass/raspberry.key"
-
   gather_facts: true
 
   pre_tasks:
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
+
     # Resolved once into memory on the control node; nothing is exported to disk (#229).
     - name: Read root CA from KeePass
       ansible.builtin.set_fact:

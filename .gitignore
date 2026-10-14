@@ -33,3 +33,6 @@ molecule/*/inventory.yml
 .AppleDouble
 .LSOverride
 test-results/
+
+# Local KeePass paths (#267)
+bootstrap/inventory/group_vars/all/local.yaml
