@@ -1,5 +1,7 @@
 # Exclude private keys
 /source/etc/ssl/private
+# SSH keys anywhere (id_rsa, id_ed25519, id_borg_raspi, ...); keep known_hosts and authorized_keys
+**/.ssh/id_*
 # Exclude .env files potentially containing secrets
 /source/etc/docker/*/.*env
 # Exclude everything looking like a secret
