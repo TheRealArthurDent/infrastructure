@@ -116,6 +116,9 @@ services:
     hostname: resticprofile
     container_name: resticprofile
     image: creativeprojects/resticprofile:0.33.1
+    # On stop, let a running backup shut down cleanly so restic removes its repository lock (#250)
+    init: true
+    stop_grace_period: 2m
     deploy:
       resources:
         limits:
@@ -142,7 +145,18 @@ services:
     entrypoint: '/bin/sh'
     command:
       - '-c'
-      - 'resticprofile schedule --all && crond -f'
+      - |
+        resticprofile schedule --all || exit 1
+        crond -f &
+        crond_pid=$$!
+        # crond doesn't pass SIGTERM on to its jobs: stop the running job (resticprofile) first and wait for it
+        stop_job() {
+          pkill -TERM -P $$crond_pid
+          while pgrep -P $$crond_pid >/dev/null; do sleep 1; done
+          kill $$crond_pid
+        }
+        trap stop_job TERM INT
+        wait $$crond_pid
   # Monitoring
   healthmonitor:
     hostname: healthmonitor
