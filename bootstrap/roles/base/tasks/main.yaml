@@ -5,7 +5,7 @@
     autoclean: true
     autoremove: true
 
-- name: "Generate Diffie-Hellman parameters with {{ dhparameter_bits }} bits"
+- name: "Generate Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
   community.crypto.openssl_dhparam:
     path: /etc/ssl/certs/dhparam.pem
     owner: root

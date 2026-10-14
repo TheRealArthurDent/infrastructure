@@ -72,7 +72,7 @@ Some files break access to the Pi if they're wrong. Always validate them before 
 
 - name: Ensure sshd listens on the configured port
   ansible.builtin.copy:
-    content: "Port {{ configured_port }}\n"
+    content: "Port {{ ssh_configured_port }}\n"
     dest: /etc/ssh/sshd_config.d/custom-port.conf
     owner: root
     group: root

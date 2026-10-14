@@ -10,7 +10,7 @@
 #   - separator: Separator for joining records (" " for hosts, "," for cnames, "" for upstreams)
 #   - url_separator: URL separator ("%20" for hosts, "%2C" for cnames, "" for upstreams)
 
-- name: "Get existing {{ record_type }} from API"
+- name: "Get existing records from API for {{ record_type }}"
   ansible.builtin.uri:
     url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}"
     method: GET
@@ -20,50 +20,62 @@
     validate_certs: false
   register: api_response
 
-- name: "Extract existing {{ record_type }} records"
-  set_fact:
+- name: "Extract existing records for {{ record_type }}"
+  ansible.builtin.set_fact:
     existing_records_extracted: "{{ api_response.json.config.dns[record_type] | default([]) }}"
 
-- name: "Show existing {{ record_type }}"
-  debug:
+- name: "Show existing records for {{ record_type }}"
+  ansible.builtin.debug:
     msg: "Existing {{ record_type }}: {{ existing_records_extracted }}"
 
-- name: "Format desired {{ record_type }} records (domain first)"
-  set_fact:
-    desired_records_formatted: "{{ desired_records | map(attribute='domain') | zip(desired_records | map(attribute=value_attribute)) | map('join', separator) | list }}"
+- name: "Format desired records domain first for {{ record_type }}"
+  ansible.builtin.set_fact:
+    desired_records_formatted: >-
+      {{ desired_records | map(attribute='domain')
+         | zip(desired_records | map(attribute=value_attribute))
+         | map('join', separator) | list }}
   when: record_format == "objects" and separator != "" and domain_first | default(true)
 
-- name: "Format desired {{ record_type }} records (value first)"
-  set_fact:
-    desired_records_formatted: "{{ desired_records | map(attribute=value_attribute) | zip(desired_records | map(attribute='domain')) | map('join', separator) | list }}"
+- name: "Format desired records value first for {{ record_type }}"
+  ansible.builtin.set_fact:
+    desired_records_formatted: >-
+      {{ desired_records | map(attribute=value_attribute)
+         | zip(desired_records | map(attribute='domain'))
+         | map('join', separator) | list }}
   when: record_format == "objects" and separator != "" and not (domain_first | default(true))
 
-- name: "Format desired {{ record_type }} records (simple list)"
-  set_fact:
+- name: "Format desired records as simple list for {{ record_type }}"
+  ansible.builtin.set_fact:
     desired_records_formatted: "{{ desired_records }}"
   when: record_format == "simple"
 
-- name: "Identify {{ record_type }} to delete"
-  set_fact:
-    records_to_delete: "{{ existing_records_extracted | difference(desired_records_formatted | default(desired_records)) }}"
+- name: "Identify records to delete for {{ record_type }}"
+  ansible.builtin.set_fact:
+    records_to_delete: >-
+      {{ existing_records_extracted
+         | difference(desired_records_formatted | default(desired_records)) }}
 
-- name: "Identify {{ record_type }} to add"
-  set_fact:
-    records_to_add: "{{ (desired_records_formatted | default(desired_records)) | difference(existing_records_extracted) }}"
+- name: "Identify records to add for {{ record_type }}"
+  ansible.builtin.set_fact:
+    records_to_add: >-
+      {{ (desired_records_formatted | default(desired_records))
+         | difference(existing_records_extracted) }}
 
-- name: "Show {{ record_type }} to delete"
-  debug:
+- name: "Show records to delete for {{ record_type }}"
+  ansible.builtin.debug:
     msg: "{{ record_type | capitalize }} to delete: {{ records_to_delete }}"
   when: records_to_delete | length > 0
 
-- name: "Show {{ record_type }} to add"
-  debug:
+- name: "Show records to add for {{ record_type }}"
+  ansible.builtin.debug:
     msg: "{{ record_type | capitalize }} to add: {{ records_to_add }}"
   when: records_to_add | length > 0
 
 - name: "Delete old {{ record_type }}"
   ansible.builtin.uri:
-    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ item | replace(separator, url_separator) if separator else item }}"
+    url: >-
+      https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{
+        item | replace(separator, url_separator) if separator else item }}
     method: DELETE
     headers:
       X-FTL-SID: "{{ pihole_session }}"
@@ -75,7 +87,9 @@
 
 - name: "Add {{ record_type }}"
   ansible.builtin.uri:
-    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ item | replace(separator, url_separator) if separator else item }}"
+    url: >-
+      https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{
+        item | replace(separator, url_separator) if separator else item }}
     method: PUT
     headers:
       X-FTL-SID: "{{ pihole_session }}"
@@ -88,8 +102,8 @@
   when: records_to_add | length > 0
   register: add_result
 
-- name: "{{ record_type | capitalize }} summary"
-  debug:
+- name: "Show summary for {{ record_type }}"
+  ansible.builtin.debug:
     msg: |
       {{ record_type | capitalize }} Configuration:
       - Records to delete: {{ records_to_delete | length }}

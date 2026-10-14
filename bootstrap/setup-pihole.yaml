@@ -20,28 +20,28 @@
 
   tasks:
     - name: Load Pi-hole configuration
-      include_vars:
+      ansible.builtin.include_vars:
         file: configs/pihole.yaml
 
     - name: Get KeePass password from environment variable
-      set_fact:
+      ansible.builtin.set_fact:
         keepass_password: "{{ lookup('env', 'KEEPASS_PASSWORD') }}"
       no_log: true
 
     - name: Prompt for KeePass password if not in environment
-      pause:
+      ansible.builtin.pause:
         prompt: "KeePass master password"
         echo: false
       register: prompted_password
       when: not keepass_password
 
     - name: Use prompted password if env not set
-      set_fact:
+      ansible.builtin.set_fact:
         keepass_password: "{{ prompted_password.user_input }}"
       when: not keepass_password
       no_log: true
     - name: Get Pi-hole password from KeePass
-      set_fact:
+      ansible.builtin.set_fact:
         pihole_password: "{{ lookup('keepass',
             db=keepass_db,
             password=keepass_password,
@@ -63,13 +63,13 @@
       no_log: true
 
     - name: Extract session token
-      set_fact:
+      ansible.builtin.set_fact:
         pihole_session: "{{ auth_response.json.session.sid }}"
       no_log: true
 
 
     - name: Manage A records (hosts)
-      include_tasks: tasks/manage_pihole_records.yaml
+      ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
       vars:
         record_type: "hosts"
         api_endpoint: "/api/config/dns/hosts"
@@ -81,7 +81,7 @@
         url_separator: "%20"
 
     - name: Manage CNAME records
-      include_tasks: tasks/manage_pihole_records.yaml
+      ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
       vars:
         record_type: "cnameRecords"
         api_endpoint: "/api/config/dns/cnameRecords"
@@ -93,7 +93,7 @@
         url_separator: "%2C"
 
     - name: Manage block lists
-      include_tasks: tasks/manage_pihole_lists.yaml
+      ansible.builtin.include_tasks: tasks/manage_pihole_lists.yaml
       vars:
         list_type: "block"
         api_endpoint: "/api/lists"
@@ -110,4 +110,5 @@
           X-FTL-SID: "{{ pihole_session }}"
         status_code: 204
         validate_certs: false  # TODO remove
-      ignore_errors: true
+      # A failed logout must not fail the play; the session expires on its own.
+      failed_when: false
