@@ -152,6 +152,9 @@ services:
           '/^resticprofile_backup_last_success_timestamp_seconds/ { ok = now - $$2 < 26 * 3600 } END { exit !ok }'
           /metrics/backup_last_success.prom
       interval: 10m
+      # Check every 10s during the first minute, so the status is known right after a deploy
+      start_period: 1m
+      start_interval: 10s
     entrypoint: '/bin/sh'
     command:
       - '-c'
