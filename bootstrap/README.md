@@ -49,9 +49,10 @@ cp inventory/group_vars/all/local.example.yaml inventory/group_vars/all/local.ya
 
 `KEEPASS_DB` / `KEEPASS_KEY` win over `local.yaml`. A run fails at the start if the files aren't found.
 
-Keep the database on a local file system. With Google Drive for desktop, set the KeePass folder to
-**Mirror files**, so the database is a normal file under `/mnt/c/Users/<you>/My Drive/...`. The streamed
-drive (`H:`, `/mnt/h` in WSL) needs its own mount, which breaks regularly.
+Keep the database on a path WSL sees without a mount of its own, i.e. under `/mnt/c`. A Google Drive
+drive letter (`H:`, `/mnt/h` in WSL) needs its own mount, which breaks regularly. With Google Drive for
+desktop, either mirror My Drive, or stream it into a folder on `C:` and make the KeePass folder
+available offline (right click in Explorer).
 
 The master password is asked for at the start of each run, unless `KEEPASS_PASSWORD` is set. On WSL,
 `bin/with-keepass` sets it from Windows Credential Manager, so runs need no prompt:
