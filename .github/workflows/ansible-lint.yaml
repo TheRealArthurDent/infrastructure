@@ -7,7 +7,7 @@ on:
       - main
       - develop
     paths:
-      - 'bootstrap/**'
+      - 'ansible/**'
       - '.ansible-lint'
       - '.yamllint.yaml'
       - 'requirements.txt'
@@ -18,7 +18,7 @@ on:
       - main
       - develop
     paths:
-      - 'bootstrap/**'
+      - 'ansible/**'
       - '.ansible-lint'
       - '.yamllint.yaml'
       - 'requirements.txt'
@@ -47,8 +47,8 @@ jobs:
 
       # Without the collections, syntax-check can't resolve community.* modules.
       - name: Install Ansible collections
-        run: ansible-galaxy collection install -r bootstrap/requirements.yaml
+        run: ansible-galaxy collection install -r ansible/requirements.yaml
 
       - name: Run ansible-lint
         run: |
-          ansible-lint --strict bootstrap/
+          ansible-lint --strict ansible/

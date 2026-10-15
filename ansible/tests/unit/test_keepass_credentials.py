@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-BOOTSTRAP = Path(__file__).parents[2]
-TASKS = BOOTSTRAP / "tasks" / "keepass_credentials.yaml"
+ANSIBLE_DIR = Path(__file__).parents[2]
+TASKS = ANSIBLE_DIR / "tasks" / "keepass_credentials.yaml"
 PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml"]
 
 
@@ -40,7 +40,7 @@ def run_tasks(tmp_path, *extra_vars, password=None):
     args = [arg for var in extra_vars for arg in ("-e", var)]
     return subprocess.run(
         ["ansible-playbook", "-v", str(playbook), *args],
-        cwd=BOOTSTRAP,
+        cwd=ANSIBLE_DIR,
         env=env,
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -78,7 +78,7 @@ def test_fails_with_a_hint_when_the_key_file_is_missing(tmp_path, keepass_files)
 
 
 def main_play(playbook):
-    return yaml.safe_load((BOOTSTRAP / playbook).read_text())[-1]
+    return yaml.safe_load((ANSIBLE_DIR / playbook).read_text())[-1]
 
 
 @pytest.mark.parametrize("playbook", PLAYBOOKS)

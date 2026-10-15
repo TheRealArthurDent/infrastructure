@@ -10,15 +10,15 @@ description: Use when a task in this repo involves running, dry-running, testing
 Ansible here changes a real smart home (DNS, SSH, Docker) on two Pis that only machines in the home
 network can reach. Know before you start what you can verify yourself, what only CI can, and what only the user
 can run on their developer machine.
-How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it too when you touch `bootstrap/`.
+How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it too when you touch `ansible/`.
 
 ## Who can run what
 
 | Check | Cloud container (you) | CI | User's machine in the home network |
 |---|---|---|---|
-| pytest (`bootstrap/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
+| pytest (`ansible/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
 | `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes (lint `--strict`, #240) | yes |
-| Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, on every push to `bootstrap/**` | yes |
+| Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, on every push to `ansible/**` | yes |
 | Anything against testbed/raspi | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | no | yes |
 
 Don't probe the LAN or set up dockerd to find this out again. Never write "Molecule passed" from a local run;
@@ -34,7 +34,7 @@ into chat, a command line you write, or `KEEPASS_PASSWORD` in a command you hand
 4. **Hand the user the rollout** as exact commands, in this order, and say what to look for in each:
 
 ```sh
-cd bootstrap                                             # ansible.cfg + inventory live here
+cd ansible                                               # ansible.cfg + inventory live here
 ansible-playbook <play>.yaml --limit testbed --check --diff
 ansible-playbook <play>.yaml --limit testbed             # real run
 ansible-playbook <play>.yaml --limit testbed             # must end with changed=0

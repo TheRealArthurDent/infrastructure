@@ -1,5 +1,5 @@
 ---
-# Ansible Galaxy requirements for bootstrap roles
+# Ansible Galaxy requirements for the roles and playbooks in ansible/
 # Define any external roles or collections used by the playbook
 
 collections:

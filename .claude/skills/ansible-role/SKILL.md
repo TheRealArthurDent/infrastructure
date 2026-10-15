@@ -1,6 +1,6 @@
 ---
 name: ansible-role
-description: Conventions and checklist for writing, changing or reviewing Ansible roles, tasks and playbooks in this repo's bootstrap/ directory, including how to cover them with Molecule tests. Use this whenever you add or modify anything under bootstrap/ (roles, tasks, handlers, templates, playbooks, inventory), migrate a bash step from deploy.sh/setup.sh/run.sh into Ansible, fix an idempotency or ansible-lint problem, or add or extend a Molecule scenario or verify.yaml, even if the user only says something like "add X to the pi setup" or "automate this step".
+description: Conventions and checklist for writing, changing or reviewing Ansible roles, tasks and playbooks in this repo's ansible/ directory, including how to cover them with Molecule tests. Use this whenever you add or modify anything under ansible/ (roles, tasks, handlers, templates, playbooks, inventory), migrate a bash step from deploy.sh/setup.sh/run.sh into Ansible, fix an idempotency or ansible-lint problem, or add or extend a Molecule scenario or verify.yaml, even if the user only says something like "add X to the pi setup" or "automate this step".
 ---
 
 # Ansible roles in this repo
@@ -13,7 +13,7 @@ that goal; when in doubt, ask "does this keep a second run at changed=0, and cou
 ## Where things go
 
 ```
-bootstrap/
+ansible/
   <playbook>.yaml            # plays only: hosts, vars, roles. No long task lists.
   inventory/hosts.yaml       # hosts; per-host values belong in host_vars/ (see #239)
   roles/<role>/
@@ -31,7 +31,7 @@ YAML files use `.yaml`. Molecule's only fixed name is `molecule.yml`; its playbo
 
 Reference role files by paths **relative to the role's own `files/` or `templates/` directory**
 (`src: etc/sysctl.d/90-overcommit-memory.conf`). Paths like `templates/etc/...` that resolve relative to the
-playbook directory only work from playbooks located directly in `bootstrap/` and break as soon as Molecule or
+playbook directory only work from playbooks located directly in `ansible/` and break as soon as Molecule or
 a new `site.yaml` calls the role (this happened once already).
 
 ## Task conventions
@@ -86,7 +86,7 @@ breakage takes the host or the reverse proxy down.
 
 ## Secrets
 
-Secrets come from KeePass via the repo's own `keepass` lookup plugin (`bootstrap/lookup_plugins/keepass.py`),
+Secrets come from KeePass via the repo's own `keepass` lookup plugin (`ansible/lookup_plugins/keepass.py`),
 never from files in the repo and not from ansible-vault.
 
 - Every task that **receives, renders or sends** a secret gets `no_log: true`. That includes `copy`/`template`
@@ -110,7 +110,7 @@ never from files in the repo and not from ansible-vault.
 Each role change comes with a matching test change. That's what keeps the roles trustworthy as the migration
 from bash continues.
 
-1. **Add the role to Molecule** in `bootstrap/molecule/default/converge.yaml` (`roles:` list), plus dummy values
+1. **Add the role to Molecule** in `ansible/molecule/default/converge.yaml` (`roles:` list), plus dummy values
    for any variables it needs that aren't in `defaults/`. If the role needs something a fresh Pi OS Lite has but
    `debian:trixie` lacks, install it in `molecule/default/Dockerfile.j2` with a comment (that's what `procps`
    for `/etc/sysctl.d` is). Never change the role just to suit the container.
@@ -118,7 +118,7 @@ from bash continues.
    `package_facts`), file exists with owner and mode, rendered content contains the expected line, config passes
    its validator (`visudo -cf`, `nginx -t`), user in group, cron entry present. Use `ansible.builtin.assert` with a
    clear `fail_msg`. Never `register:` into reserved names like `groups`.
-3. **Run it**, from `bootstrap/`:
+3. **Run it**, from `ansible/`:
    ```sh
    ../.venv/bin/molecule converge    # repeat while developing
    ../.venv/bin/molecule verify
@@ -130,7 +130,7 @@ from bash continues.
    of this repo may be active (a second checkout, a parallel agent), give yours its own state directory with
    `MOLECULE_EPHEMERAL_DIRECTORY=$(mktemp -d)`, because the default path is derived from the folder name and
    concurrent runs overwrite each other's inventory.
-4. **Lint**: `../.venv/bin/ansible-lint --strict` (from `bootstrap/`) must report 0 findings; CI blocks the PR
+4. **Lint**: `../.venv/bin/ansible-lint --strict` (from `ansible/`) must report 0 findings; CI blocks the PR
    otherwise.
 5. **Things a container can't test** (sshd port switching, real Docker daemon behavior, Pi hardware, Pi-hole API
    against a live instance) go to the testbed Pi: `ansible-playbook <playbook> --limit testbed --check --diff`,

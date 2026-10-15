@@ -23,7 +23,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 from pykeepass import create_database
 
-BOOTSTRAP = Path(__file__).parents[2]
+ANSIBLE_DIR = Path(__file__).parents[2]
 PIHOLE_PASSWORD = "pihole-secret"
 KEEPASS_PASSWORD = "test-master-password"
 
@@ -252,7 +252,7 @@ def run(tmp_path, keepass, pki):
         return subprocess.run(
             # testbed is not reachable from here: if anything tries to connect to it, the run fails.
             ["ansible-playbook", "setup-pihole.yaml", "--limit", "testbed", "-e", f"@{extra_vars}"],
-            cwd=BOOTSTRAP,
+            cwd=ANSIBLE_DIR,
             env={**os.environ, "KEEPASS_PASSWORD": KEEPASS_PASSWORD, "ANSIBLE_TIMEOUT": "3"},
             stdin=subprocess.DEVNULL,
             capture_output=True,
@@ -352,6 +352,6 @@ def test_password_never_shows_up_in_output(run):
 
 
 def test_block_list_urls_are_not_html_escaped():
-    config = yaml.safe_load((BOOTSTRAP / "configs" / "pihole.yaml").read_text())
+    config = yaml.safe_load((ANSIBLE_DIR / "configs" / "pihole.yaml").read_text())
 
     assert [url for url in config["dns_block_lists"] if "&amp;" in url] == []

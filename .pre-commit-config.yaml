@@ -27,4 +27,4 @@ repos:
         # Renovate only updates additional_dependencies when the language is set explicitly.
         language: python
         additional_dependencies: ['ansible-core==2.21.5']
-        entry: ansible-lint --strict bootstrap/
+        entry: ansible-lint --strict ansible/

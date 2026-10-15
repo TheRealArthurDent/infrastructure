@@ -3,12 +3,12 @@ name: Ansible Tests
 on:
   push:
     paths:
-      - 'bootstrap/**'
+      - 'ansible/**'
       - 'requirements.txt'
       - '.github/workflows/molecule.yaml'
   pull_request:
     paths:
-      - 'bootstrap/**'
+      - 'ansible/**'
       - 'requirements.txt'
   workflow_dispatch:
 
@@ -35,10 +35,10 @@ jobs:
 
       # The --limit guard tests load the playbooks, which need the collections.
       - name: Install Ansible collections
-        run: ansible-galaxy collection install -r bootstrap/requirements.yaml
+        run: ansible-galaxy collection install -r ansible/requirements.yaml
 
       - name: Run pytest
-        run: pytest -v bootstrap/tests/unit --junitxml=test-results/pytest.xml
+        run: pytest -v ansible/tests/unit --junitxml=test-results/pytest.xml
 
       - name: Publish test report
         if: ${{ !cancelled() }}
@@ -66,7 +66,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Molecule tests
-        working-directory: bootstrap
+        working-directory: ansible
         run: molecule test
         env:
           PY_COLORS: '1'

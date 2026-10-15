@@ -1,5 +1,5 @@
 # Container-based tests for the roles that don't depend on Pi hardware or a real sshd.
-# Run from bootstrap/: molecule test
+# Run from ansible/: molecule test
 dependency:
   name: galaxy
   options:
