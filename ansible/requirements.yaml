@@ -3,5 +3,8 @@
 # Define any external roles or collections used by the playbook
 
 collections:
+  # Pinned; Renovate's ansible-galaxy manager updates the versions.
   - name: community.crypto
+    version: 3.5.0
   - name: community.docker
+    version: 5.4.0

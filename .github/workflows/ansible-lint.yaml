@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - develop
     paths:
       - 'ansible/**'
       - '.ansible-lint'
@@ -13,10 +12,8 @@ on:
       - 'requirements.txt'
       - '.pre-commit-config.yaml'
       - '.github/workflows/ansible-lint.yaml'
+  # Every PR, whatever its base branch.
   pull_request:
-    branches:
-      - main
-      - develop
     paths:
       - 'ansible/**'
       - '.ansible-lint'

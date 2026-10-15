@@ -18,7 +18,7 @@ How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it 
 |---|---|---|---|
 | pytest (`ansible/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
 | `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes (lint `--strict`, #240) | yes |
-| Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, on every push to `ansible/**` | yes |
+| Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, on PRs and pushes to `main` touching `ansible/**` | yes |
 | Anything against testbed/raspi | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | no | yes |
 
 Don't probe the LAN or set up dockerd to find this out again. Never write "Molecule passed" from a local run;

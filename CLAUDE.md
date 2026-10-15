@@ -57,7 +57,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 
 Reports land in `test-results/` (JUnit XML). CI (`.github/workflows/molecule.yaml`) runs pytest and Molecule on
-every push touching `ansible/`.
+every PR and every push to `main` that touches `ansible/`.
 
 When writing or changing Ansible roles, follow the `ansible-role` skill in `.claude/skills/`.
 
