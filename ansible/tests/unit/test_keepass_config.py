@@ -5,20 +5,20 @@ from pathlib import Path
 import pytest
 import yaml
 
-BOOTSTRAP = Path(__file__).parents[2]
+ANSIBLE_DIR = Path(__file__).parents[2]
 PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml"]
 LOCAL_CONFIG = "inventory/group_vars/all/local.yaml"
 LOCAL_EXAMPLE = "inventory/group_vars/all/local.example.yaml"
 
 
 def plays(playbook):
-    return yaml.safe_load((BOOTSTRAP / playbook).read_text())
+    return yaml.safe_load((ANSIBLE_DIR / playbook).read_text())
 
 
 def keepass_var(name, *args):
     result = subprocess.run(
         ["ansible", "testbed", "-m", "ansible.builtin.debug", "-a", f"var={name}", *args],
-        cwd=BOOTSTRAP,
+        cwd=ANSIBLE_DIR,
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
@@ -38,23 +38,23 @@ def test_playbooks_do_not_hard_code_keepass_paths(playbook):
 def test_no_keepass_path_is_committed():
     # Paths depend on the user's file system, so they live in an ignored local file (#267).
     tracked = subprocess.run(
-        ["git", "ls-files", "inventory"], cwd=BOOTSTRAP, capture_output=True, text=True, check=True
+        ["git", "ls-files", "inventory"], cwd=ANSIBLE_DIR, capture_output=True, text=True, check=True
     ).stdout.split()
     for path in tracked:
         if path.endswith(".example.yaml"):
             continue
-        text = (BOOTSTRAP / path).read_text()
+        text = (ANSIBLE_DIR / path).read_text()
         assert ".kdbx" not in text, path
         assert ".key" not in text, path
 
 
 def test_local_config_is_ignored_by_git():
-    result = subprocess.run(["git", "check-ignore", "-q", LOCAL_CONFIG], cwd=BOOTSTRAP)
+    result = subprocess.run(["git", "check-ignore", "-q", LOCAL_CONFIG], cwd=ANSIBLE_DIR)
     assert result.returncode == 0
 
 
 def test_example_documents_the_local_config():
-    example = yaml.safe_load((BOOTSTRAP / LOCAL_EXAMPLE).read_text())
+    example = yaml.safe_load((ANSIBLE_DIR / LOCAL_EXAMPLE).read_text())
     assert set(example) == {"local_keepass_db", "local_keepass_key"}
 
 

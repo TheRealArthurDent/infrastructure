@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-BOOTSTRAP = Path(__file__).parents[2]
-WRAPPER = BOOTSTRAP / "bin" / "with-keepass"
+ANSIBLE_DIR = Path(__file__).parents[2]
+WRAPPER = ANSIBLE_DIR / "bin" / "with-keepass"
 PASSWORD = "LEAKCANARY ä'\"$x `y` \\z"
 
 # Stands in for powershell.exe: keeps credentials in a JSON file and logs each call's argv.

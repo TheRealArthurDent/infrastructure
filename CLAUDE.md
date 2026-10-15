@@ -7,7 +7,7 @@ container health monitoring) for a Raspberry Pi running Debian/Raspberry Pi OS t
 
 The deployment is being migrated from bash scripts to Ansible, and the migration is only half done:
 
-- **Ansible** (`bootstrap/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
+- **Ansible** (`ansible/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
   (`.env` files from KeePass), certificates, and Pi-hole DNS records/lists through its REST API.
 - **Bash** (`deploy.sh` → `setup/setup.sh` → `run.sh`) still deploys the stack itself: nginx/restic config with
   `%HOSTNAME%` sed templating, docker networks, `docker compose up`. It depends on files that only the Ansible
@@ -21,11 +21,11 @@ Check them before changing an affected area, and reference them in commits.
 ## Layout
 
 - `docker-compose.yaml`, `setup/` – the stack and its config (nginx snippets, resticprofile)
-- `bootstrap/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`),
+- `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`),
   `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`, `inventory/hosts.yaml`,
   `lookup_plugins/keepass.py`
-- `bootstrap/molecule/default/` – container-based role tests
-- `bootstrap/tests/unit/` – pytest tests for the KeePass lookup plugin
+- `ansible/molecule/default/` – container-based role tests
+- `ansible/tests/unit/` – pytest tests for the KeePass lookup plugin
 
 ## Hosts
 
@@ -39,8 +39,8 @@ Always pass `--limit <host>`. Before a real run, do `--check --diff` first.
 ## Secrets
 
 Secrets come from a KeePass database through the custom `keepass` lookup plugin (pykeepass). Its paths are in the
-user's git-ignored `bootstrap/inventory/group_vars/all/local.yaml`; the master password comes from `KEEPASS_PASSWORD`
-(`bootstrap/bin/with-keepass` sets it from Windows Credential Manager) or a prompt. There is no ansible-vault (#241
+user's git-ignored `ansible/inventory/group_vars/all/local.yaml`; the master password comes from `KEEPASS_PASSWORD`
+(`ansible/bin/with-keepass` sets it from Windows Credential Manager) or a prompt. There is no ansible-vault (#241
 was dropped). Never run `with-keepass --store` or read the stored password yourself. Never commit secrets, and
 never print them: every task that handles secret values needs `no_log: true`.
 
@@ -50,14 +50,14 @@ Tooling lives in a venv at the repo root:
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/pytest bootstrap/tests/unit                  # unit tests, no Docker
-(cd bootstrap && ../.venv/bin/molecule test)           # role tests in a trixie container, needs Docker, ~3–5 min
-(cd bootstrap && ../.venv/bin/molecule converge)       # faster loop while developing; then verify / destroy
-.venv/bin/ansible-lint --strict bootstrap/             # lint, must pass with 0 findings (CI blocks)
+.venv/bin/pytest ansible/tests/unit                    # unit tests, no Docker
+(cd ansible && ../.venv/bin/molecule test)             # role tests in a trixie container, needs Docker, ~3–5 min
+(cd ansible && ../.venv/bin/molecule converge)         # faster loop while developing; then verify / destroy
+.venv/bin/ansible-lint --strict ansible/               # lint, must pass with 0 findings (CI blocks)
 ```
 
 Reports land in `test-results/` (JUnit XML). CI (`.github/workflows/molecule.yaml`) runs pytest and Molecule on
-every push touching `bootstrap/`.
+every push touching `ansible/`.
 
 When writing or changing Ansible roles, follow the `ansible-role` skill in `.claude/skills/`.
 

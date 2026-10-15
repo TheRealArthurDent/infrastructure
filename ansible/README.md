@@ -24,12 +24,12 @@ Defined in `inventory/hosts.yaml`:
 
 ## Control node setup (once)
 
-Run everything from `bootstrap/`, so that `ansible.cfg` and the inventory are picked up.
+Run everything from `ansible/`, so that `ansible.cfg` and the inventory are picked up.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # in the repo root
 source .venv/bin/activate
-cd bootstrap
+cd ansible
 ansible-galaxy collection install -r requirements.yaml
 ```
 
@@ -125,7 +125,7 @@ Booting from USB needs a bootloader with USB boot enabled. If the Pi does not bo
 ### 3. Bootstrap
 
 ```sh
-cd bootstrap
+cd ansible
 ansible-playbook bootstrap.yaml --limit testbed
 ```
 
@@ -140,7 +140,7 @@ Reboot afterwards so the Docker group membership and sysctl settings take effect
 
 ```sh
 ./deploy.sh testbed 4242 testuser                           # from the repo root
-ansible-playbook check-certificates.yaml --limit testbed    # from bootstrap/
+ansible-playbook check-certificates.yaml --limit testbed    # from ansible/
 ansible-playbook setup-pihole.yaml --limit testbed
 ```
 

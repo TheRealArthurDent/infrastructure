@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 import yaml
 
-BOOTSTRAP = Path(__file__).parents[2]
+ANSIBLE_DIR = Path(__file__).parents[2]
 PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml"]
 
 
 def run_playbook(playbook, *args):
     return subprocess.run(
         ["ansible-playbook", playbook, *args],
-        cwd=BOOTSTRAP,
+        cwd=ANSIBLE_DIR,
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
@@ -22,7 +22,7 @@ def run_playbook(playbook, *args):
 
 @pytest.mark.parametrize("playbook", PLAYBOOKS)
 def test_main_play_targets_all_hosts(playbook):
-    plays = yaml.safe_load((BOOTSTRAP / playbook).read_text())
+    plays = yaml.safe_load((ANSIBLE_DIR / playbook).read_text())
     assert plays[-1]["hosts"] == "all"
 
 

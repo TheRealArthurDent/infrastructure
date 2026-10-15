@@ -34,5 +34,5 @@ molecule/*/inventory.yml
 .LSOverride
 test-results/
 
-# Local KeePass paths (#267)
-bootstrap/inventory/group_vars/all/local.yaml
+# Local KeePass paths (#267); the pattern also covers the pre-#239 location bootstrap/
+**/inventory/group_vars/all/local.yaml
