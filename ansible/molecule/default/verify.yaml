@@ -271,6 +271,8 @@
         profiles: "{{ rendered['resticprofile/config/profiles.yaml'] | b64decode }}"
         ssh_config: "{{ rendered['resticprofile/ssh_config'] | b64decode }}"
         compose: "{{ rendered['compose/docker-compose.yaml'] | b64decode | from_yaml }}"
+        nginx_cert_mount: >-
+          /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
       ansible.builtin.assert:
         that:
           - "'server_name         pihole.' ~ inventory_hostname ~ ' pihole.' ~ inventory_hostname ~ '.*;' in nginx_conf"
@@ -280,8 +282,7 @@
           - "'Port 2222' in ssh_config.splitlines()"
           # Resolved through the etc_hosts entry in molecule.yml
           - compose.services.resticprofile.extra_hosts.dungeon == '192.0.2.10'
-          - "'/etc/docker/infrastructure/nginx/' ~ inventory_hostname ~ '.pem:/etc/nginx/' ~ inventory_hostname ~ '.pem:ro'
-            in compose.services.nginx.volumes"
+          - "nginx_cert_mount in compose.services.nginx.volumes"
 
     - name: Stat stack directories
       ansible.builtin.stat:

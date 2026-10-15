@@ -29,7 +29,8 @@
     # Same pick as run.sh: the first address of a STREAM line
     - name: Remember the IP of the backup host
       ansible.builtin.set_fact:
-        stack_dungeon_ip: "{{ (stack_dungeon_getent.stdout_lines | select('search', 'STREAM') | first).split() | first }}"
+        stack_dungeon_ip: >-
+          {{ (stack_dungeon_getent.stdout_lines | select('search', 'STREAM') | first).split() | first }}
 
 - name: Ensure stack directories exist
   ansible.builtin.file:
