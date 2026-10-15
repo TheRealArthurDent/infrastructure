@@ -19,8 +19,10 @@
   gather_facts: false
 
   pre_tasks:
+    # Tagged always, so `--tags stack` still has the secrets.
     - name: Get the KeePass credentials
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
+      tags: always
 
     # Resolved once per host. As play vars, every use would re-run the lookup (#235).
     - name: Read secrets from KeePass
@@ -74,10 +76,12 @@
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='GitHub', title='NodeRed', field='email') }}
       no_log: true
+      tags: always
 
   roles:
     - ssh
     - base
     - docker
     - secrets
-    # - app
+    - role: stack
+      tags: stack

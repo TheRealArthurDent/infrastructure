@@ -14,6 +14,9 @@ platforms:
     dockerfile: Dockerfile.j2
     pre_build_image: false
     command: sleep infinity
+    # The stack role resolves the backup host on the Pi (getent), like run.sh did.
+    etc_hosts:
+      dungeon: 192.0.2.10
 
 provisioner:
   name: ansible

@@ -1,12 +1,12 @@
 # Ansible
 
 Ansible sets up the Pi host: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
-the nginx certificate and the Pi-hole DNS configuration. The Docker stack itself is still
-deployed with `deploy.sh` from the repo root (see the [main README](../README.md) and `CLAUDE.md`).
+the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role). `deploy.sh` in
+the repo root still works as a fallback until the stack role has proven itself on raspi (#238).
 
 | Playbook | What it does |
 |---|---|
-| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`: SSH port and key-only login, apt dist-upgrade, packages, sysctl, sudoers, rsnapshot cron, Docker, `.env` files under `/etc/docker/` |
+| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `stack`: SSH port and key-only login, apt dist-upgrade, packages, sysctl, sudoers, rsnapshot cron, Docker, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
 | `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days, restarts nginx |
 | `setup-pihole.yaml` | Syncs A records, CNAME records and block lists from `configs/pihole.yaml` through the Pi-hole REST API |
 
@@ -91,7 +91,10 @@ ansible-playbook setup-pihole.yaml --limit testbed
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbed
 
-# Redeploy / update the Docker stack (from the repo root)
+# Redeploy / update only the Docker stack (config, networks, compose up; reloads nginx on config changes)
+ansible-playbook bootstrap.yaml --limit testbed --tags stack
+
+# Fallback until #238 is done (from the repo root)
 ./deploy.sh testbed 4242 testuser    # ./deploy.sh alone deploys to raspi
 ```
 
@@ -126,7 +129,7 @@ Booting from USB needs a bootloader with USB boot enabled. If the Pi does not bo
 
 ```sh
 cd ansible
-ansible-playbook bootstrap.yaml --limit testbed
+ansible-playbook bootstrap.yaml --limit testbed --skip-tags stack
 ```
 
 The `ssh` role finds SSH on port 22, moves it to the port from the inventory and continues there. It also turns
@@ -136,11 +139,15 @@ for a password on the fresh install, add `--ask-become-pass` to this first run.
 Reboot afterwards so the Docker group membership and sysctl settings take effect:
 `ssh -p 4242 testuser@192.168.1.7 sudo reboot`
 
-### 4. Stack, certificate, DNS
+### 4. Certificate, stack, DNS
+
+The stack needs the nginx certificate, so it comes after `check-certificates.yaml` (the `stack` role stops
+with a message if the certificate is missing). It also needs `dungeon` to resolve on the Pi: the role looks up
+its IP at every run, like `run.sh` did.
 
 ```sh
-./deploy.sh testbed 4242 testuser                           # from the repo root
-ansible-playbook check-certificates.yaml --limit testbed    # from ansible/
+ansible-playbook check-certificates.yaml --limit testbed
+ansible-playbook bootstrap.yaml --limit testbed --tags stack
 ansible-playbook setup-pihole.yaml --limit testbed
 ```
 

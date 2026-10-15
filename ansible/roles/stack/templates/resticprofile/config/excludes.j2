@@ -1,0 +1,28 @@
+# Exclude private keys
+/source/etc/ssl/private
+# SSH keys anywhere (id_rsa, id_ed25519, id_borg_raspi, ...); keep known_hosts and authorized_keys
+**/.ssh/id_*
+# Exclude .env files potentially containing secrets
+/source/etc/docker/*/.*env
+# Exclude everything looking like a secret
+/source/etc/docker/**/*secret*
+# Exclude pihole FTL database as it's not small and bearable
+/source/etc/docker/infrastructure/pihole/pihole/pihole-FTL.db*
+# Exclude iobroker's npm cache
+/source/docker-volumes/smart-home_iobroker-storage/_data/.npm
+# Python
+**/__pycache__/**
+**/.venv
+# Version management
+**/.svn
+**/.git
+# Nextcloud
+/source/docker-volumes/nextcloud_storage/**/cache
+/source/docker-volumes/nextcloud_storage/**/uploads
+/source/docker-volumes/nextcloud_storage/**/files_trashbin
+/source/docker-volumes/nextcloud_storage/**/files_versions
+/source/docker-volumes/nextcloud_storage/**/appdata_*/preview
+# Caches
+/source/home/*/.cache
+# Exclude the SSH key for the backup host: the Ansible secrets role recreates it (#233)
+/source/etc/docker/infrastructure/resticprofile/.ssh
