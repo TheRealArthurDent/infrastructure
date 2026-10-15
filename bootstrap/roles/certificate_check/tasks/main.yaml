@@ -87,7 +87,9 @@
 - name: Sign host certificate with the root CA on the control node
   community.crypto.x509_certificate_pipe:
     provider: ownca
-    content: "{{ (certificate_check_cert_existing.content | b64decode) if certificate_check_cert_stat.stat.exists else omit }}"
+    content: >-
+      {{ (certificate_check_cert_existing.content | b64decode)
+         if certificate_check_cert_stat.stat.exists else omit }}
     csr_content: "{{ certificate_check_csr.csr }}"
     ownca_content: "{{ certificate_check_root_ca_cert }}"
     ownca_privatekey_content: "{{ certificate_check_root_ca_key }}"

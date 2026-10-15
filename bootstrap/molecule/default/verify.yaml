@@ -180,7 +180,8 @@
       changed_when: false
 
     - name: Read public key of the host certificate
-      ansible.builtin.command: openssl x509 -noout -pubkey -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      ansible.builtin.command: >-
+        openssl x509 -noout -pubkey -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
       register: cert_pubkey
       changed_when: false
 
@@ -194,7 +195,9 @@
         that: cert_pubkey.stdout == key_pubkey.stdout
 
     - name: Read SANs of the host certificate
-      ansible.builtin.command: openssl x509 -noout -ext subjectAltName -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      ansible.builtin.command: >-
+        openssl x509 -noout -ext subjectAltName
+        -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
       register: cert_san
       changed_when: false
 

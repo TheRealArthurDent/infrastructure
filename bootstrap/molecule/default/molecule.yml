@@ -23,6 +23,7 @@ provisioner:
     converge: converge.yaml
     verify: verify.yaml
   env:
+    # ansible-lint doesn't see this; it finds the roles through the roles symlink next to converge.yaml.
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/roles
     # JUnit XML per playbook run (create, converge, idempotence, verify, ...) in <repo>/test-results/molecule
     ANSIBLE_CALLBACKS_ENABLED: ansible.builtin.junit

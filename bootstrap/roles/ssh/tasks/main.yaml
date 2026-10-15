@@ -17,74 +17,75 @@
 
 # ansible_port can change throughout this role, keep a copy around
 - name: Set configured port fact
-  set_fact:
-    configured_port: "{{ ansible_port }}"
+  ansible.builtin.set_fact:
+    ssh_configured_port: "{{ ansible_port }}"
 
-## TODO flip logic. First check if the inventory-provided SSH port is reachable, then check if the default SSH port is reachable.
+## TODO flip logic. First check if the inventory-provided SSH port is reachable,
+## then check if the default SSH port is reachable.
 ## This way we can avoid checking the default SSH port if the inventory-provided one is correct.
 
 # From localhost, check if we're able to reach
 # {{ ansible_hostname }} on {{ ansible_port }} provided by the inventory
 - name: Check if we're using the inventory-provided SSH port
-  wait_for:
+  ansible.builtin.wait_for:
     port: "{{ ansible_port }}"
     state: "started"
     host: "{{ ansible_host }}"
     connect_timeout: "5"
     timeout: "10"
   delegate_to: "localhost"
-  ignore_errors: "yes"
-  register: configured_ssh
+  ignore_errors: true
+  register: ssh_configured_check
 
 # If {{ ansible_port }} is reachable, we don't need to do anything special
 - name: SSH port is configured properly
-  debug:
+  ansible.builtin.debug:
     msg: "SSH port is configured properly"
-  when: configured_ssh is defined and
-    configured_ssh.state is defined and
-    configured_ssh.state == "started"
+  when: ssh_configured_check is defined and
+    ssh_configured_check.state is defined and
+    ssh_configured_check.state == "started"
   register: ssh_port_set
 
 # If unreachable on port 22, check if we're able to reach
 # {{ inventory_hostname }} on port 22
 # from localhost.
 - name: Check if we're using the default SSH port
-  wait_for:
+  ansible.builtin.wait_for:
     port: "22"
     state: "started"
     host: "{{ ansible_host }}"
     connect_timeout: "5"
     timeout: "10"
   delegate_to: "localhost"
-  ignore_errors: "yes"
-  register: default_ssh
-  when: configured_ssh is defined and
-    configured_ssh.state is undefined
+  ignore_errors: true
+  register: ssh_default_check
+  when: ssh_configured_check is defined and
+    ssh_configured_check.state is undefined
 
 # If reachable, continue the following tasks with this port
 - name: Set inventory ansible_port to default
-  set_fact:
+  ansible.builtin.set_fact:
     ansible_port: "22"
-  when: default_ssh is defined and
-    default_ssh.state is defined and
-    default_ssh.state == "started"
+  when: ssh_default_check is defined and
+    ssh_default_check.state is defined and
+    ssh_default_check.state == "started"
   register: ssh_port_set
 
 # If the SSH port is neither the default or the configured, give up.
 - name: Fail if SSH port was not auto-detected (unknown)
-  fail:
+  ansible.builtin.fail:
     msg: "The SSH port is neither 22 nor {{ ansible_port }}."
   when: ssh_port_set is undefined
 
 # Sanity check, make sure Ansible is able to connect to the host
 - name: Confirm host connection works
-  ping:
+  ansible.builtin.ping:
 
 # sshd -t only checks the drop-in on its own, but that catches typos before
 # they can lock us out (#231).
 - name: Ensure sshd listens on the configured port
   ansible.builtin.copy:
-    content: "Port {{ configured_port }}\n"
+    content: "Port {{ ssh_configured_port }}\n"
     dest: /etc/ssh/sshd_config.d/custom-port.conf
     owner: root
     group: root
@@ -108,16 +109,16 @@
 # We notified "Restart sshd" if we modified the sshd config.
 # By calling flush_handlers, we make sure the handler is run *right now*
 - name: Ensure SSH is reloaded if need be
-  meta: flush_handlers
+  ansible.builtin.meta: flush_handlers
 
 # We're done, make sure ansible_port is set properly so that any tasks
 # after this use the right ansible_port.
 - name: Ensure we use the configured SSH port for the remainder of the role
-  set_fact:
-    ansible_port: "{{ configured_port }}"
+  ansible.builtin.set_fact:
+    ansible_port: "{{ ssh_configured_port }}"
 
 # Gather facts should be set to false when running this role since it will
 # fail if the Ansible SSH port is not set correctly.
 # We run setup to gather facts here once the SSH port is set up.
 - name: Run deferred setup to gather facts
-  setup:
+  ansible.builtin.setup:

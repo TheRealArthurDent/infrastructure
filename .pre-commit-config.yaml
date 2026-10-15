@@ -20,8 +20,11 @@ repos:
       - id: actionlint-docker
 
   - repo: https://github.com/ansible/ansible-lint
-    rev: v6.27.3
+    # Renovate updates rev and additional_dependencies together with requirements.txt (see renovate.json).
+    rev: v26.10.1
     hooks:
       - id: ansible-lint
-        additional_dependencies: ['ansible>=2.12']
+        # Renovate only updates additional_dependencies when the language is set explicitly.
+        language: python
+        additional_dependencies: ['ansible-core==2.21.5']
         entry: ansible-lint --strict bootstrap/

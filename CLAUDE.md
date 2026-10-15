@@ -53,7 +53,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/pytest bootstrap/tests/unit                  # unit tests, no Docker
 (cd bootstrap && ../.venv/bin/molecule test)           # role tests in a trixie container, needs Docker, ~3–5 min
 (cd bootstrap && ../.venv/bin/molecule converge)       # faster loop while developing; then verify / destroy
-.venv/bin/ansible-lint bootstrap/                      # lint (currently many legacy violations, see #240)
+.venv/bin/ansible-lint --strict bootstrap/             # lint, must pass with 0 findings (CI blocks)
 ```
 
 Reports land in `test-results/` (JUnit XML). CI (`.github/workflows/molecule.yaml`) runs pytest and Molecule on

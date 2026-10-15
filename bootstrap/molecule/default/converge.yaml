@@ -61,8 +61,10 @@
 
     - name: Pass the test root CA to certificate_check
       ansible.builtin.set_fact:
-        certificate_check_root_ca_cert: "{{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/rootCA.pem') }}"
-        certificate_check_root_ca_key: "{{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/rootCA.key') }}"
+        certificate_check_root_ca_cert: >-
+          {{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/rootCA.pem') }}
+        certificate_check_root_ca_key: >-
+          {{ lookup('file', lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') ~ '/rootCA.key') }}
       no_log: true
   roles:
     - base
