@@ -1,0 +1,29 @@
+---
+- name: Read nginx container state
+  community.docker.docker_container_info:
+    name: "{{ stack_nginx_container }}"
+  register: stack_nginx_info
+  listen: Reload stack nginx
+  when: stack_manage_containers | bool
+
+# nginx -s reload keeps the old config if the new one is broken, but only logs that. nginx -t fails the run.
+- name: Test nginx configuration
+  community.docker.docker_container_exec:
+    container: "{{ stack_nginx_container }}"
+    command: nginx -t
+  changed_when: false
+  listen: Reload stack nginx
+  when:
+    - stack_manage_containers | bool
+    - stack_nginx_info.exists
+    - stack_nginx_info.container.State.Running
+
+- name: Reload nginx configuration
+  community.docker.docker_container_exec:
+    container: "{{ stack_nginx_container }}"
+    command: nginx -s reload
+  listen: Reload stack nginx
+  when:
+    - stack_manage_containers | bool
+    - stack_nginx_info.exists
+    - stack_nginx_info.container.State.Running

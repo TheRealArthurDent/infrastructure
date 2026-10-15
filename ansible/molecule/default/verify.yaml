@@ -215,3 +215,93 @@
     - name: Check full chain holds leaf and root CA exactly once
       ansible.builtin.assert:
         that: chain_count.stdout == '2'
+
+    # stack role (#238)
+    - name: Stat stack config files
+      ansible.builtin.stat:
+        path: "/etc/docker/infrastructure/{{ item }}"
+      loop:
+        - nginx/nginx.conf
+        - nginx/snippets/pihole.conf
+        - nginx/snippets/ssl-certificates.conf
+        - resticprofile/config/profiles.yaml
+        - resticprofile/config/excludes
+        - resticprofile/ssh_config
+      register: stack_files
+
+    - name: Check stack config files exist, are owned by root and only readable by root
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+        fail_msg: "{{ item.item }} is missing or has wrong owner/mode"
+      loop: "{{ stack_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Find leftover placeholders in the stack config
+      ansible.builtin.command: grep -rlE '%HOSTNAME%|\{\{|\$\{(HOSTNAME|DUNGEON_IP)\}' /etc/docker/infrastructure/nginx
+        /etc/docker/infrastructure/resticprofile /etc/docker/infrastructure/compose
+      register: stack_placeholders
+      changed_when: false
+      failed_when: stack_placeholders.rc not in [0, 1]
+
+    - name: Check every placeholder is rendered
+      ansible.builtin.assert:
+        that: stack_placeholders.stdout_lines | length == 0
+        fail_msg: "Unrendered placeholders in {{ stack_placeholders.stdout_lines }}"
+
+    - name: Read rendered stack config
+      ansible.builtin.slurp:
+        src: "/etc/docker/infrastructure/{{ item }}"
+      loop:
+        - nginx/nginx.conf
+        - nginx/snippets/ssl-certificates.conf
+        - resticprofile/config/profiles.yaml
+        - resticprofile/ssh_config
+        - compose/docker-compose.yaml
+      register: stack_rendered
+
+    - name: Check the stack config is rendered for this host
+      vars:
+        rendered: "{{ stack_rendered.results | items2dict(key_name='item', value_name='content') }}"
+        nginx_conf: "{{ rendered['nginx/nginx.conf'] | b64decode }}"
+        ssl_conf: "{{ rendered['nginx/snippets/ssl-certificates.conf'] | b64decode }}"
+        profiles: "{{ rendered['resticprofile/config/profiles.yaml'] | b64decode }}"
+        ssh_config: "{{ rendered['resticprofile/ssh_config'] | b64decode }}"
+        compose: "{{ rendered['compose/docker-compose.yaml'] | b64decode | from_yaml }}"
+        nginx_cert_mount: >-
+          /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
+      ansible.builtin.assert:
+        that:
+          - "'server_name         pihole.' ~ inventory_hostname ~ ' pihole.' ~ inventory_hostname ~ '.*;' in nginx_conf"
+          - "'ssl_certificate     /etc/nginx/' ~ inventory_hostname ~ '.pem;' in ssl_conf"
+          - "'restic@dungeon:/media/backup/restic/' ~ inventory_hostname in profiles"
+          # dungeon_ssh_port from converge.yaml (KeePass in production), no longer hard-coded (#233)
+          - "'Port 2222' in ssh_config.splitlines()"
+          # Resolved through the etc_hosts entry in molecule.yml
+          - compose.services.resticprofile.extra_hosts.dungeon == '192.0.2.10'
+          - "nginx_cert_mount in compose.services.nginx.volumes"
+
+    - name: Stat stack directories
+      ansible.builtin.stat:
+        path: "/etc/docker/infrastructure/{{ item }}"
+      loop:
+        - portainer/data
+        - compose
+      register: stack_dirs
+
+    - name: Check stack directories exist
+      ansible.builtin.assert:
+        that:
+          - item.stat.isdir
+          - item.stat.pw_name == 'root'
+      loop: "{{ stack_dirs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Validates the compose file against the files it references (.env files, secrets), no daemon needed.
+    - name: Validate the compose file
+      ansible.builtin.command: docker compose --project-directory /etc/docker/infrastructure/compose config --quiet
+      changed_when: false

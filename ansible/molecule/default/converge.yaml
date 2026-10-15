@@ -22,6 +22,7 @@
     nodered_github_email: test@example.com
     # No Docker daemon runs inside the test container.
     certificate_check_reload_nginx: false
+    stack_manage_containers: false
     certificate_check_root_ca_passphrase: test-ca-passphrase
   pre_tasks:
     # Throwaway root CA on the control node, kept in the Molecule ephemeral directory so the
@@ -71,3 +72,4 @@
     - docker
     - secrets
     - certificate_check
+    - stack

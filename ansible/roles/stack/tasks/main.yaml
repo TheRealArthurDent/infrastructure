@@ -1,0 +1,140 @@
+---
+# Deploys the infrastructure stack (nginx, Pi-hole x2, unbound, portainer, resticprofile, healthmonitor).
+# Replaces deploy.sh -> setup/setup.sh -> run.sh (#238). Needs the files the secrets role writes
+# (.env files, secrets/restic_passphrase), the DH params from the base role and the certificate from
+# check-certificates.yaml.
+
+# requests for the community.docker modules, yaml for docker_compose_v2 with definition
+- name: Ensure Python libraries for the Docker modules are installed
+  ansible.builtin.apt:
+    name:
+      - python3-requests
+      - python3-yaml
+    state: present
+
+- name: Resolve the backup host
+  when: stack_dungeon_ip is not defined
+  block:
+    - name: Look up the backup host on the Pi
+      ansible.builtin.command: getent ahosts {{ stack_dungeon_host }}
+      register: stack_dungeon_getent
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Ensure the backup host resolves
+      ansible.builtin.assert:
+        that: stack_dungeon_getent.rc == 0
+        fail_msg: "{{ stack_dungeon_host }} does not resolve on {{ inventory_hostname }}; resticprofile needs its IP."
+        quiet: true
+
+    # Same pick as run.sh: the first address of a STREAM line
+    - name: Remember the IP of the backup host
+      ansible.builtin.set_fact:
+        stack_dungeon_ip: >-
+          {{ (stack_dungeon_getent.stdout_lines | select('search', 'STREAM') | first).split() | first }}
+
+- name: Ensure stack directories exist
+  ansible.builtin.file:
+    path: "{{ stack_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - nginx
+    - nginx/snippets
+    - portainer/data
+    - resticprofile/config
+    - compose
+
+# setup.sh made every nginx and resticprofile file 0600; the containers read them as root.
+- name: Ensure nginx main config is present
+  ansible.builtin.template:
+    src: nginx/nginx.conf.j2
+    dest: "{{ stack_dir }}/nginx/nginx.conf"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Reload stack nginx
+
+- name: Ensure nginx snippet is present
+  ansible.builtin.template:
+    src: nginx/snippets/{{ item | basename }}
+    dest: "{{ stack_dir }}/nginx/snippets/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/nginx/snippets/*.j2') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  notify: Reload stack nginx
+
+# resticprofile reads these on every scheduled run; like deploy.sh, a change doesn't restart the container.
+- name: Ensure resticprofile config is present
+  ansible.builtin.template:
+    src: resticprofile/{{ item }}.j2
+    dest: "{{ stack_dir }}/resticprofile/{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - config/profiles.yaml
+    - config/excludes
+    - ssh_config
+
+- name: Ensure the compose file is present
+  ansible.builtin.template:
+    src: docker-compose.yaml.j2
+    dest: "{{ stack_compose_dir }}/docker-compose.yaml"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Deploy containers
+  when: stack_manage_containers | bool
+  block:
+    # nginx mounts the certificate as single files. If they're missing, Docker creates directories in
+    # their place, and check-certificates.yaml can't write the certificate any more.
+    - name: Stat the nginx certificate
+      ansible.builtin.stat:
+        path: "{{ stack_dir }}/nginx/{{ inventory_hostname }}.{{ item }}"
+      loop: [pem, key]
+      register: stack_certificate
+
+    - name: Ensure the nginx certificate exists
+      ansible.builtin.assert:
+        that: stack_certificate.results | map(attribute='stat.isreg', default=false) | min
+        fail_msg: >-
+          {{ stack_dir }}/nginx/{{ inventory_hostname }}.pem/.key missing. Run check-certificates.yaml first.
+        quiet: true
+
+    # Same settings as run.sh created them with. Both are external in the compose file.
+    - name: Ensure the internal network siz exists
+      community.docker.docker_network:
+        name: siz
+        internal: true
+        ipam_config:
+          - subnet: 172.30.2.0/24
+      register: stack_network_siz
+
+    - name: Ensure the network outbound exists
+      community.docker.docker_network:
+        name: outbound
+        ipam_config:
+          - subnet: 172.30.1.128/25
+            iprange: 172.30.1.192/26
+      register: stack_network_outbound
+
+    # Images are pinned (Renovate), so the default pull policy "missing" pulls exactly when a version changes.
+    # The definition is rendered from the same template as the file in stack_compose_dir (kept there for manual
+    # docker compose commands), so --check can compare it with the running containers even before that file
+    # exists: check mode doesn't create stack_compose_dir.
+    - name: Ensure the stack is up
+      community.docker.docker_compose_v2:
+        definition: "{{ lookup('ansible.builtin.template', 'docker-compose.yaml.j2') | from_yaml }}"
+        project_name: "{{ stack_project_name }}"
+        state: present
+        pull: policy
+      # In check mode a missing network isn't created, and Compose would fail on the external network.
+      when: not (ansible_check_mode and (stack_network_siz is changed or stack_network_outbound is changed))

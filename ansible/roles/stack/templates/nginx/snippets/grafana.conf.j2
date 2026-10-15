@@ -1,0 +1,6 @@
+location / {
+    resolver 127.0.0.11;
+    set $grafana_host grafana:3000;
+    proxy_pass http://$grafana_host;
+    proxy_set_header Host $host;
+}

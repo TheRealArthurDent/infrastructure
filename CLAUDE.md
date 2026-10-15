@@ -9,10 +9,11 @@ The deployment is being migrated from bash scripts to Ansible, and the migration
 
 - **Ansible** (`ansible/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
   (`.env` files from KeePass), certificates, and Pi-hole DNS records/lists through its REST API.
-- **Bash** (`deploy.sh` → `setup/setup.sh` → `run.sh`) still deploys the stack itself: nginx/restic config with
-  `%HOSTNAME%` sed templating, docker networks, `docker compose up`. It depends on files that only the Ansible
-  `secrets` role creates.
-- The plan is to move the stack deployment into an Ansible role and then delete the bash scripts (#238).
+- The **`stack` role** deploys the Docker stack itself (nginx/restic config as Jinja templates, docker networks,
+  `docker compose up`), in `bootstrap.yaml` under the tag `stack` (#238).
+- **Bash** (`deploy.sh` → `setup/setup.sh` → `run.sh`) still exists as a fallback until Ansible has proven itself
+  on raspi; then it gets deleted (#238). Until then `setup/` + `docker-compose.yaml` and the role's templates must
+  stay in sync: `ansible/tests/unit/test_stack_templates.py` fails otherwise, so change both.
   Don't extend the bash scripts; put new deployment logic into Ansible.
 
 Open review findings are tracked as GitHub issues #229–#240 (security, bugs, idempotency, migration, refactor, CI).
@@ -20,7 +21,7 @@ Check them before changing an affected area, and reference them in commits.
 
 ## Layout
 
-- `docker-compose.yaml`, `setup/` – the stack and its config (nginx snippets, resticprofile)
+- `docker-compose.yaml`, `setup/` – the stack and its config for `deploy.sh` (fallback, copies of `ansible/roles/stack/templates/`)
 - `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`),
   `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`, `inventory/hosts.yaml`,
   `lookup_plugins/keepass.py`
