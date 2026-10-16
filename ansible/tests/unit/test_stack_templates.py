@@ -1,9 +1,5 @@
-"""The stack role renders the same files deploy.sh produces today (#238).
-
-Until the bash path is removed, setup/ and docker-compose.yaml stay as the fallback for deploy.sh, and the
-stack role carries Jinja copies of them. This test renders the role's templates and compares them with what
-deploy.sh/run.sh make of the originals, so the copies can't drift apart.
-"""
+"""Templates of the stack role, which deploys the infrastructure stack (#238)."""
+import re
 import subprocess
 from pathlib import Path
 
@@ -11,24 +7,10 @@ import pytest
 import yaml
 
 ANSIBLE_DIR = Path(__file__).parents[2]
-REPO_DIR = ANSIBLE_DIR.parent
 ROLE_DIR = ANSIBLE_DIR / "roles" / "stack"
 TEMPLATES = ROLE_DIR / "templates"
 DUNGEON_IP = "192.0.2.10"
-# The port hard-coded in setup/resticprofile/ssh_config; the role takes it from KeePass.
 DUNGEON_SSH_PORT = 1359
-
-
-def expected_tree(host):
-    """What deploy.sh (sed %HOSTNAME%) and run.sh (compose variables) produce for host."""
-    files = {}
-    for subdir in ("nginx", "resticprofile"):
-        for path in sorted((REPO_DIR / "setup" / subdir).rglob("*")):
-            if path.is_file():
-                files[str(path.relative_to(REPO_DIR / "setup"))] = path.read_text().replace("%HOSTNAME%", host)
-    compose = (REPO_DIR / "docker-compose.yaml").read_text()
-    files["docker-compose.yaml"] = compose.replace("${HOSTNAME}", host).replace("${DUNGEON_IP}", DUNGEON_IP)
-    return files
 
 
 def rendered_tree(tmp_path, host):
@@ -75,12 +57,18 @@ def rendered_tree(tmp_path, host):
 
 
 @pytest.mark.parametrize("host", ["raspi", "testbed"])
-def test_templates_render_like_deploy_sh(tmp_path, host):
-    expected = expected_tree(host)
-    rendered = rendered_tree(tmp_path, host)
-    assert sorted(rendered) == sorted(expected)
-    for name, content in expected.items():
-        assert rendered[name] == content, f"{name} differs from the deploy.sh output"
+def test_templates_leave_no_placeholders(tmp_path, host):
+    # %HOSTNAME% and ${...} were the bash scripts' placeholders; nothing may survive the rendering.
+    for name, content in rendered_tree(tmp_path, host).items():
+        assert not re.search(r"%HOSTNAME%|\$\{(HOSTNAME|DUNGEON_IP)\}|\{\{", content), name
+
+
+def test_compose_images_are_pinned(tmp_path):
+    # Renovate updates the pinned versions (CLAUDE.md); an unpinned image would change on any pull.
+    compose = yaml.safe_load(rendered_tree(tmp_path, "raspi")["docker-compose.yaml"])
+    for service, config in compose["services"].items():
+        image = config["image"]
+        assert re.search(r":[^/:]+$", image) and not image.endswith(":latest"), f"{service}: {image}"
 
 
 def main_play():

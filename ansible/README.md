@@ -1,8 +1,8 @@
 # Ansible
 
 Ansible sets up the Pi host: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
-the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role). `deploy.sh` in
-the repo root still works as a fallback until the stack role has proven itself on raspi (#238).
+the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role). It replaced the
+bash scripts `deploy.sh`, `setup/setup.sh` and `run.sh` (#238).
 
 | Playbook | What it does |
 | --- | --- |
@@ -98,9 +98,6 @@ bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbed
 
 # Redeploy / update only the Docker stack (config, networks, compose up; reloads nginx on config changes)
 ansible-playbook bootstrap.yaml --limit testbed --tags stack
-
-# Fallback until #238 is done (from the repo root)
-./deploy.sh testbed 4242 testuser    # ./deploy.sh alone deploys to raspi
 ```
 
 A second run of `bootstrap.yaml` should end with `changed=0`.
@@ -325,9 +322,7 @@ Options and failures:
 
 Backups stay off until the restore is done: resticprofile schedules them only once every stack in
 `stack_backup_stacks` (this stack and smart-home) has its marker, so a fresh host never backs up its empty or
-half-restored state as the latest snapshot. `docker logs resticprofile` says which marker it waits for. On a
-host that already has data, run `bootstrap.yaml` once (it writes the marker) before deploying with `deploy.sh`,
-or backups pause there too.
+half-restored state as the latest snapshot. `docker logs resticprofile` says which marker it waits for.
 
 ### Other stacks
 
@@ -336,8 +331,7 @@ resticprofile backs up the whole host, so the helper is shared. Every stack list
 `restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to `stack_backup_stacks` once
 its deployment does. Its items then work with `stage <stack>/<item>` and `apply` like this stack's. The
 smart-home stack does since TheRealArthurDent/smart-home#1, so `inventory/group_vars/all/restore_items.yaml` adds
-it to `stack_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`. `deploy.sh` still
-renders the old list (only this stack).
+it to `stack_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`.
 
 ### Monthly drill (every host)
 

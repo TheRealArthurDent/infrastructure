@@ -3,7 +3,8 @@
 [![Spell Check](https://github.com/TheRealArthurDent/raspberry/actions/workflows/spell-check.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/spell-check.yaml)
 [![CI](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ci.yaml)
 
-Basic setup of the pi-4
+Basic setup of the pi-4. Everything, from the host to the Docker stack, is deployed with Ansible; see
+[ansible/README.md](ansible/README.md).
 
 ## Testing
 
