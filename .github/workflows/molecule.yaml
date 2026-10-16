@@ -9,11 +9,9 @@ on:
       - 'ansible/**'
       - 'requirements.txt'
       - '.github/workflows/molecule.yaml'
+  # Every PR, without a paths filter: the main ruleset requires these checks, and a skipped required check
+  # would block the merge forever.
   pull_request:
-    paths:
-      - 'ansible/**'
-      - 'requirements.txt'
-      - '.github/workflows/molecule.yaml'
   workflow_dispatch:
 
 permissions:

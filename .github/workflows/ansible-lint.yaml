@@ -12,14 +12,9 @@ on:
       - 'requirements.txt'
       - '.pre-commit-config.yaml'
       - '.github/workflows/ansible-lint.yaml'
-  # Every PR, whatever its base branch.
+  # Every PR, whatever its base branch, without a paths filter: the main ruleset requires this check, and a
+  # skipped required check would block the merge forever.
   pull_request:
-    paths:
-      - 'ansible/**'
-      - '.ansible-lint'
-      - '.yamllint.yaml'
-      - 'requirements.txt'
-      - '.github/workflows/ansible-lint.yaml'
 
 jobs:
   lint:

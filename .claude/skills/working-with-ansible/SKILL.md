@@ -43,6 +43,8 @@ ansible-playbook <play>.yaml --limit testbed             # must end with changed
 ```
 
 Every playbook is `hosts: all` with an assert that fails without `--limit`. Keep that guard on new playbooks.
+The `PreToolUse` hook in `.claude/hooks/guard.py` blocks you from raspi, `--limit all` and `main`; when it blocks
+something, hand the user the command instead of looking for another way to run it.
 
 ## Things that look wrong but aren't (and traps)
 
