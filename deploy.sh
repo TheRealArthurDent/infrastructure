@@ -7,8 +7,10 @@ TARGET=$1
 PORT=$2
 USER=$3
 
+# No default target: a bare ./deploy.sh used to deploy to production (raspi).
 if [ -z "$TARGET" ]; then
-  TARGET=$DEFAULT_TARGET
+  echo "usage: $0 <target> [ssh port] [ssh user]   e.g. $0 testbed 4242 testuser, or $0 $DEFAULT_TARGET" >&2
+  exit 2
 fi
 if [ -z "$PORT" ]; then
   if [ "$TARGET" = "$DEFAULT_TARGET" ]; then

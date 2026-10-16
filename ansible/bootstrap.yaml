@@ -7,6 +7,21 @@
         that: ansible_limit is defined
         fail_msg: "Run with --limit <host>"
         quiet: true
+      tags: always
+
+# With --limit, the play above matches no host and is skipped. This one stops a limit that selects several hosts
+# (all, *, a list or a group), so a run never reaches production by accident. assert needs no connection.
+- name: Require --limit to select exactly one host
+  hosts: all
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Ensure the run is limited to one host
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: "Run with --limit <one host>"
+        quiet: true
+      tags: always
 
 - name: Bootstrap Raspberry Pi
   hosts: all
