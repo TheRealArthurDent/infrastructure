@@ -16,8 +16,8 @@ The deployment is being migrated from bash scripts to Ansible, and the migration
   stay in sync: `ansible/tests/unit/test_stack_templates.py` fails otherwise, so change both.
   Don't extend the bash scripts; put new deployment logic into Ansible.
 
-Review findings from the migration are GitHub issues; still open are #234 (Pi-hole sync), #237 (idempotency),
-#238 (migration) and #239 (refactor). Check the open issues before changing an affected area, and reference them in
+Review findings from the migration are GitHub issues. Still open are #234 (Pi-hole sync), #237 (idempotency), #238
+(migration) and #239 (refactor). Check the open issues before changing an affected area, and reference them in
 commits.
 
 ## Layout
@@ -29,12 +29,12 @@ commits.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets)
 - `.claude/` – Claude Code settings, the guard hook (`hooks/guard.py`) and skills
-- `.github/rulesets/` + `scripts/rulesets.sh` – rulesets for `main` (applied by the user with `scripts/rulesets.sh apply`)
+- `.github/rulesets/` + `scripts/rulesets.sh` – rulesets for `main`, applied by the user (`rulesets.sh apply`)
 
 ## Hosts
 
 | Host | Purpose |
-|---|---|
+| --- | --- |
 | `raspi` (192.168.1.2) | **Production** smart home. Only the user runs anything against it; hand them the commands. |
 | `testbed` (192.168.1.7) | Test Pi for real integration runs, done by the user from the home network: propose the commands (`--check --diff`, real run, second run with `changed=0`). |
 
