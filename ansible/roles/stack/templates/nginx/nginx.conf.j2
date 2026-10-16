@@ -4,10 +4,6 @@ events {
 }
 
 http {
-    upstream php-handler {
-        server 127.0.0.1:9001;
-    }
-
     server {
         listen 127.0.0.1:8080;
 
@@ -21,7 +17,7 @@ http {
     server {
         listen              80;
         server_name         {{ inventory_hostname }} {{ inventory_hostname }}.*;
-        return              301 https://$host:$request_uri;
+        return              301 https://$host$request_uri;
     }
 
     # Do the real sh1t
@@ -179,21 +175,5 @@ http {
         include             snippets/ssl-params.conf;
 
         include             snippets/pihole_outbound.conf;
-    }
-}
-
-stream {
-    upstream dns_servers {
-        server 172.30.2.53:53;
-    }
-
-    server {
-        listen 53; # tcp
-        listen [::]:53;
-        listen 53 udp;
-        listen [::]:53 udp;
-
-        proxy_pass dns_servers;
-        error_log  /var/log/nginx/dns.log info;
     }
 }
