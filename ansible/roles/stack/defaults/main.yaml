@@ -2,12 +2,12 @@
 # Config and data of the infrastructure stack live below this directory. The secrets role writes the
 # .env files and secrets/ here.
 stack_dir: /etc/docker/infrastructure
-# The former deploy.sh ran Compose in ~/dev/infrastructure, so the running containers belong to the project
-# "infrastructure". Keep the name, or Compose would start a second stack whose fixed container names collide.
+# The running containers belong to the Compose project "infrastructure". Keep the name, or Compose would start a
+# second stack whose fixed container names collide.
 stack_project_name: infrastructure
 # Not stack_dir itself: Compose reads a .env next to the compose file for variable interpolation.
 stack_compose_dir: "{{ stack_dir }}/compose"
-# Resolved on the host at every run (like the former run.sh did), so its IP isn't configured anywhere.
+# Resolved on the host at every run, so its IP isn't configured anywhere.
 # Set stack_dungeon_ip to skip the lookup.
 stack_dungeon_host: dungeon
 stack_nginx_container: nginx

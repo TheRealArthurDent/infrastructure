@@ -1,8 +1,7 @@
 # Ansible
 
 Ansible sets up the Pi host: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
-the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role). It replaced the
-bash scripts `deploy.sh`, `setup/setup.sh` and `run.sh` (#238).
+the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role).
 
 | Playbook | What it does |
 | --- | --- |
