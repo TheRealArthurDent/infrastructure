@@ -2,7 +2,7 @@
 # Install with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ansible-core==2.21.5
 ansible-lint==26.10.1
-pykeepass==4.1.1.post1
+pykeepass==4.2.0
 
 # Tests
 molecule==26.10.0
