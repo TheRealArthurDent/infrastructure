@@ -36,3 +36,7 @@ test-results/
 
 # Local KeePass paths (#267); the pattern also covers the pre-#239 location bootstrap/
 **/inventory/group_vars/all/local.yaml
+
+# Secrets: .env files are rendered on the host by the secrets role, never committed
+.env
+*.env

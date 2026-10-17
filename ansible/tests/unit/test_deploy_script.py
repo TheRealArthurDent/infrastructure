@@ -46,3 +46,5 @@ def test_deploys_to_the_named_target(stub_path):
     assert result.returncode == 0, result.stderr
     assert "testuser@testbed" in calls
     assert "raspi" not in calls
+    # setup/.env is no longer in the repo; deploy.sh must not trip over it missing.
+    assert "cannot remove" not in result.stderr

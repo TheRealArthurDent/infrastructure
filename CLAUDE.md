@@ -27,7 +27,7 @@ commits.
   `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`, `inventory/hosts.yaml`,
   `lookup_plugins/keepass.py`
 - `ansible/molecule/default/` – container-based role tests
-- `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets)
+- `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets, repo hygiene)
 - `.claude/` – Claude Code settings, the guard hook (`hooks/guard.py`) and skills
 - `.github/rulesets/` + `scripts/rulesets.sh` – rulesets for `main`, applied by the user (`rulesets.sh apply`)
 
@@ -58,7 +58,7 @@ never print them: every task that handles secret values needs `no_log: true`.
 Tooling lives in a venv at the repo root:
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/pre-commit install
 .venv/bin/pytest ansible/tests/unit                    # unit tests, no Docker
 (cd ansible && ../.venv/bin/molecule test)             # role tests in a trixie container, needs Docker, ~3–5 min
 (cd ansible && ../.venv/bin/molecule converge)         # faster loop while developing; then verify / destroy

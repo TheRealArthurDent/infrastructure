@@ -14,21 +14,27 @@ How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it 
 
 ## Who can run what
 
-| Check | Cloud container (you) | CI | User's machine in the home network |
+First find out where you run: a cloud container (claude.ai/code) or a local session in the user's WSL
+(working directory under `/home/`, `ansible/bin/with-keepass` usable, `powershell.exe` on the PATH).
+
+| Check | Cloud container | Local session (WSL) | CI |
 |---|---|---|---|
 | pytest (`ansible/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
-| `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes (lint `--strict`, #240) | yes |
-| Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, on PRs and pushes to `main` touching `ansible/**` | yes |
-| Anything against testbed/raspi | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | no | yes |
+| `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes | yes (lint `--strict`, #240) |
+| Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, if Docker runs | yes, on every PR and on pushes to `main` touching `ansible/**` |
+| Anything against testbed | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | **only after asking**, every time, `--check --diff` first | no |
+| Anything against raspi | no | **no**: hand the user the commands | no |
 
-Don't probe the LAN or set up dockerd to find this out again. Never write "Molecule passed" from a local run;
+In a local session the LAN, the SSH key and `with-keepass` are all reachable, so the only things between you and
+production are the rule above and `.claude/hooks/guard.py`.
+In a cloud container, don't probe the LAN or set up dockerd to find this out again. Never write "Molecule passed" from a local run;
 point to the CI run on your commit. The KeePass master password is typed by the user into the prompt, never
 into chat, a command line you write, or `KEEPASS_PASSWORD` in a command you hand over.
 
 ## Order of work
 
 1. **Plan first.** Before changing code, give the user a short plan summary (what, which files, how tested) and
-   check the related issue (#229–#241). Answer in the user's language.
+   check the related open issue (`gh issue list` or the GitHub tools for the current state). Answer in the user's language.
 2. **Branch off `main`, PR into `main`**, never push to `main`. Commit style `fix:`/`feat:` + `Refs #<n>`.
 3. **Test first** per CLAUDE.md, then syntax-check and lint locally, then let CI run Molecule and drive it green.
 4. **Hand the user the rollout** as exact commands, in this order, and say what to look for in each:
