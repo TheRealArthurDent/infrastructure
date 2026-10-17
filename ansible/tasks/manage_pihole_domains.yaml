@@ -12,6 +12,9 @@
     status_code: 200
     ca_path: "{{ pihole_ca_file.path }}"
   register: domains_response
+  until: domains_response.status not in pihole_api_unavailable
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Reset collected domains
   ansible.builtin.set_fact:

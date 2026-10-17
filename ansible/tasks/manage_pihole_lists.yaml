@@ -16,6 +16,9 @@
     status_code: 200
     ca_path: "{{ pihole_ca_file.path }}"
   register: api_response
+  until: api_response.status not in pihole_api_unavailable
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Extract existing list records
   ansible.builtin.set_fact:
@@ -73,6 +76,9 @@
   loop: "{{ records_to_delete }}"
   changed_when: true
   register: delete_result
+  until: delete_result.status not in pihole_api_unavailable
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Add lists of type {{ list_type }}
   ansible.builtin.uri:
@@ -88,12 +94,12 @@
       enabled: true
     status_code: 201
     ca_path: "{{ pihole_ca_file.path }}"
-  until: add_result.status == 201
-  retries: 3
-  delay: 5
   loop: "{{ records_to_add }}"
   changed_when: true
   register: add_result
+  until: add_result.status not in pihole_api_unavailable
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 # New or removed lists only take effect once gravity has been rebuilt (#234).
 - name: Update gravity after list changes
@@ -108,6 +114,10 @@
     timeout: 600
   when: records_to_delete | length > 0 or records_to_add | length > 0
   changed_when: true
+  register: pihole_api_result
+  until: pihole_api_result.status not in pihole_api_unavailable
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Show lists summary for type {{ list_type }}
   ansible.builtin.debug:

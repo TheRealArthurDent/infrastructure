@@ -140,7 +140,8 @@ def keepass(tmp_path_factory, pki):
 class FakePihole:
     RECORD_ENDPOINTS = {"/api/config/dns/hosts": "hosts", "/api/config/dns/cnameRecords": "cnameRecords"}
 
-    def __init__(self, hosts=(), cnames=(), lists=(), groups=(), clients=(), domains=(), fail=None):
+    def __init__(self, hosts=(), cnames=(), lists=(), groups=(), clients=(), domains=(), fail=None,
+                 unavailable_after_change=0):
         self.records = {"hosts": list(hosts), "cnameRecords": list(cnames)}
         self.lists = list(lists)
         self.next_group_id = 1
@@ -154,6 +155,9 @@ class FakePihole:
         self.gravity_runs = 0
         # (method, path) that answers 500, to simulate a failure in the middle of a run
         self.fail = fail
+        # FTL restarts after some changes; nginx answers 502 to the next requests until it's back
+        self.unavailable_after_change = unavailable_after_change
+        self.unavailable = 0
 
     def handle(self, method, raw_path, headers, body):
         url = urlsplit(raw_path)
@@ -162,6 +166,15 @@ class FakePihole:
 
         if (method, url.path) == self.fail:
             return 500, {"error": "injected failure"}
+        if self.unavailable:
+            self.unavailable -= 1
+            return 502, "<html><body><h1>502 Bad Gateway</h1></body></html>"
+        status, payload = self._handle(method, url, query, headers, body)
+        if method in ("PUT", "POST", "DELETE") and url.path != "/api/auth" and status < 300:
+            self.unavailable = self.unavailable_after_change
+        return status, payload
+
+    def _handle(self, method, url, query, headers, body):
 
         if url.path == "/api/auth":
             if method == "POST":
@@ -364,6 +377,7 @@ def run(tmp_path, keepass, pki):
             **(DESIRED if desired is None else desired),
             "pihole_host": "localhost",
             "pihole_port": server.server_address[1],
+            "pihole_api_delay": 0,
             "keepass_db": keepass["db"],
             "keepass_key": keepass["key"],
         }))
@@ -431,6 +445,22 @@ def test_second_run_changes_nothing(run):
     assert result.returncode == 0, output(result)
     assert pihole.changing_requests() == []
     assert pihole.gravity_runs == 1
+
+
+def test_waits_for_the_api_when_pi_hole_restarts_after_a_change(run):
+    pihole = FakePihole(hosts=["10.0.0.9 old"], cnames=["old.raspi,raspi"], lists=[OLD_LIST],
+                        groups=[{"name": "old"}], clients=[{"client": "192.168.1.99"}],
+                        domains=[{"domain": "old.example", "type": "deny", "kind": "exact"}],
+                        unavailable_after_change=2)
+
+    result = run(pihole)
+
+    assert result.returncode == 0, output(result)
+    assert pihole.records["cnameRecords"] == ["pihole.raspi,raspi"]
+    assert sorted(pihole.lists) == sorted(DESIRED["dns_block_lists"])
+    assert sorted(g["name"] for g in pihole.groups) == ["Default", "iot", "kids"]
+    assert [c["client"] for c in pihole.clients] == ["192.168.1.50"]
+    assert len(pihole.domains) == 2
 
 
 def test_logs_out_when_a_task_fails(run):
