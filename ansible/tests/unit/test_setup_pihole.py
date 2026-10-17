@@ -141,7 +141,7 @@ class FakePihole:
     RECORD_ENDPOINTS = {"/api/config/dns/hosts": "hosts", "/api/config/dns/cnameRecords": "cnameRecords"}
 
     def __init__(self, hosts=(), cnames=(), lists=(), groups=(), clients=(), domains=(), fail=None,
-                 unavailable_after_change=0):
+                 unavailable_after_change=0, unavailable_as="bad_gateway"):
         self.records = {"hosts": list(hosts), "cnameRecords": list(cnames)}
         self.lists = list(lists)
         self.next_group_id = 1
@@ -157,6 +157,7 @@ class FakePihole:
         self.fail = fail
         # FTL restarts after some changes; nginx answers 502 to the next requests until it's back
         self.unavailable_after_change = unavailable_after_change
+        self.unavailable_as = unavailable_as
         self.unavailable = 0
 
     def handle(self, method, raw_path, headers, body):
@@ -168,6 +169,9 @@ class FakePihole:
             return 500, {"error": "injected failure"}
         if self.unavailable:
             self.unavailable -= 1
+            if self.unavailable_as == "database":
+                return 500, {"error": {"key": "database_error", "message": "Could not read domains from database table",
+                                       "hint": "Database not available"}}
             return 502, "<html><body><h1>502 Bad Gateway</h1></body></html>"
         status, payload = self._handle(method, url, query, headers, body)
         if method in ("PUT", "POST", "DELETE") and url.path != "/api/auth" and status < 300:
@@ -447,8 +451,9 @@ def test_second_run_changes_nothing(run):
     assert pihole.gravity_runs == 1
 
 
-def test_waits_for_the_api_when_pi_hole_restarts_after_a_change(run):
-    pihole = FakePihole(hosts=["10.0.0.9 old"], cnames=["old.raspi,raspi"], lists=[OLD_LIST],
+@pytest.mark.parametrize("unavailable_as", ["bad_gateway", "database"])
+def test_waits_for_the_api_when_pi_hole_restarts_after_a_change(run, unavailable_as):
+    pihole = FakePihole(unavailable_as=unavailable_as, hosts=["10.0.0.9 old"], cnames=["old.raspi,raspi"], lists=[OLD_LIST],
                         groups=[{"name": "old"}], clients=[{"client": "192.168.1.99"}],
                         domains=[{"domain": "old.example", "type": "deny", "kind": "exact"}],
                         unavailable_after_change=2)
