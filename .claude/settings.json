@@ -4,22 +4,40 @@
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py"
+          }
+        ]
       },
       {
         "matcher": "mcp__github__(push_files|create_or_update_file|delete_file|merge_pull_request|enable_pr_auto_merge)",
-        "hooks": [{ "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.py"
+          }
+        ]
       }
     ]
   },
   "permissions": {
     "deny": [
       "Read(**/*.kdbx)",
-      "Read(**/*.keyx)"
+      "Read(**/*.keyx)",
+      "Read(**/inventory/group_vars/all/local.yaml)",
+      "Read(**/.env)",
+      "Read(**/*.env)"
     ]
   }
 }
