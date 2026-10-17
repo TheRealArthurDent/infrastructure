@@ -8,3 +8,6 @@ pykeepass==4.1.1.post1
 molecule==26.10.0
 molecule-plugins[docker]==26.9.28
 pytest==9.1.1
+
+# Git hooks (gitleaks, no commits to main, ansible-lint); activate once per clone: .venv/bin/pre-commit install
+pre-commit==4.6.2
