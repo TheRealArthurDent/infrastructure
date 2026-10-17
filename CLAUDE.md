@@ -8,7 +8,8 @@ container health monitoring) for a Raspberry Pi running Debian/Raspberry Pi OS t
 The deployment is being migrated from bash scripts to Ansible, and the migration is only half done:
 
 - **Ansible** (`ansible/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
-  (`.env` files from KeePass), certificates, and Pi-hole DNS records/lists through its REST API.
+  (`.env` files from KeePass), certificates, and Pi-hole DNS records, lists, groups, clients and domains through its
+  REST API.
 - The **`stack` role** deploys the Docker stack itself (nginx/restic config as Jinja templates, docker networks,
   `docker compose up`), in `bootstrap.yaml` under the tag `stack` (#238).
 - **Bash** (`deploy.sh` → `setup/setup.sh` → `run.sh`) still exists as a fallback until Ansible has proven itself
@@ -16,9 +17,8 @@ The deployment is being migrated from bash scripts to Ansible, and the migration
   stay in sync: `ansible/tests/unit/test_stack_templates.py` fails otherwise, so change both.
   Don't extend the bash scripts; put new deployment logic into Ansible.
 
-Review findings from the migration are GitHub issues. Still open are #234 (Pi-hole sync), #237 (idempotency), #238
-(migration) and #239 (refactor). Check the open issues before changing an affected area, and reference them in
-commits.
+Review findings from the migration are GitHub issues. Still open are #237 (idempotency), #238 (migration) and #239
+(refactor). Check the open issues before changing an affected area, and reference them in commits.
 
 ## Layout
 

@@ -1,0 +1,63 @@
+---
+# Sync Pi-hole allow and deny domains (exact and regex) with pihole_domains (#234). A domain is identified by
+# type, kind and domain; groups are given by name and mapped to their ids.
+# Expects pihole_host, pihole_port, pihole_session, pihole_ca_file and pihole_group_ids from setup-pihole.yaml.
+
+- name: Get existing domains from API
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}/api/domains"
+    method: GET
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 200
+    ca_path: "{{ pihole_ca_file.path }}"
+  register: domains_response
+  until: >-
+    domains_response.status not in pihole_api_unavailable
+    and domains_response.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
+
+- name: Reset collected domains
+  ansible.builtin.set_fact:
+    pihole_existing: {}
+    pihole_desired: {}
+
+# The domain is a path segment, so everything in it is encoded, including '/' (regexes may contain it).
+- name: Collect existing domains
+  ansible.builtin.set_fact:
+    pihole_existing: >-
+      {{ pihole_existing | combine({item.type ~ '/' ~ item.kind ~ '/' ~ item.domain: {
+           'path': '/api/domains/' ~ item.type ~ '/' ~ item.kind ~ '/'
+                   ~ (item.domain | urlencode | replace('/', '%2F')),
+           'body': {'comment': item.comment | default('', true), 'groups': item.groups | sort,
+                    'enabled': item.enabled},
+         }}) }}
+  loop: "{{ domains_response.json.domains }}"
+  loop_control:
+    label: "{{ item.type }}/{{ item.kind }}/{{ item.domain }}"
+
+- name: Collect desired domains
+  ansible.builtin.set_fact:
+    pihole_desired: >-
+      {{ pihole_desired | combine({item.type ~ '/' ~ item.kind ~ '/' ~ item.domain: {
+           'path': '/api/domains/' ~ item.type ~ '/' ~ item.kind ~ '/'
+                   ~ (item.domain | urlencode | replace('/', '%2F')),
+           'body': body,
+           'create_path': '/api/domains/' ~ item.type ~ '/' ~ item.kind,
+           'create_body': body | combine({'domain': item.domain}),
+           'update_body': body | combine({'type': item.type, 'kind': item.kind}),
+         }}) }}
+  vars:
+    body:
+      comment: "{{ item.comment | default('') }}"
+      groups: "{{ item.groups | default(['Default']) | map('extract', pihole_group_ids) | sort }}"
+      enabled: "{{ item.enabled | default(true) }}"
+  loop: "{{ pihole_domains }}"
+  loop_control:
+    label: "{{ item.type }}/{{ item.kind }}/{{ item.domain }}"
+
+- name: Sync domains
+  ansible.builtin.include_tasks: manage_pihole_items.yaml
+  vars:
+    item_type: domains

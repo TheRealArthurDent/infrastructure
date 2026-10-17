@@ -1,0 +1,92 @@
+---
+# Modular task to sync Pi-hole items that the API manages one by one (groups, clients, domains, #234)
+# Parameters:
+#   - item_type: Label for task names ("groups", "clients", "domains")
+#   - pihole_existing: Dict key -> {path, body} of the items on the Pi-hole
+#   - pihole_desired: Dict key -> {path, body, create_path, create_body, update_body (default: body)}
+# A key only on the Pi-hole is deleted, a key only in the desired dict is added, and a key on both sides whose body
+# differs is updated in place. Paths must be encoded already.
+# Expects pihole_host, pihole_port, pihole_session and pihole_ca_file from setup-pihole.yaml.
+
+- name: Identify changes for {{ item_type }}
+  ansible.builtin.set_fact:
+    items_to_delete: "{{ pihole_existing.keys() | difference(pihole_desired.keys()) }}"
+    items_to_add: "{{ pihole_desired.keys() | difference(pihole_existing.keys()) }}"
+    items_to_update: >-
+      {{ pihole_desired.keys() | intersect(pihole_existing.keys())
+         | reject('in', pihole_unchanged) | list }}
+  vars:
+    # Keys whose (key, body) pair is the same on both sides
+    pihole_unchanged: >-
+      {{ pihole_desired.keys() | zip(pihole_desired.values() | map(attribute='body'))
+         | select('in', pihole_existing.keys() | zip(pihole_existing.values() | map(attribute='body')) | list)
+         | map('first') | list }}
+
+- name: Show changes for {{ item_type }}
+  ansible.builtin.debug:
+    msg: |
+      {{ item_type | capitalize }} to delete: {{ items_to_delete }}
+      {{ item_type | capitalize }} to add: {{ items_to_add }}
+      {{ item_type | capitalize }} to update: {{ items_to_update }}
+
+- name: Delete old {{ item_type }}
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ pihole_existing[item].path }}"
+    method: DELETE
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 204
+    ca_path: "{{ pihole_ca_file.path }}"
+  loop: "{{ items_to_delete }}"
+  changed_when: true
+  register: pihole_api_result
+  until: >-
+    pihole_api_result.status not in pihole_api_unavailable
+    and pihole_api_result.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
+
+# Pi-hole answers 201 even when it rejects an item, and lists the reason under processed.errors.
+- name: Add {{ item_type }}
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ pihole_desired[item].create_path }}"
+    method: POST
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    body_format: json
+    body: "{{ pihole_desired[item].create_body }}"
+    status_code: 201
+    ca_path: "{{ pihole_ca_file.path }}"
+  loop: "{{ items_to_add }}"
+  register: add_result
+  failed_when: >-
+    add_result.status != 201
+    or add_result.json.processed.errors | default([]) | length > 0
+  changed_when: true
+  until: >-
+    add_result.status not in pihole_api_unavailable
+    and add_result.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
+
+- name: Update changed {{ item_type }}
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}{{ pihole_desired[item].path }}"
+    method: PUT
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    body_format: json
+    body: "{{ pihole_desired[item].update_body | default(pihole_desired[item].body) }}"
+    status_code: 200
+    ca_path: "{{ pihole_ca_file.path }}"
+  loop: "{{ items_to_update }}"
+  register: update_result
+  failed_when: >-
+    update_result.status != 200
+    or update_result.json.processed.errors | default([]) | length > 0
+  changed_when: true
+  until: >-
+    update_result.status not in pihole_api_unavailable
+    and update_result.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"

@@ -1,0 +1,57 @@
+---
+# Sync Pi-hole groups with pihole_groups (#234). The Default group (id 0) can't be deleted, so it's left alone.
+# Expects pihole_host, pihole_port, pihole_session and pihole_ca_file from setup-pihole.yaml.
+
+- name: Get existing groups from API
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}/api/groups"
+    method: GET
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 200
+    ca_path: "{{ pihole_ca_file.path }}"
+  register: groups_response
+  until: >-
+    groups_response.status not in pihole_api_unavailable
+    and groups_response.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
+
+- name: Reset collected groups
+  ansible.builtin.set_fact:
+    pihole_existing: {}
+    pihole_desired: {}
+
+- name: Collect existing groups
+  ansible.builtin.set_fact:
+    pihole_existing: >-
+      {{ pihole_existing | combine({item.name: {
+           'path': '/api/groups/' ~ (item.name | urlencode | replace('/', '%2F')),
+           'body': {'name': item.name, 'comment': item.comment | default('', true), 'enabled': item.enabled},
+         }}) }}
+  loop: "{{ groups_response.json.groups | rejectattr('id', 'eq', 0) }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Collect desired groups
+  ansible.builtin.set_fact:
+    pihole_desired: >-
+      {{ pihole_desired | combine({item.name: {
+           'path': '/api/groups/' ~ (item.name | urlencode | replace('/', '%2F')),
+           'body': body,
+           'create_path': '/api/groups',
+           'create_body': body,
+         }}) }}
+  vars:
+    body:
+      name: "{{ item.name }}"
+      comment: "{{ item.comment | default('') }}"
+      enabled: "{{ item.enabled | default(true) }}"
+  loop: "{{ pihole_groups }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Sync groups
+  ansible.builtin.include_tasks: manage_pihole_items.yaml
+  vars:
+    item_type: groups

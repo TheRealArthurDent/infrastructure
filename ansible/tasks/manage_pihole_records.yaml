@@ -18,6 +18,11 @@
     status_code: 200
     ca_path: "{{ pihole_ca_file.path }}"
   register: api_response
+  until: >-
+    api_response.status not in pihole_api_unavailable
+    and api_response.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Extract existing records for {{ record_type }}
   ansible.builtin.set_fact:
@@ -84,6 +89,11 @@
   loop: "{{ records_to_delete }}"
   changed_when: true
   register: delete_result
+  until: >-
+    delete_result.status not in pihole_api_unavailable
+    and delete_result.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Add records for {{ record_type }}
   ansible.builtin.uri:
@@ -93,14 +103,16 @@
       X-FTL-SID: "{{ pihole_session }}"
     status_code: 201
     ca_path: "{{ pihole_ca_file.path }}"
-  until: add_result.status == 201
-  retries: 3
-  delay: 5
   vars:
     encoded_item: "{{ item | urlencode | replace('/', '%2F') }}"
   loop: "{{ records_to_add }}"
   changed_when: true
   register: add_result
+  until: >-
+    add_result.status not in pihole_api_unavailable
+    and add_result.json.error.key | default('') not in pihole_api_busy_errors
+  retries: "{{ pihole_api_retries }}"
+  delay: "{{ pihole_api_delay }}"
 
 - name: Show records summary for {{ record_type }}
   ansible.builtin.debug:
