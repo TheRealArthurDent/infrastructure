@@ -1,7 +1,7 @@
 """setup-pihole.yaml against a fake Pi-hole API on localhost (#234).
 
 The fake speaks just enough of the Pi-hole v6 REST API for the playbook: auth, DNS hosts and CNAME records,
-block lists and the gravity action. It runs over HTTPS with a certificate from a throwaway CA, and the
+block lists, the gravity action, groups, clients and domains. It runs over HTTPS with a certificate from a throwaway CA, and the
 playbook gets that CA's certificate from a throwaway KeePass database, like it does from the real one.
 """
 import datetime
@@ -35,7 +35,15 @@ DESIRED = {
     "dns_a_records": [{"domain": "raspi", "address": "192.168.1.2"}],
     "dns_cname_records": [{"domain": "pihole.raspi", "target": "raspi"}],
     "dns_block_lists": ["https://adaway.org/hosts.txt", YOYO],
+    "pihole_groups": [{"name": "kids", "comment": "Kids' devices"}, {"name": "iot"}],
+    "pihole_clients": [{"client": "192.168.1.50", "comment": "Tablet", "groups": ["Default", "kids"]}],
+    "pihole_domains": [
+        {"domain": "example.com", "type": "allow", "kind": "exact", "groups": ["kids"]},
+        # '/' and '\\' in a regex: the item path only matches if the playbook encodes them.
+        {"domain": r"(^|\.)tracker\.example/x$", "type": "deny", "kind": "regex", "comment": "Tracker"},
+    ],
 }
+GROUP_MANAGEMENT = ("pihole_groups", "pihole_clients", "pihole_domains")
 
 
 # --- certificates -------------------------------------------------------------------------------------------
@@ -132,9 +140,15 @@ def keepass(tmp_path_factory, pki):
 class FakePihole:
     RECORD_ENDPOINTS = {"/api/config/dns/hosts": "hosts", "/api/config/dns/cnameRecords": "cnameRecords"}
 
-    def __init__(self, hosts=(), cnames=(), lists=(), fail=None):
+    def __init__(self, hosts=(), cnames=(), lists=(), groups=(), clients=(), domains=(), fail=None):
         self.records = {"hosts": list(hosts), "cnameRecords": list(cnames)}
         self.lists = list(lists)
+        self.next_group_id = 1
+        self.groups = [{"id": 0, "name": "Default", "comment": "The default group", "enabled": True}]
+        for group in groups:
+            self._add_group(group)
+        self.clients = [{"comment": "", "groups": [0], **client} for client in clients]
+        self.domains = [{"comment": "", "groups": [0], "enabled": True, **domain} for domain in domains]
         self.sessions = set()
         self.requests = []
         self.gravity_runs = 0
@@ -183,7 +197,111 @@ class FakePihole:
             self.gravity_runs += 1
             return 200, "  [✓] Building tree\n"
 
+        if url.path.startswith("/api/groups"):
+            return self._groups(method, url.path, body)
+        if url.path.startswith("/api/clients"):
+            return self._clients(method, url.path, body)
+        if url.path.startswith("/api/domains"):
+            return self._domains(method, url.path, body)
+
         return 404, {"error": "not found"}
+
+    def group_ids(self, *names):
+        return sorted(group["id"] for group in self.groups if group["name"] in names)
+
+    def _add_group(self, group):
+        self.groups.append({"comment": "", "enabled": True, **group, "id": self.next_group_id})
+        self.next_group_id += 1
+
+    def _check_group_ids(self, ids):
+        return set(ids) <= {group["id"] for group in self.groups}
+
+    @staticmethod
+    def _processed(item):
+        return {"processed": {"success": [{"item": item}], "errors": []}}
+
+    @staticmethod
+    def _item(path, prefix):
+        return unquote(path[len(prefix):]) if path.startswith(prefix) else None
+
+    def _groups(self, method, path, body):
+        name = self._item(path, "/api/groups/")
+        group = next((g for g in self.groups if g["name"] == name), None)
+        if path == "/api/groups" and method == "GET":
+            return 200, {"groups": self.groups}
+        if path == "/api/groups" and method == "POST":
+            new = json.loads(body)
+            if any(g["name"] == new["name"] for g in self.groups):
+                return 400, {"error": "already exists"}
+            self._add_group(new)
+            return 201, self._processed(new["name"])
+        if group is None:
+            return 404, {"error": "not found"}
+        if method == "PUT":
+            group.update(json.loads(body))
+            return 200, self._processed(name)
+        if method == "DELETE":
+            if group["id"] == 0:
+                return 400, {"error": "the default group can't be deleted"}
+            self.groups.remove(group)
+            for item in self.clients + self.domains:
+                item["groups"] = [i for i in item["groups"] if i != group["id"]]
+            return 204, None
+        return 405, {"error": "method not allowed"}
+
+    def _clients(self, method, path, body):
+        address = self._item(path, "/api/clients/")
+        client = next((c for c in self.clients if c["client"] == address), None)
+        if path == "/api/clients" and method == "GET":
+            return 200, {"clients": [{**c, "name": None, "id": n} for n, c in enumerate(self.clients)]}
+        if method in ("POST", "PUT") and not self._check_group_ids(json.loads(body)["groups"]):
+            return 400, {"error": "unknown group"}
+        if path == "/api/clients" and method == "POST":
+            new = json.loads(body)
+            if any(c["client"] == new["client"] for c in self.clients):
+                return 400, {"error": "already exists"}
+            self.clients.append(new)
+            return 201, self._processed(new["client"])
+        if client is None:
+            return 404, {"error": "not found"}
+        if method == "PUT":
+            client.update(json.loads(body))
+            return 200, self._processed(address)
+        if method == "DELETE":
+            self.clients.remove(client)
+            return 204, None
+        return 405, {"error": "method not allowed"}
+
+    def _domains(self, method, path, body):
+        if path == "/api/domains" and method == "GET":
+            return 200, {"domains": [{**d, "unicode": d["domain"], "id": n} for n, d in enumerate(self.domains)]}
+        parts = path[len("/api/domains/"):].split("/")
+        if len(parts) < 2 or parts[0] not in ("allow", "deny") or parts[1] not in ("exact", "regex"):
+            return 404, {"error": "not found"}
+        kind = {"type": parts[0], "kind": parts[1]}
+        if method in ("POST", "PUT") and not self._check_group_ids(json.loads(body)["groups"]):
+            return 400, {"error": "unknown group"}
+        if len(parts) == 2 and method == "POST":
+            new = {**json.loads(body), **kind}
+            if any(d["domain"] == new["domain"] and d["type"] == new["type"] and d["kind"] == new["kind"]
+                   for d in self.domains):
+                return 400, {"error": "already exists"}
+            self.domains.append(new)
+            return 201, self._processed(new["domain"])
+        if len(parts) != 3:
+            return 404, {"error": "not found"}
+        domain = next((d for d in self.domains
+                       if d["domain"] == unquote(parts[2]) and d["type"] == kind["type"] and d["kind"] == kind["kind"]),
+                      None)
+        if domain is None:
+            return 404, {"error": "not found"}
+        if method == "PUT":
+            domain.update(json.loads(body))
+            return 200, self._processed(domain["domain"])
+        if method == "DELETE":
+            self.domains.remove(domain)
+            return 204, None
+        return 405, {"error": "method not allowed"}
 
     @staticmethod
     def _change(collection, method, add_method, value):
@@ -238,12 +356,12 @@ def serve(pihole, cert):
 def run(tmp_path, keepass, pki):
     servers = []
 
-    def _run(pihole, cert="trusted"):
+    def _run(pihole, cert="trusted", desired=None):
         server = serve(pihole, pki[cert])
         servers.append(server)
         extra_vars = tmp_path / "vars.json"
         extra_vars.write_text(json.dumps({
-            **DESIRED,
+            **(DESIRED if desired is None else desired),
             "pihole_host": "localhost",
             "pihole_port": server.server_address[1],
             "keepass_db": keepass["db"],
@@ -355,3 +473,81 @@ def test_block_list_urls_are_not_html_escaped():
     config = yaml.safe_load((ANSIBLE_DIR / "configs" / "pihole.yaml").read_text())
 
     assert [url for url in config["dns_block_lists"] if "&amp;" in url] == []
+
+
+def test_syncs_groups_and_keeps_the_default_group(run):
+    pihole = FakePihole(groups=[{"name": "old"}, {"name": "iot", "comment": "stale", "enabled": False}])
+
+    result = run(pihole)
+
+    assert result.returncode == 0, output(result)
+    assert sorted((g["name"], g["comment"], g["enabled"]) for g in pihole.groups) == [
+        ("Default", "The default group", True),
+        ("iot", "", True),
+        ("kids", "Kids' devices", True),
+    ]
+
+
+def test_syncs_clients_with_groups_by_name(run):
+    pihole = FakePihole(clients=[{"client": "192.168.1.99"}, {"client": "192.168.1.50", "comment": "Old"}])
+
+    result = run(pihole)
+
+    assert result.returncode == 0, output(result)
+    assert pihole.clients == [
+        {"client": "192.168.1.50", "comment": "Tablet", "groups": pihole.group_ids("Default", "kids")},
+    ]
+
+
+def test_syncs_domains_and_encodes_them_in_the_path(run):
+    old_regex = r"^ads/[0-9]+\.example$"
+    pihole = FakePihole(domains=[
+        {"domain": old_regex, "type": "deny", "kind": "regex"},
+        {"domain": "example.com", "type": "allow", "kind": "exact", "enabled": False},
+    ])
+
+    result = run(pihole)
+
+    assert result.returncode == 0, output(result)
+    assert sorted((d["domain"], d["type"], d["kind"], d["comment"], d["groups"], d["enabled"])
+                  for d in pihole.domains) == sorted([
+        ("example.com", "allow", "exact", "", pihole.group_ids("kids"), True),
+        (r"(^|\.)tracker\.example/x$", "deny", "regex", "Tracker", [0], True),
+    ])
+    assert ("DELETE", "/api/domains/deny/regex/%5Eads%2F%5B0-9%5D%2B%5C.example%24") in pihole.requests
+
+
+def test_leaves_groups_clients_and_domains_alone_when_not_configured(run):
+    pihole = FakePihole(groups=[{"name": "manual"}], clients=[{"client": "192.168.1.99"}],
+                        domains=[{"domain": "manual.example", "type": "deny", "kind": "exact"}])
+    # configs/pihole.yaml defines the lists, and extra vars can't undefine them, so they're set to null.
+    desired = {**DESIRED, **dict.fromkeys(GROUP_MANAGEMENT)}
+
+    result = run(pihole, desired=desired)
+
+    assert result.returncode == 0, output(result)
+    assert [g["name"] for g in pihole.groups] == ["Default", "manual"]
+    assert [c["client"] for c in pihole.clients] == ["192.168.1.99"]
+    assert [d["domain"] for d in pihole.domains] == ["manual.example"]
+
+
+def test_fails_on_an_unknown_group_before_changing_clients_or_domains(run):
+    pihole = FakePihole(clients=[{"client": "192.168.1.99"}])
+    desired = {**DESIRED, "pihole_clients": [{"client": "192.168.1.50", "groups": ["nope"]}]}
+
+    result = run(pihole, desired=desired)
+
+    assert result.returncode != 0
+    assert "nope" in output(result)
+    assert [c["client"] for c in pihole.clients] == ["192.168.1.99"]
+    assert [d for d in pihole.changing_requests() if d[1].startswith(("/api/clients", "/api/domains"))] == []
+
+
+def test_clients_and_domains_in_the_config_only_use_configured_groups():
+    config = yaml.safe_load((ANSIBLE_DIR / "configs" / "pihole.yaml").read_text())
+    known = {"Default"} | {group["name"] for group in config["pihole_groups"]}
+
+    used = {group for item in config["pihole_clients"] + config["pihole_domains"]
+            for group in item.get("groups", ["Default"])}
+
+    assert used <= known

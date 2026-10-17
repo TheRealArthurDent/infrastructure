@@ -1,0 +1,51 @@
+---
+# Sync Pi-hole clients with pihole_clients (#234). Groups are given by name and mapped to their ids.
+# Expects pihole_host, pihole_port, pihole_session, pihole_ca_file and pihole_group_ids from setup-pihole.yaml.
+
+- name: Get existing clients from API
+  ansible.builtin.uri:
+    url: "https://{{ pihole_host }}:{{ pihole_port }}/api/clients"
+    method: GET
+    headers:
+      X-FTL-SID: "{{ pihole_session }}"
+    status_code: 200
+    ca_path: "{{ pihole_ca_file.path }}"
+  register: clients_response
+
+- name: Reset collected clients
+  ansible.builtin.set_fact:
+    pihole_existing: {}
+    pihole_desired: {}
+
+- name: Collect existing clients
+  ansible.builtin.set_fact:
+    pihole_existing: >-
+      {{ pihole_existing | combine({item.client: {
+           'path': '/api/clients/' ~ (item.client | urlencode | replace('/', '%2F')),
+           'body': {'comment': item.comment | default('', true), 'groups': item.groups | sort},
+         }}) }}
+  loop: "{{ clients_response.json.clients }}"
+  loop_control:
+    label: "{{ item.client }}"
+
+- name: Collect desired clients
+  ansible.builtin.set_fact:
+    pihole_desired: >-
+      {{ pihole_desired | combine({item.client: {
+           'path': '/api/clients/' ~ (item.client | urlencode | replace('/', '%2F')),
+           'body': body,
+           'create_path': '/api/clients',
+           'create_body': body | combine({'client': item.client}),
+         }}) }}
+  vars:
+    body:
+      comment: "{{ item.comment | default('') }}"
+      groups: "{{ item.groups | default(['Default']) | map('extract', pihole_group_ids) | sort }}"
+  loop: "{{ pihole_clients }}"
+  loop_control:
+    label: "{{ item.client }}"
+
+- name: Sync clients
+  ansible.builtin.include_tasks: manage_pihole_items.yaml
+  vars:
+    item_type: clients

@@ -94,3 +94,22 @@ dns_block_lists:
   - "https://blocklistproject.github.io/Lists/ransomware.txt"
   - "https://blocklistproject.github.io/Lists/scam.txt"
   - "https://blocklistproject.github.io/Lists/tracking.txt"
+
+# Groups, clients and domains are synced only when their list is defined here. Remove a list (or set it to
+# null) to leave that part to the web interface. The Default group always exists and is not managed here.
+# Groups are referenced by name; clients and domains without groups are in Default.
+pihole_groups:
+  - name: "Rennknecht"
+    comment: "The racing PC"
+
+pihole_clients:
+  - client: "192.168.1.114"
+    comment: "Rennknecht"
+    groups: ["Default", "Rennknecht"]
+
+# type: allow or deny, kind: exact or regex
+pihole_domains:
+  - domain: "cognito-identity.us-east-1.amazonaws.com"
+    type: "allow"
+    kind: "exact"
+    comment: "For TrackTitan"

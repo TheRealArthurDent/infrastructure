@@ -84,7 +84,6 @@
             pihole_session: "{{ auth_response.json.session.sid }}"
           no_log: true
 
-        # TODO: Clients, Groups and Domains (#234)
         - name: Manage A records (hosts)
           ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
           vars:
@@ -114,6 +113,48 @@
             api_endpoint: "/api/lists"
             desired_records: "{{ dns_block_lists }}"
             record_format: "simple"
+
+        # Groups, clients and domains are only synced when they're configured (missing or null), so a missing
+        # list never wipes what was set up in the web interface (#234).
+        - name: Manage groups
+          ansible.builtin.include_tasks: tasks/manage_pihole_groups.yaml
+          when: pihole_groups | default(none) is not none
+
+        - name: Get group ids for clients and domains
+          ansible.builtin.uri:
+            url: "https://{{ pihole_host }}:{{ pihole_port }}/api/groups"
+            method: GET
+            headers:
+              X-FTL-SID: "{{ pihole_session }}"
+            status_code: 200
+            ca_path: "{{ pihole_ca_file.path }}"
+          register: group_ids_response
+          when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
+
+        - name: Map group names to ids
+          ansible.builtin.set_fact:
+            pihole_group_ids: "{{ group_ids_response.json.groups | items2dict(key_name='name', value_name='id') }}"
+          when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
+
+        - name: Ensure clients and domains only use existing groups
+          ansible.builtin.assert:
+            that: unknown_groups | length == 0
+            fail_msg: "Unknown Pi-hole groups: {{ unknown_groups | join(', ') }}. Add them to pihole_groups."
+            quiet: true
+          vars:
+            unknown_groups: >-
+              {{ ((pihole_clients | default([], true)) + (pihole_domains | default([], true)))
+                 | map(attribute='groups', default=['Default']) | flatten | unique
+                 | difference(pihole_group_ids.keys()) }}
+          when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
+
+        - name: Manage clients
+          ansible.builtin.include_tasks: tasks/manage_pihole_clients.yaml
+          when: pihole_clients | default(none) is not none
+
+        - name: Manage domains
+          ansible.builtin.include_tasks: tasks/manage_pihole_domains.yaml
+          when: pihole_domains | default(none) is not none
 
       # Pi-hole allows only a few API sessions at a time, so log out even when a task above failed.
       always:
