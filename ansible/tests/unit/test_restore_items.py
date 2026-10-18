@@ -88,7 +88,24 @@ ITEMS = restore_items()
 
 
 def test_restore_items_are_defined():
-    assert set(ITEMS) >= {"portainer", "pihole", "pihole_outbound"}
+    assert set(ITEMS) >= {"portainer", "pihole"}
+
+
+def test_outbound_is_not_restored():
+    """setup-pihole.yaml provisions outbound, so its state comes from Ansible, not the backup (#293)."""
+    assert "pihole_outbound" not in ITEMS
+
+
+def test_outbound_keeps_its_runtime_data_in_a_named_volume():
+    compose = yaml.safe_load(read(COMPOSE))
+
+    assert compose["services"]["outbound"]["volumes"] == ["outbound_pihole:/etc/pihole"]
+    assert compose["volumes"]["outbound_pihole"] == {"name": "outbound_pihole"}
+
+
+def test_cache_volumes_are_not_backed_up():
+    """A volume that is only a cache would just bloat the backup; losing it costs one Ansible run (#293)."""
+    assert excluded(to_source("/var/lib/docker/volumes/outbound_pihole/_data/gravity.db"))
 
 
 @pytest.mark.parametrize("name", sorted(ITEMS))
