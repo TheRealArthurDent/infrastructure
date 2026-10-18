@@ -6,8 +6,9 @@
 /source/etc/docker/*/.*env
 # Exclude everything looking like a secret
 /source/etc/docker/**/*secret*
-# Exclude pihole FTL database as it's not small and bearable
+# Exclude the pihole FTL databases as they're not small and bearable
 /source/etc/docker/infrastructure/pihole/pihole/pihole-FTL.db*
+/source/etc/docker/infrastructure/pihole_outbound/pihole/pihole-FTL.db*
 # Exclude iobroker's npm cache
 /source/docker-volumes/smart-home_iobroker-storage/_data/.npm
 # Python
