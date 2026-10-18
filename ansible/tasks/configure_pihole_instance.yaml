@@ -100,7 +100,9 @@
     - name: Ensure clients and domains only use existing groups
       ansible.builtin.assert:
         that: unknown_groups | length == 0
-        fail_msg: "Unknown Pi-hole groups: {{ unknown_groups | join(', ') }}. Add them to the groups of {{ pihole_instance.name }}."
+        fail_msg: >-
+          Unknown Pi-hole groups: {{ unknown_groups | join(', ') }}.
+          Add them to the groups of {{ pihole_instance.name }}.
         quiet: true
       vars:
         unknown_groups: >-
