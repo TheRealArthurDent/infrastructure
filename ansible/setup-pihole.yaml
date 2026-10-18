@@ -26,12 +26,10 @@
 
 # The Pi-hole is only talked to through its API, so everything runs on the control node: nothing connects to
 # the Pi itself (#234).
-- name: Configure Pi-hole via REST API
+- name: Configure the Pi-hole instances via their REST API
   hosts: all
   gather_facts: false
   vars:
-    pihole_host: "{{ pihole_ip | default('pihole.' ~ inventory_hostname) }}"
-    pihole_port: 443
     # FTL restarts after some changes (CNAME records, for example): nginx answers 502 until it's back, and FTL
     # then answers 500 database_error until its database is open again. Every API call waits that out instead
     # of failing the run.
@@ -48,10 +46,8 @@
     - name: Get the KeePass credentials
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
 
-    - name: Get Pi-hole password and root CA certificate from KeePass
+    - name: Get the root CA certificate from KeePass
       ansible.builtin.set_fact:
-        pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                                    group='smart-home', title='pihole') }}"
         pihole_root_ca: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                                    group='Domain', title='rootCA', attachment='rootCA.pem') }}"
       no_log: true
@@ -74,124 +70,14 @@
             mode: '0600'
           changed_when: false
 
-        - name: Authenticate with Pi-hole API
-          ansible.builtin.uri:
-            url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
-            method: POST
-            body_format: json
-            body:
-              password: "{{ pihole_password }}"
-            status_code: 200
-            ca_path: "{{ pihole_ca_file.path }}"
-          register: auth_response
-          no_log: true
-          until: >-
-            auth_response.status not in pihole_api_unavailable
-            and auth_response.json.error.key | default('') not in pihole_api_busy_errors
-          retries: "{{ pihole_api_retries }}"
-          delay: "{{ pihole_api_delay }}"
+        - name: Configure each Pi-hole instance
+          ansible.builtin.include_tasks: tasks/configure_pihole_instance.yaml
+          loop: "{{ pihole_instances }}"
+          loop_control:
+            loop_var: pihole_instance
+            label: "{{ pihole_instance.name }}"
 
-        - name: Extract session token
-          ansible.builtin.set_fact:
-            pihole_session: "{{ auth_response.json.session.sid }}"
-          no_log: true
-
-        - name: Manage A records (hosts)
-          ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
-          vars:
-            record_type: "hosts"
-            api_endpoint: "/api/config/dns/hosts"
-            desired_records: "{{ dns_a_records }}"
-            record_format: "objects"
-            value_attribute: "address"
-            domain_first: false
-            separator: " "
-
-        - name: Manage CNAME records
-          ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
-          vars:
-            record_type: "cnameRecords"
-            api_endpoint: "/api/config/dns/cnameRecords"
-            desired_records: "{{ dns_cname_records }}"
-            record_format: "objects"
-            value_attribute: "target"
-            domain_first: true
-            separator: ","
-
-        - name: Manage block lists
-          ansible.builtin.include_tasks: tasks/manage_pihole_lists.yaml
-          vars:
-            list_type: "block"
-            api_endpoint: "/api/lists"
-            desired_records: "{{ dns_block_lists }}"
-            record_format: "simple"
-
-        # Groups, clients and domains are only synced when they're configured (missing or null), so a missing
-        # list never wipes what was set up in the web interface (#234).
-        - name: Manage groups
-          ansible.builtin.include_tasks: tasks/manage_pihole_groups.yaml
-          when: pihole_groups | default(none) is not none
-
-        - name: Get group ids for clients and domains
-          ansible.builtin.uri:
-            url: "https://{{ pihole_host }}:{{ pihole_port }}/api/groups"
-            method: GET
-            headers:
-              X-FTL-SID: "{{ pihole_session }}"
-            status_code: 200
-            ca_path: "{{ pihole_ca_file.path }}"
-          register: group_ids_response
-          when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
-          until: >-
-            group_ids_response.status not in pihole_api_unavailable
-            and group_ids_response.json.error.key | default('') not in pihole_api_busy_errors
-          retries: "{{ pihole_api_retries }}"
-          delay: "{{ pihole_api_delay }}"
-
-        - name: Map group names to ids
-          ansible.builtin.set_fact:
-            pihole_group_ids: "{{ group_ids_response.json.groups | items2dict(key_name='name', value_name='id') }}"
-          when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
-
-        - name: Ensure clients and domains only use existing groups
-          ansible.builtin.assert:
-            that: unknown_groups | length == 0
-            fail_msg: "Unknown Pi-hole groups: {{ unknown_groups | join(', ') }}. Add them to pihole_groups."
-            quiet: true
-          vars:
-            unknown_groups: >-
-              {{ ((pihole_clients | default([], true)) + (pihole_domains | default([], true)))
-                 | map(attribute='groups', default=['Default']) | flatten | unique
-                 | difference(pihole_group_ids.keys()) }}
-          when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
-
-        - name: Manage clients
-          ansible.builtin.include_tasks: tasks/manage_pihole_clients.yaml
-          when: pihole_clients | default(none) is not none
-
-        - name: Manage domains
-          ansible.builtin.include_tasks: tasks/manage_pihole_domains.yaml
-          when: pihole_domains | default(none) is not none
-
-      # Pi-hole allows only a few API sessions at a time, so log out even when a task above failed.
       always:
-        - name: Logout from Pi-hole API
-          ansible.builtin.uri:
-            url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
-            method: DELETE
-            headers:
-              X-FTL-SID: "{{ pihole_session }}"
-            # 401: the session has already expired
-            status_code: [204, 401]
-            ca_path: "{{ pihole_ca_file.path }}"
-          when: pihole_session is defined
-          register: pihole_api_result
-          until: >-
-            pihole_api_result.status not in pihole_api_unavailable
-            and pihole_api_result.json.error.key | default('') not in pihole_api_busy_errors
-          retries: "{{ pihole_api_retries }}"
-          delay: "{{ pihole_api_delay }}"
-
         - name: Remove temporary root CA certificate file
           ansible.builtin.file:
             path: "{{ pihole_ca_file.path }}"

@@ -85,9 +85,10 @@ ansible-playbook bootstrap.yaml --limit testbed
 # Check / renew the nginx certificate
 ansible-playbook check-certificates.yaml --limit testbed
 
-# Change DNS records or block lists: edit configs/pihole.yaml, then
+# Change DNS records, block lists, groups, clients or domains of a Pi-hole (pihole or outbound):
+# edit configs/pihole.yaml, then
 ansible-playbook setup-pihole.yaml --limit testbed
-# Pi-hole is reached at pihole.<host>; override with -e pihole_ip=192.168.1.7
+# Each instance is reached at <name>.<host> (pihole.testbed, outbound.testbed); set host in its config entry to override
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbed
 

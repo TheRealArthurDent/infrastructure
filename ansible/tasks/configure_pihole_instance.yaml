@@ -1,0 +1,142 @@
+---
+# Configure one Pi-hole instance through its REST API (#234, #293), from the control node.
+# Expects pihole_instance (an entry of pihole_instances in configs/pihole.yaml), pihole_ca_file and the KeePass
+# credentials from setup-pihole.yaml.
+
+- name: Get the Pi-hole password from KeePass
+  ansible.builtin.set_fact:
+    pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                                group='smart-home', title=pihole_instance.keepass_title
+                                | default(pihole_instance.name)) }}"
+  no_log: true
+
+- name: Configure the Pi-hole instance {{ pihole_instance.name }}
+  vars:
+    pihole_host: "{{ pihole_instance.host | default(pihole_instance.name ~ '.' ~ inventory_hostname) }}"
+    pihole_port: "{{ pihole_instance.port | default(443) }}"
+    # Groups, clients and domains are only synced when they're configured (missing or null), so a missing
+    # list never wipes what was set up in the web interface (#234).
+    pihole_groups: "{{ pihole_instance.groups | default(none) }}"
+    pihole_clients: "{{ pihole_instance.clients | default(none) }}"
+    pihole_domains: "{{ pihole_instance.domains | default(none) }}"
+  block:
+    - name: Authenticate with Pi-hole API
+      ansible.builtin.uri:
+        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
+        method: POST
+        body_format: json
+        body:
+          password: "{{ pihole_password }}"
+        status_code: 200
+        ca_path: "{{ pihole_ca_file.path }}"
+      register: auth_response
+      no_log: true
+      until: >-
+        auth_response.status not in pihole_api_unavailable
+        and auth_response.json.error.key | default('') not in pihole_api_busy_errors
+      retries: "{{ pihole_api_retries }}"
+      delay: "{{ pihole_api_delay }}"
+
+    - name: Extract session token
+      ansible.builtin.set_fact:
+        pihole_session: "{{ auth_response.json.session.sid }}"
+      no_log: true
+
+    - name: Manage A records (hosts)
+      ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
+      vars:
+        record_type: "hosts"
+        api_endpoint: "/api/config/dns/hosts"
+        desired_records: "{{ pihole_instance.a_records }}"
+        record_format: "objects"
+        value_attribute: "address"
+        domain_first: false
+        separator: " "
+
+    - name: Manage CNAME records
+      ansible.builtin.include_tasks: tasks/manage_pihole_records.yaml
+      vars:
+        record_type: "cnameRecords"
+        api_endpoint: "/api/config/dns/cnameRecords"
+        desired_records: "{{ pihole_instance.cname_records }}"
+        record_format: "objects"
+        value_attribute: "target"
+        domain_first: true
+        separator: ","
+
+    - name: Manage block lists
+      ansible.builtin.include_tasks: tasks/manage_pihole_lists.yaml
+      vars:
+        list_type: "block"
+        api_endpoint: "/api/lists"
+        desired_records: "{{ pihole_instance.block_lists }}"
+        record_format: "simple"
+
+    - name: Manage groups
+      ansible.builtin.include_tasks: tasks/manage_pihole_groups.yaml
+      when: pihole_groups | default(none) is not none
+
+    - name: Get group ids for clients and domains
+      ansible.builtin.uri:
+        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/groups"
+        method: GET
+        headers:
+          X-FTL-SID: "{{ pihole_session }}"
+        status_code: 200
+        ca_path: "{{ pihole_ca_file.path }}"
+      register: group_ids_response
+      when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
+      until: >-
+        group_ids_response.status not in pihole_api_unavailable
+        and group_ids_response.json.error.key | default('') not in pihole_api_busy_errors
+      retries: "{{ pihole_api_retries }}"
+      delay: "{{ pihole_api_delay }}"
+
+    - name: Map group names to ids
+      ansible.builtin.set_fact:
+        pihole_group_ids: "{{ group_ids_response.json.groups | items2dict(key_name='name', value_name='id') }}"
+      when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
+
+    - name: Ensure clients and domains only use existing groups
+      ansible.builtin.assert:
+        that: unknown_groups | length == 0
+        fail_msg: "Unknown Pi-hole groups: {{ unknown_groups | join(', ') }}. Add them to the groups of {{ pihole_instance.name }}."
+        quiet: true
+      vars:
+        unknown_groups: >-
+          {{ ((pihole_clients | default([], true)) + (pihole_domains | default([], true)))
+             | map(attribute='groups', default=['Default']) | flatten | unique
+             | difference(pihole_group_ids.keys()) }}
+      when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
+
+    - name: Manage clients
+      ansible.builtin.include_tasks: tasks/manage_pihole_clients.yaml
+      when: pihole_clients | default(none) is not none
+
+    - name: Manage domains
+      ansible.builtin.include_tasks: tasks/manage_pihole_domains.yaml
+      when: pihole_domains | default(none) is not none
+
+  # Pi-hole allows only a few API sessions at a time, so log out even when a task above failed.
+  always:
+    - name: Logout from Pi-hole API
+      ansible.builtin.uri:
+        url: "https://{{ pihole_host }}:{{ pihole_port }}/api/auth"
+        method: DELETE
+        headers:
+          X-FTL-SID: "{{ pihole_session }}"
+        # 401: the session has already expired
+        status_code: [204, 401]
+        ca_path: "{{ pihole_ca_file.path }}"
+      when: pihole_session | default(none) is not none
+      register: pihole_api_result
+      until: >-
+        pihole_api_result.status not in pihole_api_unavailable
+        and pihole_api_result.json.error.key | default('') not in pihole_api_busy_errors
+      retries: "{{ pihole_api_retries }}"
+      delay: "{{ pihole_api_delay }}"
+
+    # The next instance must never send this session to its own API.
+    - name: Forget the session token
+      ansible.builtin.set_fact:
+        pihole_session: null
