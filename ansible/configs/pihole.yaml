@@ -113,3 +113,4 @@ pihole_domains:
     type: "allow"
     kind: "exact"
     comment: "For TrackTitan"
+    groups: ["Rennknecht"]
