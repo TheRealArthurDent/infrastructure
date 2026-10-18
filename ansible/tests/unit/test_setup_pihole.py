@@ -3,6 +3,7 @@
 The fake speaks just enough of the Pi-hole v6 REST API for the playbook: auth, DNS hosts and CNAME records,
 block lists, the gravity action, groups, clients and domains. It runs over HTTPS with a certificate from a throwaway CA, and the
 playbook gets that CA's certificate from a throwaway KeePass database, like it does from the real one.
+The playbook configures several Pi-hole instances (the main one and outbound, #293), each with its own password.
 """
 import datetime
 import json
@@ -25,25 +26,39 @@ from pykeepass import create_database
 
 ANSIBLE_DIR = Path(__file__).parents[2]
 PIHOLE_PASSWORD = "pihole-secret"
+OUTBOUND_PASSWORD = "outbound-secret"
 KEEPASS_PASSWORD = "test-master-password"
 
 # Query parameters in the list URL: the DELETE path only matches if the playbook encodes them.
 YOYO = "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext"
 OLD_LIST = "https://old.example/list.php?a=1&b=2"
 
+# One instance in pihole_instances, without name, host and port (the test fills those in).
 DESIRED = {
-    "dns_a_records": [{"domain": "raspi", "address": "192.168.1.2"}],
-    "dns_cname_records": [{"domain": "pihole.raspi", "target": "raspi"}],
-    "dns_block_lists": ["https://adaway.org/hosts.txt", YOYO],
-    "pihole_groups": [{"name": "kids", "comment": "Kids' devices"}, {"name": "iot"}],
-    "pihole_clients": [{"client": "192.168.1.50", "comment": "Tablet", "groups": ["Default", "kids"]}],
-    "pihole_domains": [
+    "a_records": [{"domain": "raspi", "address": "192.168.1.2"}],
+    "cname_records": [{"domain": "pihole.raspi", "target": "raspi"}],
+    "block_lists": ["https://adaway.org/hosts.txt", YOYO],
+    "groups": [{"name": "kids", "comment": "Kids' devices"}, {"name": "iot"}],
+    "clients": [{"client": "192.168.1.50", "comment": "Tablet", "groups": ["Default", "kids"]}],
+    "domains": [
         {"domain": "example.com", "type": "allow", "kind": "exact", "groups": ["kids"]},
         # '/' and '\\' in a regex: the item path only matches if the playbook encodes them.
         {"domain": r"(^|\.)tracker\.example/x$", "type": "deny", "kind": "regex", "comment": "Tracker"},
     ],
 }
-GROUP_MANAGEMENT = ("pihole_groups", "pihole_clients", "pihole_domains")
+GROUP_MANAGEMENT = ("groups", "clients", "domains")
+# An egress filter like outbound: nothing but a few allowed domains resolves.
+OUTBOUND_DESIRED = {
+    "a_records": [],
+    "cname_records": [],
+    "block_lists": [],
+    "groups": [],
+    "clients": [],
+    "domains": [
+        {"domain": ".*", "type": "deny", "kind": "regex"},
+        {"domain": "registry.npmjs.org", "type": "allow", "kind": "exact"},
+    ],
+}
 
 
 # --- certificates -------------------------------------------------------------------------------------------
@@ -128,6 +143,7 @@ def keepass(tmp_path_factory, pki):
     kp = create_database(str(db), password=KEEPASS_PASSWORD, keyfile=str(keyfile))
     smart_home = kp.add_group(kp.root_group, "smart-home")
     kp.add_entry(smart_home, "pihole", "", PIHOLE_PASSWORD)
+    kp.add_entry(smart_home, "outbound", "", OUTBOUND_PASSWORD)
     domain = kp.add_group(kp.root_group, "Domain")
     ca = kp.add_entry(domain, "rootCA", "", "ca-passphrase")
     ca.add_attachment(kp.add_binary(pki["ca_pem"]), "rootCA.pem")
@@ -141,7 +157,8 @@ class FakePihole:
     RECORD_ENDPOINTS = {"/api/config/dns/hosts": "hosts", "/api/config/dns/cnameRecords": "cnameRecords"}
 
     def __init__(self, hosts=(), cnames=(), lists=(), groups=(), clients=(), domains=(), fail=None,
-                 unavailable_after_change=0, unavailable_as="bad_gateway"):
+                 unavailable_after_change=0, unavailable_as="bad_gateway", password=PIHOLE_PASSWORD):
+        self.password = password
         self.records = {"hosts": list(hosts), "cnameRecords": list(cnames)}
         self.lists = list(lists)
         self.next_group_id = 1
@@ -182,7 +199,7 @@ class FakePihole:
 
         if url.path == "/api/auth":
             if method == "POST":
-                if json.loads(body).get("password") != PIHOLE_PASSWORD:
+                if json.loads(body).get("password") != self.password:
                     return 401, {"error": "unauthorized"}
                 sid = uuid.uuid4().hex
                 self.sessions.add(sid)
@@ -373,14 +390,18 @@ def serve(pihole, cert):
 def run(tmp_path, keepass, pki):
     servers = []
 
-    def _run(pihole, cert="trusted", desired=None):
-        server = serve(pihole, pki[cert])
-        servers.append(server)
+    def _run(pihole, cert="trusted", desired=None, instances=None):
+        """Run against one fake Pi-hole, or against several given as instances: [(name, fake, desired)]."""
+        if instances is None:
+            instances = [("pihole", pihole, DESIRED if desired is None else desired)]
+        configured = []
+        for name, fake, config in instances:
+            server = serve(fake, pki[cert])
+            servers.append(server)
+            configured.append({**config, "name": name, "host": "localhost", "port": server.server_address[1]})
         extra_vars = tmp_path / "vars.json"
         extra_vars.write_text(json.dumps({
-            **(DESIRED if desired is None else desired),
-            "pihole_host": "localhost",
-            "pihole_port": server.server_address[1],
+            "pihole_instances": configured,
             "pihole_api_delay": 0,
             "keepass_db": keepass["db"],
             "keepass_key": keepass["key"],
@@ -417,7 +438,7 @@ def test_syncs_records_and_lists_without_touching_the_pi(run):
     assert result.returncode == 0, output(result)
     assert pihole.records["hosts"] == ["192.168.1.2 raspi"]
     assert pihole.records["cnameRecords"] == ["pihole.raspi,raspi"]
-    assert sorted(pihole.lists) == sorted(DESIRED["dns_block_lists"])
+    assert sorted(pihole.lists) == sorted(DESIRED["block_lists"])
 
 
 def test_encodes_list_urls_in_the_path(run):
@@ -462,7 +483,7 @@ def test_waits_for_the_api_when_pi_hole_restarts_after_a_change(run, unavailable
 
     assert result.returncode == 0, output(result)
     assert pihole.records["cnameRecords"] == ["pihole.raspi,raspi"]
-    assert sorted(pihole.lists) == sorted(DESIRED["dns_block_lists"])
+    assert sorted(pihole.lists) == sorted(DESIRED["block_lists"])
     assert sorted(g["name"] for g in pihole.groups) == ["Default", "iot", "kids"]
     assert [c["client"] for c in pihole.clients] == ["192.168.1.50"]
     assert len(pihole.domains) == 2
@@ -504,10 +525,14 @@ def test_password_never_shows_up_in_output(run):
     assert KEEPASS_PASSWORD not in output(result)
 
 
-def test_block_list_urls_are_not_html_escaped():
-    config = yaml.safe_load((ANSIBLE_DIR / "configs" / "pihole.yaml").read_text())
+def configured_instances():
+    return yaml.safe_load((ANSIBLE_DIR / "configs" / "pihole.yaml").read_text())["pihole_instances"]
 
-    assert [url for url in config["dns_block_lists"] if "&amp;" in url] == []
+
+def test_block_list_urls_are_not_html_escaped():
+    urls = [url for instance in configured_instances() for url in instance["block_lists"]]
+
+    assert [url for url in urls if "&amp;" in url] == []
 
 
 def test_syncs_groups_and_keeps_the_default_group(run):
@@ -568,7 +593,7 @@ def test_leaves_groups_clients_and_domains_alone_when_not_configured(run):
 
 def test_fails_on_an_unknown_group_before_changing_clients_or_domains(run):
     pihole = FakePihole(clients=[{"client": "192.168.1.99"}])
-    desired = {**DESIRED, "pihole_clients": [{"client": "192.168.1.50", "groups": ["nope"]}]}
+    desired = {**DESIRED, "clients": [{"client": "192.168.1.50", "groups": ["nope"]}]}
 
     result = run(pihole, desired=desired)
 
@@ -578,11 +603,67 @@ def test_fails_on_an_unknown_group_before_changing_clients_or_domains(run):
     assert [d for d in pihole.changing_requests() if d[1].startswith(("/api/clients", "/api/domains"))] == []
 
 
-def test_clients_and_domains_in_the_config_only_use_configured_groups():
-    config = yaml.safe_load((ANSIBLE_DIR / "configs" / "pihole.yaml").read_text())
-    known = {"Default"} | {group["name"] for group in config["pihole_groups"]}
+@pytest.mark.parametrize("instance", configured_instances(), ids=lambda instance: instance["name"])
+def test_clients_and_domains_in_the_config_only_use_configured_groups(instance):
+    known = {"Default"} | {group["name"] for group in instance["groups"] or []}
 
-    used = {group for item in config["pihole_clients"] + config["pihole_domains"]
+    used = {group for item in (instance["clients"] or []) + (instance["domains"] or [])
             for group in item.get("groups", ["Default"])}
 
     assert used <= known
+
+
+def test_configures_every_instance_with_its_own_password(run):
+    main = FakePihole(domains=[{"domain": "old.example", "type": "deny", "kind": "exact"}])
+    outbound = FakePihole(password=OUTBOUND_PASSWORD, lists=["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"],
+                          domains=[{"domain": "api.telegram.org", "type": "allow", "kind": "exact"}])
+
+    result = run(None, instances=[("pihole", main, DESIRED), ("outbound", outbound, OUTBOUND_DESIRED)])
+
+    assert result.returncode == 0, output(result)
+    assert sorted(main.lists) == sorted(DESIRED["block_lists"])
+    assert len(main.domains) == 2
+    assert outbound.lists == []
+    assert sorted((d["domain"], d["type"], d["kind"]) for d in outbound.domains) == [
+        (".*", "deny", "regex"),
+        ("registry.npmjs.org", "allow", "exact"),
+    ]
+    assert main.sessions == set() and outbound.sessions == set()
+    assert OUTBOUND_PASSWORD not in output(result)
+
+
+def test_second_run_changes_no_instance(run):
+    main, outbound = FakePihole(), FakePihole(password=OUTBOUND_PASSWORD)
+    instances = [("pihole", main, DESIRED), ("outbound", outbound, OUTBOUND_DESIRED)]
+    assert run(None, instances=instances).returncode == 0
+    main.requests.clear()
+    outbound.requests.clear()
+
+    result = run(None, instances=instances)
+
+    assert result.returncode == 0, output(result)
+    assert main.changing_requests() == [] and outbound.changing_requests() == []
+
+
+def test_logs_out_of_every_instance_when_a_later_one_fails(run):
+    main = FakePihole()
+    outbound = FakePihole(password=OUTBOUND_PASSWORD, fail=("GET", "/api/lists"))
+
+    result = run(None, instances=[("pihole", main, DESIRED), ("outbound", outbound, OUTBOUND_DESIRED)])
+
+    assert result.returncode != 0
+    assert main.sessions == set() and outbound.sessions == set(), output(result)
+
+
+def test_configured_instances_are_the_main_pihole_and_outbound():
+    assert [instance["name"] for instance in configured_instances()] == ["pihole", "outbound"]
+
+
+def test_outbound_only_resolves_allowed_domains():
+    """outbound is the egress filter for the smart-home containers: everything not allowed is denied (#293)."""
+    outbound = next(instance for instance in configured_instances() if instance["name"] == "outbound")
+    domains = {(d["type"], d["kind"], d["domain"]) for d in outbound["domains"]}
+
+    assert ("deny", "regex", ".*") in domains
+    # A block list would only cost a gravity download: '.*' already blocks everything.
+    assert outbound["block_lists"] == []
