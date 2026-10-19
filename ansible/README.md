@@ -140,7 +140,16 @@ for a password on the fresh install, add `--ask-become-pass` to this first run.
 Reboot afterwards so the Docker group membership and sysctl settings take effect:
 `ssh -p 4242 testuser@192.168.1.7 sudo reboot`
 
-### 4. Certificate, stack, DNS
+### 4. Backup access
+
+On the Pi, authorise the restic key on the backup host `dungeon` once (the `secrets` role created the key and the
+script in step 3):
+
+```sh
+sudo /etc/docker/infrastructure/init-restic.sh
+```
+
+### 5. Certificate, stack, DNS
 
 The stack needs the nginx certificate, so it comes after `check-certificates.yaml` (the `stack` role stops
 with a message if the certificate is missing). It also needs `dungeon` to resolve on the Pi: the role looks up
@@ -152,15 +161,17 @@ ansible-playbook bootstrap.yaml --limit testbed --tags stack
 ansible-playbook setup-pihole.yaml --limit testbed
 ```
 
-### 5. Backups
+On a fresh host, the `stack` role restores `restore_items` (`inventory/group_vars/all/restore_items.yaml`) from
+the latest snapshot in the host's restic repository before it starts the stack (#287), then writes
+`/var/lib/restore/done`. resticprofile doesn't schedule backups before that marker exists, so the empty new host
+never becomes the latest snapshot. A host whose item folders already hold data only gets the marker.
 
-On the Pi, authorise the restic key on the backup host `dungeon` once:
+- `-e skip_restore=true`: a new host with nothing to restore; only writes the marker.
+- `-e restore_snapshot=<id>`: restore another snapshot than the latest.
+- If `dungeon` refuses the key or has no snapshot for the host, the run stops and says what to do.
 
-```sh
-sudo /etc/docker/infrastructure/init-restic.sh
-```
-
-To restore data from the last backup, see `basic-setup/setup.txt` (step 5).
+`sudo restic-restore stage <item>` and `sudo restic-restore apply <staging dir>` restore a single item on a running
+host (the targeted restore, #286, adds more). For anything else, see `basic-setup/setup.txt` (step 5).
 
 ## Tests
 

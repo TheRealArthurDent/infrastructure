@@ -91,6 +91,9 @@
     group: root
     mode: '0644'
 
+- name: Restore restore_items on a fresh host
+  ansible.builtin.import_tasks: restore.yaml
+
 - name: Deploy containers
   when: stack_manage_containers | bool
   block:

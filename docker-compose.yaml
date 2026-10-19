@@ -135,6 +135,8 @@ services:
       - /etc:/source/etc:ro
       - /var/lib/docker/volumes:/source/docker-volumes:ro
       - /var/restore:/restore-target:rw
+      # The clean-slate restore's marker (#287)
+      - /var/lib/restore:/restore-state:ro
       # Prom metrics for telegraf
       - /var/lib/resticprofile/metrics:/metrics
     restart: unless-stopped
@@ -159,6 +161,10 @@ services:
     command:
       - '-c'
       - |
+        # No backups before the clean-slate restore is done or skipped, or a fresh host's empty state would become
+        # the latest snapshot (#287). bootstrap.yaml writes the marker.
+        [ -f /restore-state/done ] || echo 'Waiting for /var/lib/restore/done (bootstrap.yaml) to schedule backups'
+        while [ ! -f /restore-state/done ]; do sleep 60; done
         resticprofile schedule --all || exit 1
         crond -f &
         crond_pid=$$!

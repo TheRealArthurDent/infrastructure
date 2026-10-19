@@ -39,6 +39,10 @@ jobs:
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r ansible/requirements.yaml
 
+      # The restic-restore tests run the helper against a local restic repository (#287).
+      - name: Install restic and rsync
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends restic rsync
+
       - name: Run pytest
         run: pytest -v ansible/tests/unit --junitxml=test-results/pytest.xml
 
