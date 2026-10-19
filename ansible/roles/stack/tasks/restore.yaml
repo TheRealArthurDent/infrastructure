@@ -1,7 +1,9 @@
 ---
-# Clean-slate restore (#287): on a fresh host, restore_items come back from the latest snapshot before the stack
-# starts. The helper decides and works (ansible/tests/unit/test_restic_restore.py); a marker makes every later run
-# a no-op. A host that already has data (raspi, testbed) only gets the marker.
+# Clean-slate restore (#287): on a fresh host, this stack's restore_items come back from the latest snapshot before
+# the stack starts. resticprofile backs up the whole host, so the helper is a host service: other stacks put their
+# own items into /etc/restic-restore/stacks/ and call it themselves. The helper decides and works
+# (ansible/tests/unit/test_restic_restore.py); a marker makes every later run a no-op. A host that already has
+# data (raspi, testbed) only gets the marker.
 
 - name: Ensure the restore helper is present
   ansible.builtin.copy:
@@ -11,16 +13,19 @@
     group: root
     mode: '0755'
 
-- name: Ensure the restore helper config directory exists
+- name: Ensure the restore helper config directories exist
   ansible.builtin.file:
-    path: /etc/restic-restore
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
+  loop:
+    - /etc/restic-restore
+    - /etc/restic-restore/stacks
 
 # No secrets: restic gets the passphrase from the resticprofile container.
-- name: Ensure the restore helper config is present
+- name: Ensure the restore helper host config is present
   ansible.builtin.copy:
     content: "{{ stack_restore_config | to_nice_json }}\n"
     dest: /etc/restic-restore/config.json
@@ -29,10 +34,19 @@
     mode: '0644'
   vars:
     stack_restore_config:
-      items: "{{ restore_items }}"
+      stacks_dir: /etc/restic-restore/stacks
+      state_dir: "{{ stack_restore_state_dir }}"
       source_mounts: "{{ stack_restore_source_mounts }}"
       staging: "{{ stack_restore_staging }}"
       runners: "{{ stack_restore_runners }}"
+
+- name: Ensure the restore items of this stack are listed for the helper
+  ansible.builtin.copy:
+    content: "{{ {'items': restore_items} | to_nice_json }}\n"
+    dest: /etc/restic-restore/stacks/{{ stack_project_name }}.json
+    owner: root
+    group: root
+    mode: '0644'
 
 # In check mode on a fresh host the helper isn't installed yet, and the compose file the one-off container needs
 # doesn't exist either.
@@ -44,15 +58,30 @@
 - name: Ensure restore_items are restored on a fresh host
   ansible.builtin.command:
     argv: >-
-      {{ ['/usr/local/bin/restic-restore', '--runner', 'oneoff', 'clean-slate',
-          '--marker', stack_restore_marker, '--snapshot', stack_restore_snapshot]
+      {{ ['/usr/local/bin/restic-restore', '--runner', 'oneoff', 'clean-slate', stack_project_name,
+          '--snapshot', stack_restore_snapshot]
          + (['--skip'] if stack_skip_restore | bool else [])
          + (['--dry-run'] if ansible_check_mode else []) }}
   register: stack_restore
   changed_when: stack_restore.rc == 0 and (stack_restore.stdout | from_json).changed
+  # Fails in the next task, with the next step for the user
+  failed_when: false
   # Read-only with --dry-run, so it also reports in check mode what a real run would do
   check_mode: false
   when: stack_restore_helper.stat.exists
+
+- name: Ensure the restore succeeded
+  ansible.builtin.fail:
+    msg: "{{ stack_restore.stderr }}\n{{ stack_restore_hints[stack_restore.rc] | default('') }}"
+  vars:
+    stack_restore_hints:
+      2: >-
+        Check that the backup host accepts this host's restic SSH key: run sudo {{ stack_dir }}/init-restic.sh
+        on the host, then run the playbook again.
+      3: >-
+        If this is a new host with nothing to restore, run the playbook again with
+        -e skip_infrastructure_restore=true.
+  when: stack_restore is not skipped and stack_restore.rc != 0
 
 - name: Report the restore
   ansible.builtin.debug:
@@ -63,5 +92,5 @@
   ansible.builtin.debug:
     msg: >-
       restic-restore isn't installed yet: a real run restores {{ restore_items | list | join(', ') }} from
-      snapshot {{ stack_restore_snapshot }}, unless the host has data already or skip_restore is set.
+      snapshot {{ stack_restore_snapshot }}, unless the host has data already or skip_infrastructure_restore is set.
   when: stack_restore is skipped

@@ -337,7 +337,7 @@
 
     - name: Read the restore marker
       ansible.builtin.slurp:
-        src: /var/lib/restore/done
+        src: /var/lib/restic-restore/infrastructure.done
       register: restore_marker
 
     - name: Check the restore marker names the restored snapshot and no backup was taken meanwhile
@@ -361,6 +361,15 @@
       ansible.builtin.stat:
         path: /usr/local/bin/restic-restore
       register: restore_helper
+
+    - name: Read the restore items of this stack
+      ansible.builtin.slurp:
+        src: /etc/restic-restore/stacks/infrastructure.json
+      register: restore_stack_items
+
+    - name: Check this stack's items are listed for the helper
+      ansible.builtin.assert:
+        that: (restore_stack_items.content | b64decode | from_json)['items'].keys() | sort == ['pihole', 'portainer']
 
     - name: Check the restore helper is installed and executable
       ansible.builtin.assert:

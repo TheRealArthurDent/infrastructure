@@ -163,15 +163,20 @@ ansible-playbook setup-pihole.yaml --limit testbed
 
 On a fresh host, the `stack` role restores `restore_items` (`inventory/group_vars/all/restore_items.yaml`) from
 the latest snapshot in the host's restic repository before it starts the stack (#287), then writes
-`/var/lib/restore/done`. resticprofile doesn't schedule backups before that marker exists, so the empty new host
-never becomes the latest snapshot. A host whose item folders already hold data only gets the marker.
+`/var/lib/restic-restore/infrastructure.done`. A host whose item folders already hold data only gets the marker.
 
-- `-e skip_restore=true`: a new host with nothing to restore; only writes the marker.
-- `-e restore_snapshot=<id>`: restore another snapshot than the latest.
+- `-e skip_infrastructure_restore=true`: a new host with nothing to restore; only writes the marker.
+- `-e infrastructure_restore_snapshot=<id>`: restore another snapshot than the latest.
 - If `dungeon` refuses the key or has no snapshot for the host, the run stops and says what to do.
 
-`sudo restic-restore stage <item>` and `sudo restic-restore apply <staging dir>` restore a single item on a running
-host (the targeted restore, #286, adds more). For anything else, see `basic-setup/setup.txt` (step 5).
+resticprofile backs up the whole host, so the restore helper `/usr/local/bin/restic-restore` is shared by all
+stacks: each one lists its items in `/etc/restic-restore/stacks/<stack>.json` and runs
+`restic-restore --runner oneoff clean-slate <stack>` before it starts. resticprofile doesn't schedule backups
+before every stack in `stack_backup_stacks` (role default: this stack only) has its marker, so a new host never
+backs up a half-restored state as the latest snapshot. Add a stack there once its deployment does its restore.
+
+`sudo restic-restore stage <stack>/<item>` and `sudo restic-restore apply <staging dir>` restore a single item on a
+running host (the targeted restore, #286, adds more). For anything else, see `basic-setup/setup.txt` (step 5).
 
 ## Tests
 
