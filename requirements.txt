@@ -10,4 +10,4 @@ molecule-plugins[docker]==26.10.12
 pytest==9.1.1
 
 # Git hooks (gitleaks, no commits to main, ansible-lint); activate once per clone: .venv/bin/pre-commit install
-pre-commit==4.6.2
+pre-commit==4.7.0
