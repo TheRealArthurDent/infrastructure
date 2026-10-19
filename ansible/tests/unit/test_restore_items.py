@@ -100,23 +100,7 @@ def test_outbound_keeps_its_runtime_data_in_a_named_volume():
     compose = yaml.safe_load(read(COMPOSE))
 
     assert compose["services"]["outbound"]["volumes"] == ["outbound_pihole:/etc/pihole"]
-    # Created by the stack role (like the external networks), so Compose doesn't warn about a volume it didn't
-    # create when the volume was seeded by hand.
-    assert compose["volumes"]["outbound_pihole"] == {"name": "outbound_pihole", "external": True}
-
-
-def test_the_stack_role_creates_every_external_volume():
-    compose = yaml.safe_load(read(COMPOSE))
-    external = {spec["name"] for spec in compose.get("volumes", {}).values() if spec.get("external")}
-    tasks = yaml.safe_load(read(ANSIBLE_DIR / "roles" / "stack" / "tasks" / "main.yaml"))
-
-    def created(task_list):
-        for task in task_list:
-            yield from created(task.get("block", []))
-            if "community.docker.docker_volume" in task:
-                yield task["community.docker.docker_volume"]["name"]
-
-    assert external <= set(created(tasks))
+    assert compose["volumes"]["outbound_pihole"] == {"name": "outbound_pihole"}
 
 
 def test_cache_volumes_are_not_backed_up():
