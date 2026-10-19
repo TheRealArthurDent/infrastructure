@@ -13,6 +13,8 @@ if [ -f "$ENV_FILE" ]; then
       echo 'Network "outbound" does not exist. Creating it now...'
       docker network create --subnet 172.30.1.128/25 --ip-range 172.30.1.192/26 outbound
     fi
+    # External in docker-compose.yaml, like the networks (#293)
+    docker volume create outbound_pihole > /dev/null
     export HOSTNAME
     export DUNGEON_IP; DUNGEON_IP=$(getent ahosts dungeon | awk '/STREAM/ {print $1; exit}')
 

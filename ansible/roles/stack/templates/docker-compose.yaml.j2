@@ -193,6 +193,7 @@ services:
 volumes:
   outbound_pihole:
     name: outbound_pihole
+    external: true
 networks:
   nginx:
     name: nginx
