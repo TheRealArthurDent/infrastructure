@@ -34,12 +34,3 @@ restore_items:
     note: >-
       To be removed later: the folder used to be the provisioning path; setup-pihole.yaml now configures the
       Pi-hole through its API.
-  pihole_outbound:
-    paths:
-      - /etc/docker/infrastructure/pihole_outbound/pihole
-      - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d
-    containers: [outbound]
-    preserve:
-      - pihole-FTL.db*
-    note: >-
-      The second Pi-hole isn't provisioned by Ansible yet (#293). Remove the item once it is.

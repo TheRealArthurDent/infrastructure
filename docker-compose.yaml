@@ -92,10 +92,10 @@ services:
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
       FTLCONF_dns_dnssec: 'true'
       FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
-    # Volumes store your data between container upgrades
+    # Only a cache: setup-pihole.yaml provisions this Pi-hole, so the volume isn't backed up. It keeps the egress
+    # filter closed when the container is recreated; an empty Pi-hole would allow everything (#293).
     volumes:
-      - /etc/docker/infrastructure/pihole_outbound/pihole:/etc/pihole
-      - /etc/docker/infrastructure/pihole_outbound/dnsmasq.d:/etc/dnsmasq.d
+      - outbound_pihole:/etc/pihole
     # Recommended but not required (DHCP needs NET_ADMIN)
     # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
     #cap_add:
@@ -190,6 +190,9 @@ services:
       - outbound  # internet
     dns:
       - 172.30.1.153
+volumes:
+  outbound_pihole:
+    name: outbound_pihole
 networks:
   nginx:
     name: nginx
