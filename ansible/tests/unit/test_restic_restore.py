@@ -186,6 +186,23 @@ def test_resticprofile_schedules_backups_only_after_every_stack_is_restored():
     assert loop < wait < script.index("resticprofile schedule")
 
 
+def test_stage_copes_with_resticprofile_output_around_the_json(env):
+    # resticprofile prints its own lines on stdout, before and after restic's JSON (seen on testbed)
+    noisy = env.tmp / "bin" / "noisy-restic"
+    noisy.write_text('#!/bin/sh\necho "[INFO] profile default"\n"$@"\nrc=$?\necho "[INFO] done"\nexit $rc\n')
+    noisy.chmod(0o755)
+    env.config["runners"]["exec"] = [str(noisy), *env.config["runners"]["exec"]]
+    env.config_path.write_text(json.dumps(env.config))
+    env.write(env.source, "portainer/data/portainer.db", "from backup")
+    snapshot = env.backup()
+
+    code, out, err = env.run("stage", "infrastructure/portainer")
+
+    assert code == 0, err
+    staging = Path(out.strip().splitlines()[-1])
+    assert json.loads((staging / ".restic-restore.json").read_text())["snapshot"] == snapshot
+
+
 # stage
 
 

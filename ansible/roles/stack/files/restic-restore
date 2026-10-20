@@ -68,10 +68,15 @@ def restic(config, runner, *args):
 def resolve_snapshot(config, runner, snapshot):
     """The full id of snapshot (an id, a short id or latest), or None if the repository has none."""
     out = restic(config, runner, "snapshots", "--json", snapshot)
-    # resticprofile may print its own lines before restic's JSON
-    start = out.find("[")
-    snapshots = json.loads(out[start:]) if start >= 0 else []
-    return snapshots[-1]["id"] if snapshots else None
+    # resticprofile prints its own lines around restic's JSON, some of them starting with "[" too
+    for line in out.splitlines():
+        try:
+            snapshots = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(snapshots, list):
+            return snapshots[-1]["id"] if snapshots else None
+    raise RestoreError(f"no snapshot list in the output of restic snapshots:\n{out.strip()}")
 
 
 def stack_items(config, stack):
