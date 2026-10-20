@@ -27,26 +27,4 @@ sudo reboot
     b >> chown root:root /etc/sudoers.d/smarthome
     c >> chmod 440 /etc/sudoers.d/smarthome
 
-5. Restore from remote backup
-
-from raspi:
-Login un dungeon once in order to get the known host entry
-~~~
-ssh restic@192.168.1.5 -p 1359
-~~~
-
-~~~
-sudo docker run --rm \
-  --name restic-restore \
-  --entrypoint restic \
-  --add-host=dungeon:192.168.1.5 \
-  -v /etc/docker/infrastructure/restic/.ssh:/root/.ssh \
-  -v /restore:/restore-target \
-  -e RESTIC_PASSWORD=test \
-  creativeprojects/resticprofile:latest \
-  -r sftp:restic@dungeon:/media/backup/restic/raspi \
-  --option sftp.command="ssh -p 1359 -l restic dungeon -s sftp" \
-  restore \
-  latest \
-  --target /restore-target
-~~~
+5. Restore from remote backup: see the "Restore" section in ansible/README.md

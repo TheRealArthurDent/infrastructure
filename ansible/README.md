@@ -165,41 +165,168 @@ ansible-playbook bootstrap.yaml --limit testbed --tags stack
 ansible-playbook setup-pihole.yaml --limit testbed
 ```
 
-On a fresh host, the `stack` role restores `restore_items` (`inventory/group_vars/all/restore_items.yaml`) from
-the latest snapshot in the host's restic repository before it starts the stack (#287), then writes
-`/var/lib/restic-restore/infrastructure.done`. A host whose item folders already hold data only gets the marker.
+On a fresh host, the `stack` role restores the state that isn't IaC from the backup before it starts the stack;
+see [Clean slate](#clean-slate-reinstall-or-crash) below.
 
-- `-e skip_infrastructure_restore=true`: a new host with nothing to restore; only writes the marker.
-- `-e infrastructure_restore_snapshot=<id>`: restore another snapshot than the latest.
-- If `dungeon` refuses the key or has no snapshot for the host, the run stops and says what to do.
+## Restore
 
-resticprofile backs up the whole host, so the restore helper `/usr/local/bin/restic-restore` is shared by all
-stacks: each one lists its items in `/etc/restic-restore/stacks/<stack>.json` and runs
-`restic-restore --runner oneoff clean-slate <stack>` before it starts. resticprofile doesn't schedule backups
-before every stack in `stack_backup_stacks` (role default: this stack only) has its marker, so a new host never
-backs up a half-restored state as the latest snapshot. Add a stack there once its deployment does its restore.
+resticprofile backs up `/home`, `/etc` and `/var/lib/docker/volumes` every night at 03:00 to the host's own
+repository `sftp:restic@dungeon:/media/backup/restic/<host>`. rsnapshot keeps local copies of the same trees
+under `/var/cache/backup/` (7 daily, 4 weekly), which are gone after a crash.
 
-### Targeted restore
+Most of the host doesn't need a restore: Ansible renders the configs, certificates and `.env` files (secrets come
+from KeePass), `setup-pihole.yaml` configures the Pi-hole, and the restic SSH key is created anew. What does
+need one is listed as `restore_items` in `inventory/group_vars/all/restore_items.yaml` (for this stack: the
+Portainer data and the Pi-hole folder). The backup excludes `.env` files, `*secret*`, private keys and
+`pihole-FTL.db`, so a restore never brings back stale secrets.
 
-On a running host, the helper brings back single items or files (#286). It runs restic in the running
-resticprofile container, and takes host paths:
+Both scenarios use the helper `/usr/local/bin/restic-restore`, which the `stack` role installs. It runs restic in
+the resticprofile container, so repository, passphrase and SSH key are the ones the backups use, and it takes
+host paths. `sudo restic-restore --help` lists all commands. A restore always goes into a staging directory
+under `/var/restore/` first and only `apply` puts it in place.
+
+### Targeted restore (host running)
+
+Something was changed or deleted by accident and Ansible can't bring it back, e.g. a Portainer setting. On the
+Pi:
+
+1. Pick a snapshot. restic snapshots are taken at 03:00; the local rsnapshot copies (`daily.0` = last night,
+   `daily.1`, ..., `weekly.0`, ...) need no network.
+
+   ```sh
+   sudo restic-restore snapshots                    # restic, from dungeon
+   sudo restic-restore snapshots --from rsnapshot   # local copies
+   ```
+
+2. Optionally check that the snapshot has what you're missing:
+
+   ```sh
+   sudo restic-restore ls /etc/docker/infrastructure/portainer/data --snapshot <id>
+   sudo restic-restore find 'portainer.db*' --snapshot <id>     # without --snapshot: the latest
+   ```
+
+3. Stage the item. This prints the staging directory and changes nothing else:
+
+   ```sh
+   sudo restic-restore stage infrastructure/portainer --snapshot <id>
+   sudo restic-restore stage infrastructure/portainer --from rsnapshot --snapshot daily.1
+   ```
+
+   Without `--snapshot` it takes the latest snapshot (the newest local copy with `--from rsnapshot`). Without a
+   local copy, `--from rsnapshot` falls back to the latest restic snapshot.
+
+4. See what `apply` would change, then apply it. `apply` stops the item's containers, mirrors the staged files
+   into place (files listed under `preserve`, e.g. `pihole-FTL.db`, are kept) and starts the containers again:
+
+   ```sh
+   sudo restic-restore diff <staging dir>
+   sudo restic-restore apply <staging dir>
+   ```
+
+5. Check the service (e.g. log in to Portainer), then remove the staging directory:
+
+   ```sh
+   sudo restic-restore clean          # staging dirs older than 7 days; --all for all of them
+   ```
+
+Anything that isn't an item, e.g. a single file of another stack, can be staged by its host path and copied by
+hand; `apply` refuses it, since it doesn't know which containers to stop:
 
 ```sh
-sudo restic-restore snapshots                                   # add --from rsnapshot for the local copies
-sudo restic-restore ls /etc/docker/infrastructure/portainer/data --snapshot <id>
-sudo restic-restore find 'portainer.db*'                        # in the latest snapshot, or --snapshot <id>
-sudo restic-restore stage infrastructure/portainer              # prints the staging dir under /var/restore
-sudo restic-restore diff <staging dir>                          # what apply would change
-sudo restic-restore apply <staging dir>                         # stops the item's containers meanwhile
-sudo restic-restore clean                                       # staging dirs older than 7 days, or --all
+sudo restic-restore stage /etc/docker/smart-home/some/file --snapshot <id>
+# the file lies under its snapshot path in the staging dir (<staging dir>/source/etc/docker/smart-home/...):
+# stop the container that uses it, copy the file into place with cp -a, start the container
 ```
 
-- `stage ... --from rsnapshot [--snapshot daily.1]` takes the local rsnapshot copy under `/var/cache/backup/`
-  (fast, no network). Without a local copy it falls back to the latest restic snapshot.
-- `stage <host path>` stages any path in the backup for copying by hand; `apply` only puts items in place, since
-  only for them it knows the containers to stop and the files to keep (`preserve`).
+### Clean slate (reinstall or crash)
 
-For anything else, see `basic-setup/setup.txt` (step 5).
+The host is rebuilt and its non-IaC state comes back from restic automatically, before the stack starts. Follow
+[Set up a host from scratch](#set-up-a-host-from-scratch):
+
+1. Flash, first boot, `bootstrap.yaml --skip-tags stack`, reboot (steps 1 to 3).
+2. Authorise the new restic key on `dungeon` with `sudo /etc/docker/infrastructure/init-restic.sh` (step 4). The
+   `secrets` role creates a new key per install; it reaches the existing repository of the host, since the
+   repository path is the hostname and the passphrase comes from KeePass.
+3. `check-certificates.yaml`, then `bootstrap.yaml --tags stack` (step 5). Before `docker compose up`, the role
+   runs `restic-restore --runner oneoff clean-slate infrastructure`, which restores every item from the latest
+   snapshot in a one-off resticprofile container and writes the marker `/var/lib/restic-restore/infrastructure.done`.
+   The `--check --diff` run before it reports `would restore infrastructure: pihole, portainer from snapshot <id>`.
+4. `setup-pihole.yaml` (step 5) puts the Pi-hole configuration from `configs/pihole.yaml` on top.
+5. A second `bootstrap.yaml --tags stack` run ends with `changed=0`: the marker makes the restore a no-op.
+
+What the role decides:
+
+- Marker present: nothing to do. Every later run is a no-op, so a deliberate second restore of the whole stack
+  goes through the targeted restore, not by deleting the marker.
+- No marker, but an item folder already holds files (a host that existed before #287, like raspi): it only
+  writes the marker, with the folder named in it.
+- No marker, item folders empty or missing: it restores. A run that dies halfway left
+  `infrastructure.done.restoring` and restores again on the next run.
+
+Options and failures:
+
+- `-e infrastructure_restore_snapshot=<id>`: restore another snapshot than the latest, e.g. when the latest
+  one was taken after the data was already broken. Find the ID with `sudo restic-restore --runner oneoff snapshots`.
+- `-e skip_infrastructure_restore=true`: a new host with nothing to restore; only writes the marker.
+- The run stops with a hint if `dungeon` refuses the key (run `init-restic.sh`, then the playbook again) or the
+  repository has no snapshot (a new host: run again with `skip_infrastructure_restore`).
+
+Backups stay off until the restore is done: resticprofile schedules them only once every stack in
+`stack_backup_stacks` (role default: this stack) has its marker, so a fresh host never backs up its empty or
+half-restored state as the latest snapshot. `docker logs resticprofile` says which marker it waits for. On a
+host that already has data, run `bootstrap.yaml` once (it writes the marker) before deploying with `deploy.sh`,
+or backups pause there too.
+
+### Other stacks
+
+resticprofile backs up the whole host, so the helper is shared. Every stack lists its items in
+`/etc/restic-restore/stacks/<stack>.json` (`{"items": {name: {paths, containers, preserve}}}`), runs
+`restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to `stack_backup_stacks` once
+its deployment does. Its items then work with `stage <stack>/<item>` and `apply` like this stack's. The
+smart-home stack follows in TheRealArthurDent/smart-home#276; until then, its files only come back with
+`stage <host path>`.
+
+### Restore drill (testbed only)
+
+Run the drill on testbed against testbed's own repository, never on raspi, e.g. after changes to the helper or
+the restore tasks, and now and then to know the backup restores. It needs at least one testbed snapshot
+(`sudo restic-restore snapshots`).
+
+Targeted, on the Pi:
+
+```sh
+sudo restic-restore stage infrastructure/portainer
+sudo restic-restore diff <staging dir>
+sudo restic-restore apply <staging dir>    # Portainer is down for a moment, then log in
+sudo restic-restore clean --all
+```
+
+Clean slate without reflashing: stop the item containers, put the item folders and the marker aside, and let the
+`stack` role restore them.
+
+```sh
+# On the Pi. The containers must stay stopped: a started Pi-hole fills its empty folder and the role then
+# takes it for existing data.
+sudo docker stop portainer pihole
+sudo mkdir /var/tmp/drill
+sudo mv /etc/docker/infrastructure/portainer/data /var/tmp/drill/portainer-data
+sudo mv /etc/docker/infrastructure/pihole/pihole /var/tmp/drill/pihole
+sudo mv /var/lib/restic-restore/infrastructure.done /var/tmp/drill/
+
+# On the control node, in ansible/
+ansible-playbook bootstrap.yaml --limit testbed --tags stack --check --diff   # "would restore ..."
+ansible-playbook bootstrap.yaml --limit testbed --tags stack                  # "restored ..."
+ansible-playbook bootstrap.yaml --limit testbed --tags stack                  # changed=0
+
+# On the Pi: log in to Portainer and the Pi-hole, check the marker, compare with what was there before (files
+# changed since the last backup and pihole-FTL.db differ), then clean up
+sudo cat /var/lib/restic-restore/infrastructure.done
+sudo diff -rq /var/tmp/drill/portainer-data /etc/docker/infrastructure/portainer/data
+sudo rm -rf /var/tmp/drill
+```
+
+The full drill reflashes testbed and follows [Clean slate](#clean-slate-reinstall-or-crash); only it covers
+`init-restic.sh` and the one-off container on a host without a running stack.
 
 ## Tests
 
