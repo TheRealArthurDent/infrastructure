@@ -18,7 +18,7 @@ Defined in `inventory/hosts.yaml`, which only says how to reach each host. Setti
 `inventory/host_vars/<host>.yaml`:
 
 | Host | IP | SSH port | User |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `raspi` | 192.168.1.2 | 1357 | `smarthome` (production) |
 | `testbed` | 192.168.1.7 | 4242 | `testuser` |
 
