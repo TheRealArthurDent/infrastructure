@@ -1,6 +1,8 @@
-- name: Debug
+- name: Show the Docker repository for this host
   ansible.builtin.debug:
-    msg: "Add Docker repository for {{ distribution }} {{ distribution_release }} ({{ architecture }})"
+    msg: >-
+      Add Docker repository for {{ docker_apt_distribution }} {{ docker_apt_release }}
+      ({{ docker_apt_architecture }})
 
 # deb822_repository needs python3-debian on the host, and refuses to run in
 # check mode without it. So this one package is installed even with --check.
@@ -22,7 +24,7 @@
 # in Signed-By.
 - name: Ensure the Docker package signing key is in its own keyring
   ansible.builtin.get_url:
-    url: https://download.docker.com/linux/{{ distribution }}/gpg
+    url: https://download.docker.com/linux/{{ docker_apt_distribution }}/gpg
     dest: /etc/apt/keyrings/docker.asc
     checksum: "sha256:1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570"
     owner: root
@@ -44,10 +46,10 @@
   ansible.builtin.deb822_repository:
     name: docker
     types: deb
-    uris: https://download.docker.com/linux/{{ distribution }}
-    suites: "{{ distribution_release }}"
+    uris: https://download.docker.com/linux/{{ docker_apt_distribution }}
+    suites: "{{ docker_apt_release }}"
     components: stable
-    architectures: "{{ architecture }}"
+    architectures: "{{ docker_apt_architecture }}"
     signed_by: /etc/apt/keyrings/docker.asc
     state: present
   notify: Update apt cache
@@ -76,3 +78,21 @@
     name: "{{ ansible_user }}"
     groups: docker
     append: true
+
+- name: Ensure /etc/docker exists
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# Moved here from the secrets role: it isn't a secret, and a change needs a daemon restart (#237).
+- name: Ensure the Docker daemon config is present
+  ansible.builtin.template:
+    src: etc/docker/daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart Docker

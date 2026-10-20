@@ -2,7 +2,6 @@
   hosts: all
   gather_facts: true
   vars:
-    architecture: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
     # Dummy secrets instead of KeePass lookups. Every value containing LEAKCANARY is a secret;
     # verify.yaml fails if one of them shows up in the Ansible log (#230).
     pihole_password: LEAKCANARY-pihole
@@ -22,6 +21,9 @@
     nodered_github_email: test@example.com
     # No Docker daemon runs inside the test container.
     certificate_check_reload_nginx: false
+    docker_restart_daemon: false
+    # A container can't change the host's kernel settings.
+    base_sysctl_reload: false
     stack_manage_containers: false
     certificate_check_root_ca_passphrase: test-ca-passphrase
     # restic directly instead of the resticprofile container, on the repository from prepare.yaml

@@ -6,9 +6,6 @@ all:
       ansible_user: smarthome
       ansible_ssh_private_key_file: ~/.ssh/id_ed25519
       ansible_become: true
-      distribution_release: trixie
-      distribution: debian
-      architecture: arm64
       dhparameter_bits: 4096
     testbed:
       ansible_host: 192.168.1.7
@@ -16,7 +13,4 @@ all:
       ansible_user: testuser
       ansible_ssh_private_key_file: ~/.ssh/id_ed25519
       ansible_become: true
-      distribution_release: trixie
-      distribution: debian
-      architecture: arm64
       dhparameter_bits: 2048

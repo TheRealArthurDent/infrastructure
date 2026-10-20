@@ -1,10 +1,3 @@
-- name: Update apt
-  ansible.builtin.apt:
-    update_cache: true
-    upgrade: dist
-    autoclean: true
-    autoremove: true
-
 - name: "Generate Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
   community.crypto.openssl_dhparam:
     path: /etc/ssl/certs/dhparam.pem
@@ -13,21 +6,25 @@
     mode: '0644'
     size: "{{ dhparameter_bits }}"
 
+# Package upgrades are update.yaml's job: here they'd change something on every run once Debian has published
+# updates (#237). The cache is only refreshed when it's older than a day.
 - name: Install base packages
   ansible.builtin.apt:
     name:
       - rsnapshot
     state: present
+    update_cache: true
+    cache_valid_time: 86400
 
 - name: Provision config files
   block:
-    - name: Copy redis overcommit config
-      ansible.builtin.copy:
-        src: etc/sysctl.d/90-overcommit-memory.conf
-        dest: /etc/sysctl.d/90-overcommit-memory.conf
-        owner: root
-        group: root
-        mode: '0644'
+    # Writes the setting and applies it right away, not only after the next reboot (#237).
+    - name: Ensure redis may overcommit memory
+      ansible.posix.sysctl:
+        name: vm.overcommit_memory
+        value: '1'
+        sysctl_file: /etc/sysctl.d/90-overcommit-memory.conf
+        reload: "{{ base_sysctl_reload }}"
 
     # A broken sudoers file locks out sudo, so it's checked before it's
     # put in place (#231).
