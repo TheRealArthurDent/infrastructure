@@ -44,8 +44,6 @@ provisioner:
         # Connect as the unprivileged deploy user, like on the real Pi.
         ansible_user: smarthome
         ansible_become: true
-        distribution: debian
-        distribution_release: trixie
         # Fast DH params for tests; production uses inventory values.
         dhparameter_bits: 1024
 

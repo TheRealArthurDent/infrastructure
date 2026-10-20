@@ -80,6 +80,45 @@
         that: "'Signed-By: /etc/apt/keyrings/docker.asc' in (docker_sources.content | b64decode)"
         fail_msg: docker.sources does not pin Signed-By to /etc/apt/keyrings/docker.asc
 
+    - name: Gather distribution and network facts
+      ansible.builtin.setup:
+        gather_subset: [distribution, network]
+
+    # Molecule passes no distribution vars, so these come from facts (#237).
+    - name: Check Docker repository matches the host's release and architecture
+      vars:
+        sources: "{{ docker_sources.content | b64decode }}"
+        expected_arch: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
+      ansible.builtin.assert:
+        that:
+          - "'URIs: https://download.docker.com/linux/debian' in sources"
+          - "'Suites: ' ~ ansible_facts['distribution_release'] in sources"
+          - "'Architectures: ' ~ expected_arch in sources"
+        fail_msg: "docker.sources doesn't match this host: {{ sources }}"
+
+    - name: Stat Docker daemon config
+      ansible.builtin.stat:
+        path: /etc/docker/daemon.json
+      register: docker_daemon_file
+
+    - name: Read Docker daemon config
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: docker_daemon_config
+
+    # The containers resolve through this host's own Pi-hole, not a hard-coded raspi address (#237).
+    - name: Check Docker daemon uses this host as DNS server
+      vars:
+        config: "{{ docker_daemon_config.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - docker_daemon_file.stat.pw_name == 'root'
+          - docker_daemon_file.stat.mode == '0644'
+          - config.dns == [ansible_facts['default_ipv4']['address']]
+          - config['max-concurrent-uploads'] == 1
+          - config['max-concurrent-downloads'] == 1
+        fail_msg: "Expected dns [{{ ansible_facts['default_ipv4']['address'] }}], got {{ config }}"
+
     - name: Read deploy user groups
       ansible.builtin.command: id -nG smarthome
       register: user_groups

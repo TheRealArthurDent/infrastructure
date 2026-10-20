@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 ANSIBLE_DIR = Path(__file__).parents[2]
-PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml"]
+PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml", "update.yaml"]
 
 
 def run_playbook(playbook, *args):
