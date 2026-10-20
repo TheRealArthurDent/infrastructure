@@ -5,10 +5,20 @@ resticprofile backs up the whole host, so this is a host service shared by all s
 of the raspberry repo, which also writes the host config /etc/restic-restore/config.json. Every stack lists the
 state it restores in /etc/restic-restore/stacks/<stack>.json ({"items": {name: {paths, containers, preserve}}}).
 
-  restic-restore stage STACK/ITEM [--snapshot ID]  restore an item into a new staging dir and print it
+  restic-restore snapshots [--from rsnapshot]      list the snapshots
+  restic-restore ls HOST_PATH [--snapshot ID]      list what a snapshot holds at a host path
+  restic-restore find PATTERN [--snapshot ID]      find files by name in a snapshot (default: the latest)
+  restic-restore stage STACK/ITEM|HOST_PATH [--snapshot ID] [--from rsnapshot]
+                                                   restore an item or a path into a new staging dir and print it
+  restic-restore diff STAGING                      show what apply would change
   restic-restore apply STAGING [--no-containers]   put a staged item in place (stops its containers meanwhile)
+  restic-restore clean [--older-than DAYS | --all] remove staging dirs (default: older than 7 days)
   restic-restore --runner oneoff clean-slate STACK [--skip] [--snapshot ID] [--dry-run]
                                                    restore all items of STACK on a fresh host, once (#287)
+
+apply only puts items in place: their containers and preserved files are known. A staged host path is for copying
+by hand. --from rsnapshot takes the local rsnapshot copy (fast, no network); its snapshots are named like daily.0.
+Without a local copy, stage --from rsnapshot falls back to the latest restic snapshot.
 
 clean-slate writes /var/lib/restic-restore/STACK.done; resticprofile schedules backups only once every stack it
 waits for has its marker. It exits with 10 if restic can't reach the repository and 11 if there is no snapshot.
@@ -20,6 +30,7 @@ Snapshot paths are the container's (/source/etc/...); source_mounts in the confi
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -52,6 +63,15 @@ def snapshot_path(host_path, mounts):
     raise RestoreError(f"{host_path} is not in the backup (no source mount covers it)")
 
 
+def host_path(path, mounts):
+    """The host path of a snapshot path, the reverse of snapshot_path; unchanged if no mount covers it."""
+    path = PurePosixPath(path)
+    for host, source in sorted(mounts.items(), key=lambda m: -len(m[1])):
+        if path == PurePosixPath(source) or PurePosixPath(source) in path.parents:
+            return str(PurePosixPath(host) / path.relative_to(source))
+    return str(path)
+
+
 def log(message):
     print(message, file=sys.stderr, flush=True)
 
@@ -65,18 +85,100 @@ def restic(config, runner, *args):
     return result.stdout
 
 
-def resolve_snapshot(config, runner, snapshot):
-    """The full id of snapshot (an id, a short id or latest), or None if the repository has none."""
-    out = restic(config, runner, "snapshots", "--json", snapshot)
-    # resticprofile prints its own lines around restic's JSON, some of them starting with "[" too
+def json_lines(out):
+    """The JSON values among the lines of out: resticprofile prints its own lines around restic's JSON."""
     for line in out.splitlines():
         try:
-            snapshots = json.loads(line)
+            yield json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(snapshots, list):
-            return snapshots[-1]["id"] if snapshots else None
-    raise RestoreError(f"no snapshot list in the output of restic snapshots:\n{out.strip()}")
+
+
+def json_list(out, command):
+    # Some of resticprofile's own lines start with "[" too
+    for value in json_lines(out):
+        if isinstance(value, list):
+            return value
+    raise RestoreError(f"no JSON list in the output of restic {command}:\n{out.strip()}")
+
+
+def resolve_snapshot(config, runner, snapshot):
+    """The full id of snapshot (an id, a short id or latest), or None if the repository has none."""
+    snapshots = json_list(restic(config, runner, "snapshots", "--json", snapshot), "snapshots")
+    return snapshots[-1]["id"] if snapshots else None
+
+
+def human_size(size):
+    for unit in ["B", "KiB", "MiB", "GiB"]:
+        if size < 1024:
+            break
+        size /= 1024
+    else:
+        unit = "TiB"
+    return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+
+
+def restic_snapshots(config, runner):
+    """One line per snapshot, oldest first: time, short id, size (restic 0.17+ reports it) and host paths."""
+    lines = []
+    for snap in json_list(restic(config, runner, "snapshots", "--json"), "snapshots"):
+        size = snap.get("summary", {}).get("total_bytes_processed")
+        paths = ", ".join(host_path(p, config["source_mounts"]) for p in snap["paths"])
+        time_ = snap["time"][:16].replace("T", " ")
+        lines.append(f"{time_}  {snap['short_id']}  {human_size(size) if size else '-':>10}  {paths}")
+    return lines
+
+
+RSNAPSHOT_NAME = re.compile(r"^[a-z]+\.[0-9]+$")
+
+
+def rsnapshot_snapshots(config):
+    """The names of the local rsnapshot snapshots, newest first."""
+    root = config.get("rsnapshot", {}).get("root")
+    if not root or not os.path.isdir(root):
+        return []
+    names = [n for n in os.listdir(root) if RSNAPSHOT_NAME.match(n) and os.path.isdir(os.path.join(root, n))]
+    return sorted(names, key=lambda n: -os.path.getmtime(os.path.join(root, n)))
+
+
+def local_snapshots(config):
+    """One line per rsnapshot snapshot, newest first: time and name."""
+    lines = []
+    for name in rsnapshot_snapshots(config):
+        mtime = os.path.getmtime(os.path.join(config["rsnapshot"]["root"], name))
+        lines.append(f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(mtime))}  {name}")
+    return lines
+
+
+def rsnapshot_dir(config, name):
+    return os.path.join(config["rsnapshot"]["root"], name, config["rsnapshot"]["host"])
+
+
+def ls(config, runner, path, snapshot="latest"):
+    """One line per entry at path in the snapshot: permissions, size, mtime, host path."""
+    source = snapshot_path(path, config["source_mounts"])
+    lines = []
+    for node in json_lines(restic(config, runner, "ls", "--json", snapshot, source)):
+        # The first line describes the snapshot
+        if not isinstance(node, dict) or "path" not in node or "paths" in node:
+            continue
+        size = human_size(node["size"]) if node.get("type") == "file" else "-"
+        mtime = node.get("mtime", "")[:16].replace("T", " ")
+        path_ = host_path(node["path"], config["source_mounts"])
+        lines.append(f"{node.get('permissions', '?')}  {size:>10}  {mtime}  {path_}")
+    if not lines:
+        raise RestoreError(f"{path} is not in snapshot {snapshot}")
+    return lines
+
+
+def find(config, runner, pattern, snapshot="latest"):
+    """The host paths in the snapshot whose name matches pattern."""
+    out = restic(config, runner, "find", "--json", "--snapshot", snapshot, pattern)
+    return [
+        host_path(match["path"], config["source_mounts"])
+        for result in json_list(out, "find")
+        for match in result["matches"]
+    ]
 
 
 def stack_items(config, stack):
@@ -95,22 +197,66 @@ def item_config(config, stack, name):
     return items[name]
 
 
-def stage(config, runner, stack, name, snapshot="latest", snapshot_id=None):
+def stage(config, runner, stack, name, snapshot="latest", snapshot_id=None, source="restic"):
+    """Restores an item into a new staging dir and returns it."""
     item = item_config(config, stack, name)
-    if snapshot_id is None:
+    meta = {"stack": stack, "item": name}
+    return stage_paths(config, runner, item["paths"], f"{stack}-{name}", meta, snapshot, snapshot_id, source)
+
+
+def stage_path(config, runner, path, snapshot="latest", source="restic"):
+    """Restores a host path into a new staging dir and returns it."""
+    path = os.path.normpath(path)
+    label = path.strip("/").replace("/", "_") or "root"
+    return stage_paths(config, runner, [path], label, {"paths": [path]}, snapshot, None, source)
+
+
+def stage_paths(config, runner, paths, label, meta, snapshot, snapshot_id, source):
+    mounts = config["source_mounts"]
+    if source == "rsnapshot":
+        local = rsnapshot_snapshots(config)
+        if snapshot == "latest" and local:
+            snapshot = local[0]
+        elif snapshot == "latest":
+            log("no local rsnapshot copy, falling back to restic")
+            source = "restic"
+        elif snapshot not in local:
+            raise RestoreError(f"no rsnapshot snapshot {snapshot}; there are: {', '.join(local) or 'none'}")
+    if source == "restic" and snapshot_id is None:
         snapshot_id = resolve_snapshot(config, runner, snapshot)
         if snapshot_id is None:
             raise RestoreError(f"snapshot {snapshot} not found")
-    dirname = f"{time.strftime('%Y%m%d-%H%M%S')}-{stack}-{name}"
+    dirname = f"{time.strftime('%Y%m%d-%H%M%S')}-{label}"
     host_dir = os.path.join(config["staging"]["host"], dirname)
     os.makedirs(host_dir, mode=0o700)
-    includes = []
-    for path in item["paths"]:
-        includes += ["--include", snapshot_path(path, config["source_mounts"])]
-    target = os.path.join(config["staging"]["restic"], dirname)
-    restic(config, runner, "restore", snapshot_id, "--target", target, *includes)
-    with open(os.path.join(host_dir, META), "w") as f:
-        json.dump({"stack": stack, "item": name, "snapshot": snapshot_id}, f)
+    try:
+        if source == "restic":
+            includes = []
+            for path in paths:
+                includes += ["--include", snapshot_path(path, mounts)]
+            target = os.path.join(config["staging"]["restic"], dirname)
+            restic(config, runner, "restore", snapshot_id, "--target", target, *includes)
+        else:
+            # The same layout as a restic restore, so diff and apply don't care where it came from
+            snapshot_id = f"rsnapshot:{snapshot}"
+            for path in paths:
+                copy = os.path.join(rsnapshot_dir(config, snapshot), path.lstrip("/"))
+                if os.path.lexists(copy):
+                    staged_path = os.path.join(host_dir, snapshot_path(path, mounts).lstrip("/"))
+                    os.makedirs(os.path.dirname(staged_path), exist_ok=True)
+                    trailing = "/" if os.path.isdir(copy) else ""
+                    subprocess.run(
+                        ["rsync", "-aH", "--numeric-ids", f"{copy}{trailing}", f"{staged_path}{trailing}"],
+                        check=True,
+                    )
+        for path in paths:
+            if not os.path.lexists(os.path.join(host_dir, snapshot_path(path, mounts).lstrip("/"))):
+                raise RestoreError(f"{path} is not in the snapshot {snapshot_id}")
+        with open(os.path.join(host_dir, META), "w") as f:
+            json.dump({**meta, "snapshot": snapshot_id}, f)
+    except BaseException:
+        shutil.rmtree(host_dir)
+        raise
     return host_dir
 
 
@@ -122,21 +268,71 @@ def running(container):
     return result.stdout.strip() == "true"
 
 
-def staged(config, staging_dir):
-    """The item of a staging dir and its (staged dir, host path) pairs; fails if a path is missing."""
+def staged(config, staging_dir, items_only=True):
+    """The item of a staging dir (None for a staged host path) and its (staged path, host path) pairs.
+
+    Fails if a path is missing, and with items_only for a staged host path.
+    """
     meta_path = os.path.join(staging_dir, META)
     if not os.path.isfile(meta_path):
         raise RestoreError(f"{staging_dir} is not a staging directory (no {META})")
     with open(meta_path) as f:
         meta = json.load(f)
-    item = item_config(config, meta["stack"], meta["item"])
+    if "item" in meta:
+        item = item_config(config, meta["stack"], meta["item"])
+        paths = item["paths"]
+    elif items_only:
+        raise RestoreError(
+            f"{staging_dir} holds {', '.join(meta['paths'])}, not an item: apply only puts items in place; "
+            "copy what you need from it by hand"
+        )
+    else:
+        item, paths = None, meta["paths"]
     sources = []
-    for path in item["paths"]:
+    for path in paths:
         source = os.path.join(staging_dir, snapshot_path(path, config["source_mounts"]).lstrip("/"))
-        if not os.path.isdir(source):
+        if not (os.path.isdir(source) if item else os.path.lexists(source)):
             raise RestoreError(f"{path} is not in the snapshot (nothing at {source})")
         sources.append((source, path))
     return item, sources
+
+
+def diff(config, staging_dir):
+    """What apply would change, as rsync's itemized changes per host path.
+
+    Compares content, owner and mode; a file that differs only in its mtime isn't listed.
+    """
+    item, sources = staged(config, staging_dir, items_only=False)
+    excludes = [f"--exclude={pattern}" for pattern in item["preserve"]] if item else []
+    lines = []
+    for source, path in sources:
+        trailing = "/" if os.path.isdir(source) else ""
+        result = subprocess.run(
+            ["rsync", "-aHn", "--no-times", "--checksum", "--numeric-ids", "--delete", "--itemize-changes", *excludes,
+             f"{source}{trailing}", f"{path}{trailing}"],
+            check=True, stdout=subprocess.PIPE, text=True,
+        )
+        changes = result.stdout.splitlines()
+        lines.append(f"{path}:")
+        lines += [f"  {change}" for change in changes] or ["  no changes"]
+    return lines
+
+
+def clean(config, older_than_days=7, everything=False):
+    """Removes the staging dirs older than older_than_days (by their metadata file); returns them."""
+    root = config["staging"]["host"]
+    if not os.path.isdir(root):
+        return []
+    removed = []
+    for name in sorted(os.listdir(root)):
+        meta = os.path.join(root, name, META)
+        # Only what stage made
+        if not os.path.isfile(meta):
+            continue
+        if everything or time.time() - os.path.getmtime(meta) >= older_than_days * 86400:
+            shutil.rmtree(os.path.join(root, name))
+            removed.append(os.path.join(root, name))
+    return removed
 
 
 def apply(config, staging_dir, containers=True):
@@ -207,10 +403,10 @@ def clean_slate(config, runner, stack, skip=False, snapshot="latest", dry_run=Fa
     if dry_run:
         return True, f"would restore {stack}: {', '.join(names)} from snapshot {snapshot_id}"
     # Stage everything first, so a snapshot that lacks an item changes nothing
-    staging_dirs = [stage(config, runner, stack, name, snapshot_id=snapshot_id) for name in names]
+    staging_dirs = []
     try:
-        for staging_dir in staging_dirs:
-            staged(config, staging_dir)
+        for name in names:
+            staging_dirs.append(stage(config, runner, stack, name, snapshot_id=snapshot_id))
     except RestoreError:
         for staging_dir in staging_dirs:
             shutil.rmtree(staging_dir)
@@ -229,9 +425,24 @@ def main(argv=None):
     parser.add_argument("--config", default=DEFAULT_CONFIG)
     parser.add_argument("--runner", choices=["exec", "oneoff"], default="exec")
     commands = parser.add_subparsers(dest="command", required=True)
-    p = commands.add_parser("stage", help="restore an item into a new staging dir")
-    p.add_argument("item", metavar="STACK/ITEM")
+    p = commands.add_parser("snapshots", help="list the snapshots")
+    p.add_argument("--from", dest="source", choices=["restic", "rsnapshot"], default="restic")
+    p = commands.add_parser("ls", help="list what a snapshot holds at a host path")
+    p.add_argument("path", metavar="HOST_PATH")
     p.add_argument("--snapshot", default="latest")
+    p = commands.add_parser("find", help="find files by name in a snapshot")
+    p.add_argument("pattern")
+    p.add_argument("--snapshot", default="latest")
+    p = commands.add_parser("stage", help="restore an item or a host path into a new staging dir")
+    p.add_argument("item", metavar="STACK/ITEM|HOST_PATH")
+    p.add_argument("--snapshot", default="latest", help="a restic snapshot id, or an rsnapshot one like daily.0")
+    p.add_argument("--from", dest="source", choices=["restic", "rsnapshot"], default="restic")
+    p = commands.add_parser("diff", help="show what apply would change")
+    p.add_argument("staging_dir")
+    p = commands.add_parser("clean", help="remove old staging dirs")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--older-than", type=float, default=7, metavar="DAYS")
+    group.add_argument("--all", action="store_true")
     p = commands.add_parser("apply", help="put a staged item in place")
     p.add_argument("staging_dir")
     p.add_argument("--no-containers", action="store_true", help="don't stop and start the item's containers")
@@ -245,11 +456,26 @@ def main(argv=None):
     with open(args.config) as f:
         config = json.load(f)
     try:
-        if args.command == "stage":
-            stack, sep, item = args.item.partition("/")
-            if not sep:
-                raise RestoreError(f"name the item as STACK/ITEM, e.g. infrastructure/{args.item}")
-            print(stage(config, args.runner, stack, item, args.snapshot))
+        if args.command == "snapshots":
+            lines = local_snapshots(config) if args.source == "rsnapshot" else restic_snapshots(config, args.runner)
+            print("\n".join(lines))
+        elif args.command == "ls":
+            print("\n".join(ls(config, args.runner, args.path, args.snapshot)))
+        elif args.command == "find":
+            print("\n".join(find(config, args.runner, args.pattern, args.snapshot)))
+        elif args.command == "stage":
+            if args.item.startswith("/"):
+                print(stage_path(config, args.runner, args.item, args.snapshot, args.source))
+            else:
+                stack, sep, item = args.item.partition("/")
+                if not sep:
+                    raise RestoreError(f"name the item as STACK/ITEM, e.g. infrastructure/{args.item}")
+                print(stage(config, args.runner, stack, item, args.snapshot, source=args.source))
+        elif args.command == "diff":
+            print("\n".join(diff(config, args.staging_dir)))
+        elif args.command == "clean":
+            for removed in clean(config, args.older_than, args.all):
+                print(removed)
         elif args.command == "apply":
             apply(config, args.staging_dir, containers=not args.no_containers)
         else:

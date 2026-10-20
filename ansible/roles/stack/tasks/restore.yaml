@@ -40,6 +40,7 @@
       source_mounts: "{{ stack_restore_source_mounts }}"
       staging: "{{ stack_restore_staging }}"
       runners: "{{ stack_restore_runners }}"
+      rsnapshot: "{{ stack_restore_rsnapshot }}"
   register: stack_restore_config_file
 
 - name: Ensure the restore items of this stack are listed for the helper

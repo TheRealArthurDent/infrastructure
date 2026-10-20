@@ -175,8 +175,27 @@ stacks: each one lists its items in `/etc/restic-restore/stacks/<stack>.json` an
 before every stack in `stack_backup_stacks` (role default: this stack only) has its marker, so a new host never
 backs up a half-restored state as the latest snapshot. Add a stack there once its deployment does its restore.
 
-`sudo restic-restore stage <stack>/<item>` and `sudo restic-restore apply <staging dir>` restore a single item on a
-running host (the targeted restore, #286, adds more). For anything else, see `basic-setup/setup.txt` (step 5).
+### Targeted restore
+
+On a running host, the helper brings back single items or files (#286). It runs restic in the running
+resticprofile container, and takes host paths:
+
+```sh
+sudo restic-restore snapshots                                   # add --from rsnapshot for the local copies
+sudo restic-restore ls /etc/docker/infrastructure/portainer/data --snapshot <id>
+sudo restic-restore find 'portainer.db*'                        # in the latest snapshot, or --snapshot <id>
+sudo restic-restore stage infrastructure/portainer              # prints the staging dir under /var/restore
+sudo restic-restore diff <staging dir>                          # what apply would change
+sudo restic-restore apply <staging dir>                         # stops the item's containers meanwhile
+sudo restic-restore clean                                       # staging dirs older than 7 days, or --all
+```
+
+- `stage ... --from rsnapshot [--snapshot daily.1]` takes the local rsnapshot copy under `/var/cache/backup/`
+  (fast, no network). Without a local copy it falls back to the latest restic snapshot.
+- `stage <host path>` stages any path in the backup for copying by hand; `apply` only puts items in place, since
+  only for them it knows the containers to stop and the files to keep (`preserve`).
+
+For anything else, see `basic-setup/setup.txt` (step 5).
 
 ## Tests
 
