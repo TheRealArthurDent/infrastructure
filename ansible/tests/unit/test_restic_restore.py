@@ -63,6 +63,7 @@ class Env:
         self.state = tmp_path / "state"
         self.rsnapshot = tmp_path / "rsnapshot"  # stands in for /var/cache/backup
         self.marker = self.state / "infrastructure.done"
+        self.drill_metrics = tmp_path / "metrics" / "restore_drill.prom"
         self.password = tmp_path / "password"
         self.password.write_text("test\n")
         self.docker_log = tmp_path / "docker.log"
@@ -90,6 +91,7 @@ class Env:
             "staging": {"host": str(self.staging), "restic": str(self.staging)},
             "runners": {"exec": restic, "oneoff": restic},
             "rsnapshot": {"root": str(self.rsnapshot), "host": "localhost"},
+            "drill": {"metrics": str(tmp_path / "metrics" / "restore_drill.prom"), "parts": 12},
         }
         self.config_path = tmp_path / "config.json"
         self.config_path.write_text(json.dumps(self.config))
@@ -872,3 +874,180 @@ def test_default_rsnapshot_config_matches_rsnapshot_conf():
     # Every restic source mount is also in the local copy, below the same destination
     for host in defaults["stack_restore_source_mounts"]:
         assert backups[f"{host}/"] == f"{rsnapshot['host']}/"
+
+
+# drill (#288): a periodic check that the backup restores, reported through the resticprofile healthcheck
+
+
+def drill_metrics(env):
+    """The drill's metrics file as {name: value}."""
+    return {
+        line.split()[0]: float(line.split()[1])
+        for line in env.drill_metrics.read_text().splitlines()
+        if line and not line.startswith("#")
+    }
+
+
+def test_drill_reads_a_different_part_of_the_data_each_month():
+    helper = load_helper()
+    assert helper.drill_subset(1, 12) == "1/12"
+    assert helper.drill_subset(12, 12) == "12/12"
+    # Fewer parts than months: the parts repeat
+    assert helper.drill_subset(5, 4) == "1/4"
+
+
+def test_drill_checks_the_repository_stages_every_item_and_reports_success(env):
+    env.write(env.source, "portainer/data/portainer.db", "portainer")
+    env.write(env.source, "pihole/pihole/gravity.db", "pihole")
+    env.backup()
+    before = time.time()
+
+    code, out, err = env.run("drill", "--read-data-subset", "1/1")
+
+    assert code == 0, err
+    assert "infrastructure/pihole" in out and "infrastructure/portainer" in out
+    metrics = drill_metrics(env)
+    assert metrics["restic_restore_drill_success"] == 1
+    assert metrics["restic_restore_drill_last_success_timestamp_seconds"] >= int(before)
+    assert metrics["restic_restore_drill_last_run_timestamp_seconds"] >= int(before)
+    assert not staging_dirs(env), "the drill removes what it staged"
+    assert not (env.host / "portainer").exists(), "the drill never puts anything in place"
+    assert not env.marker.exists()
+
+
+def test_drill_covers_the_items_of_every_stack(env):
+    other = {"db": {"paths": [str(env.host / "other" / "db")], "containers": ["db"], "preserve": []}}
+    (Path(env.config["stacks_dir"]) / "other.json").write_text(json.dumps({"items": other}))
+    env.write(env.source, "portainer/data/portainer.db", "portainer")
+    env.write(env.source, "pihole/pihole/gravity.db", "pihole")
+    env.backup()
+
+    code, _, err = env.run("drill", "--read-data-subset", "1/1")
+
+    assert code != 0, "other/db is missing from the snapshot"
+    assert "other" in err
+    assert drill_metrics(env)["restic_restore_drill_success"] == 0
+
+
+def test_drill_fails_if_an_item_is_missing_from_the_snapshot(env):
+    env.write(env.source, "portainer/data/portainer.db", "portainer")
+    env.backup()
+
+    code, _, err = env.run("drill", "--read-data-subset", "1/1")
+
+    assert code != 0
+    assert "not in the snapshot" in err
+    metrics = drill_metrics(env)
+    assert metrics["restic_restore_drill_success"] == 0
+    assert "restic_restore_drill_last_success_timestamp_seconds" not in metrics, "there never was a success"
+    assert not staging_dirs(env)
+
+
+def test_drill_fails_on_damaged_data_in_the_repository(env):
+    env.write(env.source, "portainer/data/portainer.db", "portainer")
+    env.write(env.source, "pihole/pihole/gravity.db", "pihole")
+    env.backup()
+    for pack in (env.repo / "data").rglob("*"):
+        if pack.is_file():
+            pack.chmod(0o644)
+            data = bytearray(pack.read_bytes())
+            data[len(data) // 2] ^= 0xFF
+            pack.write_bytes(bytes(data))
+
+    code, _, err = env.run("drill", "--read-data-subset", "1/1")
+
+    assert code != 0
+    assert "check" in err
+    assert drill_metrics(env)["restic_restore_drill_success"] == 0
+
+
+def test_drill_failure_keeps_the_time_of_the_last_success(env):
+    env.write(env.source, "portainer/data/portainer.db", "portainer")
+    env.write(env.source, "pihole/pihole/gravity.db", "pihole")
+    env.backup()
+    assert env.run("drill", "--read-data-subset", "1/1")[0] == 0
+    last_success = drill_metrics(env)["restic_restore_drill_last_success_timestamp_seconds"]
+    shutil.rmtree(env.repo)
+
+    code, _, _ = env.run("drill", "--read-data-subset", "1/1")
+
+    assert code != 0
+    metrics = drill_metrics(env)
+    assert metrics["restic_restore_drill_success"] == 0
+    assert metrics["restic_restore_drill_last_success_timestamp_seconds"] == last_success
+
+
+def test_drill_metrics_go_to_the_metrics_mount_of_the_resticprofile_container():
+    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
+    mounts = dict(v.split(":")[:2] for v in service["volumes"])
+    metrics = PurePosixPath(defaults["stack_restore_drill"]["metrics"])
+    assert mounts[str(metrics.parent)] == "/metrics"
+    assert f"/metrics/{metrics.name}" in service["healthcheck"]["test"][-1]
+
+
+class Healthcheck:
+    """Runs the resticprofile healthcheck from the compose template against metrics files in a temp dir."""
+
+    def __init__(self, tmp_path):
+        service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
+        # Compose turns $$ into $
+        self.script = service["healthcheck"]["test"][-1].replace("$$", "$").replace("/metrics/", f"{tmp_path}/")
+        self.dir = tmp_path
+
+    def backup(self, age_hours):
+        stamp = int(time.time() - age_hours * 3600)
+        (self.dir / "backup_last_success.prom").write_text(
+            f'resticprofile_backup_last_success_timestamp_seconds{{profile="default"}} {stamp}\n'
+        )
+
+    def drill(self, success, age_days=None):
+        now = int(time.time())
+        lines = [f"restic_restore_drill_success {success}", f"restic_restore_drill_last_run_timestamp_seconds {now}"]
+        if age_days is not None:
+            lines.append(f"restic_restore_drill_last_success_timestamp_seconds {int(now - age_days * 86400)}")
+        (self.dir / "restore_drill.prom").write_text("\n".join(lines) + "\n")
+
+    def healthy(self):
+        return subprocess.run(["sh", "-c", self.script]).returncode == 0
+
+
+@pytest.fixture
+def healthcheck(tmp_path):
+    return Healthcheck(tmp_path)
+
+
+def test_healthcheck_is_healthy_before_the_first_drill(healthcheck):
+    healthcheck.backup(age_hours=1)
+    assert healthcheck.healthy()
+
+
+def test_healthcheck_is_healthy_after_a_recent_drill(healthcheck):
+    healthcheck.backup(age_hours=1)
+    healthcheck.drill(1, age_days=20)
+    assert healthcheck.healthy()
+
+
+def test_healthcheck_is_unhealthy_after_a_failed_drill(healthcheck):
+    healthcheck.backup(age_hours=1)
+    healthcheck.drill(0, age_days=2)
+    assert not healthcheck.healthy()
+
+
+def test_healthcheck_is_unhealthy_after_a_failed_first_drill(healthcheck):
+    healthcheck.backup(age_hours=1)
+    healthcheck.drill(0)
+    assert not healthcheck.healthy()
+
+
+def test_healthcheck_is_unhealthy_when_the_last_drill_is_too_old(healthcheck):
+    # Monthly drill: one missed run makes it unhealthy
+    healthcheck.backup(age_hours=1)
+    healthcheck.drill(1, age_days=36)
+    assert not healthcheck.healthy()
+
+
+def test_healthcheck_still_needs_a_recent_backup(healthcheck):
+    healthcheck.backup(age_hours=27)
+    healthcheck.drill(1, age_days=1)
+    assert not healthcheck.healthy()

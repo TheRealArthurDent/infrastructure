@@ -491,3 +491,36 @@
         that:
           - targeted_staging.matched == 0
           - helper_stage.stdout in helper_clean.stdout
+
+    # Restore drill (#288): monthly from root's crontab, result for the resticprofile healthcheck
+    # Without --read-data-subset: this month's part, from the parts in the host config
+    - name: Run the restore drill
+      ansible.builtin.command: restic-restore drill
+      register: helper_drill
+      changed_when: false
+
+    - name: Read the restore drill result
+      ansible.builtin.slurp:
+        src: /var/lib/resticprofile/metrics/restore_drill.prom
+      register: drill_metrics
+
+    - name: Read root crontab after the stack role
+      ansible.builtin.command: crontab -l -u root
+      register: drill_crontab
+      changed_when: false
+
+    - name: Find staging directories left by the drill
+      ansible.builtin.find:
+        paths: /var/restore
+        file_type: any
+      register: drill_staging
+
+    - name: Check the drill passed, cleaned up and is scheduled monthly
+      ansible.builtin.assert:
+        that:
+          - "'infrastructure/portainer' in helper_drill.stdout and 'infrastructure/pihole' in helper_drill.stdout"
+          - "'restic_restore_drill_success 1' in (drill_metrics.content | b64decode).splitlines()"
+          - drill_staging.matched == 0
+          - "'0 12 1 * * /usr/local/bin/restic-restore drill 2>&1 | logger -t restic-restore-drill'
+            in drill_crontab.stdout_lines"
+        fail_msg: "drill: {{ helper_drill.stdout }} cron: {{ drill_crontab.stdout_lines | select('search', 'drill') }}"

@@ -146,6 +146,8 @@ services:
       dungeon: "${DUNGEON_IP}"
     # Unhealthy when the last successful backup (daily at 03:00) is older than 26h, so healthmonitor
     # alerts on a missing backup, not only on a failed one (#259). Also unhealthy before the first backup.
+    # Also unhealthy when the last monthly restore drill (restic-restore drill, host cron) failed or its last
+    # success is older than 35 days (#288); healthy before the first drill.
     healthcheck:
       test:
         - CMD-SHELL
@@ -153,6 +155,11 @@ services:
           awk -v now=$$(date +%s)
           '/^resticprofile_backup_last_success_timestamp_seconds/ { ok = now - $$2 < 26 * 3600 } END { exit !ok }'
           /metrics/backup_last_success.prom
+          && { [ ! -f /metrics/restore_drill.prom ] || awk -v now=$$(date +%s)
+          '$$1 == "restic_restore_drill_success" { ok = $$2 == 1 }
+          $$1 == "restic_restore_drill_last_success_timestamp_seconds" { last = $$2 }
+          END { exit !(ok && now - last < 35 * 86400) }'
+          /metrics/restore_drill.prom; }
       interval: 10m
       # Check every 10s during the first minute, so the status is known right after a deploy
       start_period: 1m

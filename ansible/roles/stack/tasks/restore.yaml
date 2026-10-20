@@ -41,6 +41,8 @@
       staging: "{{ stack_restore_staging }}"
       runners: "{{ stack_restore_runners }}"
       rsnapshot: "{{ stack_restore_rsnapshot }}"
+      # One expression, so parts stays a number in the JSON
+      drill: "{{ {'metrics': stack_restore_drill.metrics, 'parts': stack_restore_drill.parts | int} }}"
   register: stack_restore_config_file
 
 - name: Ensure the restore items of this stack are listed for the helper
@@ -51,6 +53,25 @@
     group: root
     mode: '0644'
   register: stack_restore_items_file
+
+# Monthly restore drill (#288): its result goes to the resticprofile healthcheck, so healthmonitor alerts on a
+# failed or missed drill. The log goes to the journal (journalctl -t restic-restore-drill).
+- name: Ensure cron job "restore drill" is {{ stack_restore_drill_enabled | bool | ternary('present', 'absent') }}
+  ansible.builtin.cron:
+    name: restore drill
+    state: "{{ stack_restore_drill_enabled | bool | ternary('present', 'absent') }}"
+    user: root
+    day: "{{ stack_restore_drill.day }}"
+    hour: "{{ stack_restore_drill.hour }}"
+    minute: "{{ stack_restore_drill.minute }}"
+    job: /usr/local/bin/restic-restore drill 2>&1 | logger -t restic-restore-drill
+
+# A stale result of a disabled drill would turn the healthcheck red after 35 days
+- name: Ensure no restore drill result is left when the drill is disabled
+  ansible.builtin.file:
+    path: "{{ stack_restore_drill.metrics }}"
+    state: absent
+  when: not stack_restore_drill_enabled | bool
 
 # In check mode the files above aren't written: on a fresh host the helper doesn't exist yet, and where one of them
 # is due for an update, the dry run would run the old helper or config (it did on testbed).
