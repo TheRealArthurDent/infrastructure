@@ -17,15 +17,15 @@ The deployment is being migrated from bash scripts to Ansible, and the migration
   stay in sync: `ansible/tests/unit/test_stack_templates.py` fails otherwise, so change both.
   Don't extend the bash scripts; put new deployment logic into Ansible.
 
-Review findings from the migration are GitHub issues. Still open are #237 (idempotency), #238 (migration) and #239
+Review findings from the migration are GitHub issues. Still open are #238 (migration) and #239
 (refactor). Check the open issues before changing an affected area, and reference them in commits.
 
 ## Layout
 
 - `docker-compose.yaml`, `setup/` – the stack and its config for `deploy.sh` (fallback, copies of `ansible/roles/stack/templates/`)
 - `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`,
-  `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`, `inventory/hosts.yaml`,
-  `lookup_plugins/keepass.py`
+  `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`,
+  `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets, repo hygiene)
 - `.claude/` – Claude Code settings, the guard hook (`hooks/guard.py`) and skills

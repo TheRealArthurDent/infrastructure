@@ -1,18 +1,11 @@
+# How to reach each host. Shared settings are in group_vars/all/, per-host values in host_vars/<host>.yaml (#239).
 all:
   hosts:
     raspi:
       ansible_host: 192.168.1.2
       ansible_port: 1357
       ansible_user: smarthome
-      ansible_ssh_private_key_file: ~/.ssh/id_ed25519
-      ansible_become: true
-      dhparameter_bits: 4096
     testbed:
       ansible_host: 192.168.1.7
       ansible_port: 4242
       ansible_user: testuser
-      ansible_ssh_private_key_file: ~/.ssh/id_ed25519
-      ansible_become: true
-      dhparameter_bits: 2048
-      # Often switched off on the 1st: a missed monthly restore drill would turn resticprofile unhealthy (#288)
-      stack_restore_drill_enabled: false

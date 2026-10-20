@@ -15,7 +15,7 @@ that goal; when in doubt, ask "does this keep a second run at changed=0, and cou
 ```
 ansible/
   <playbook>.yaml            # plays only: hosts, vars, roles. No long task lists.
-  inventory/hosts.yaml       # hosts; per-host values belong in host_vars/ (see #239)
+  inventory/hosts.yaml       # how to reach each host; shared values in group_vars/all/, per-host in host_vars/
   roles/<role>/
     tasks/main.yaml
     handlers/main.yaml       # restarts/reloads, triggered via notify

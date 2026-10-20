@@ -13,7 +13,9 @@ the repo root still works as a fallback until the stack role has proven itself o
 
 ## Hosts
 
-Defined in `inventory/hosts.yaml`:
+Defined in `inventory/hosts.yaml`, which only says how to reach each host. Settings shared by all hosts (SSH key,
+`become`, KeePass paths) are in `inventory/group_vars/all/`, per-host values (`dhparameter_bits`) in
+`inventory/host_vars/<host>.yaml`:
 
 | Host | IP | SSH port | User |
 |---|---|---|---|
