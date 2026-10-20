@@ -537,6 +537,10 @@ def main(argv=None):
             subset = args.read_data_subset or drill_subset(time.localtime().tm_mon, config["drill"]["parts"])
             # Without the monthly drill, a recorded result would turn the healthcheck red 35 days later
             record = config["drill"].get("enabled", True)
+            if not record and os.path.exists(config["drill"]["metrics"]):
+                # Left from when the drill was enabled
+                os.remove(config["drill"]["metrics"])
+                log(f"removed {config['drill']['metrics']}")
             try:
                 print("\n".join(drill(config, args.runner, subset)))
             # Any failure counts, not only the ones the helper expects

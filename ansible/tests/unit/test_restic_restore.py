@@ -1057,6 +1057,9 @@ def test_drill_by_hand_on_a_host_without_the_monthly_drill_records_nothing(env):
     # A recorded success would turn the healthcheck red 35 days later, with no monthly drill to renew it
     env.config["drill"]["enabled"] = False
     env.config_path.write_text(json.dumps(env.config))
+    # Recorded while the drill was still enabled
+    env.drill_metrics.parent.mkdir(parents=True)
+    env.drill_metrics.write_text("restic_restore_drill_success 1\n")
     env.write(env.source, "portainer/data/portainer.db", "portainer")
     env.write(env.source, "pihole/pihole/gravity.db", "pihole")
     env.backup()
