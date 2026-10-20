@@ -35,6 +35,10 @@ stack_restore_source_mounts:
 stack_restore_staging:
   host: /var/restore
   restic: /restore-target
+# The local rsnapshot copy (base role's rsnapshot.conf) for restic-restore --from rsnapshot: <root>/<snapshot>/<host>
+stack_restore_rsnapshot:
+  root: /var/cache/backup
+  host: localhost
 # How the helper runs restic: in the running container (exec) or, before the stack is up, in a one-off one
 stack_restore_runners:
   exec: [docker, exec, resticprofile, resticprofile]

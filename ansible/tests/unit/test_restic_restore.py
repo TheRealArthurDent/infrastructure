@@ -14,7 +14,8 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+import time
+from pathlib import Path, PurePosixPath
 
 import pytest
 import yaml
@@ -22,6 +23,7 @@ import yaml
 ANSIBLE_DIR = Path(__file__).parents[2]
 HELPER = ANSIBLE_DIR / "roles" / "stack" / "files" / "restic-restore"
 STACK_DEFAULTS = ANSIBLE_DIR / "roles" / "stack" / "defaults" / "main.yaml"
+RSNAPSHOT_CONF = ANSIBLE_DIR / "roles" / "base" / "files" / "etc" / "rsnapshot.conf"
 COMPOSE = ANSIBLE_DIR / "roles" / "stack" / "templates" / "docker-compose.yaml.j2"
 
 pytestmark = pytest.mark.skipif(
@@ -59,6 +61,7 @@ class Env:
         self.repo = tmp_path / "repo"
         self.staging = tmp_path / "staging"
         self.state = tmp_path / "state"
+        self.rsnapshot = tmp_path / "rsnapshot"  # stands in for /var/cache/backup
         self.marker = self.state / "infrastructure.done"
         self.password = tmp_path / "password"
         self.password.write_text("test\n")
@@ -86,6 +89,7 @@ class Env:
             "source_mounts": {str(self.host): str(self.source)},
             "staging": {"host": str(self.staging), "restic": str(self.staging)},
             "runners": {"exec": restic, "oneoff": restic},
+            "rsnapshot": {"root": str(self.rsnapshot), "host": "localhost"},
         }
         self.config_path = tmp_path / "config.json"
         self.config_path.write_text(json.dumps(self.config))
@@ -102,6 +106,13 @@ class Env:
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
+        return path
+
+    def rsnapshot_write(self, snapshot, rel, content, age_hours=0):
+        """Writes a file into an rsnapshot snapshot, which keeps the host's paths below <root>/<snapshot>/<host>."""
+        path = self.write(self.rsnapshot / snapshot / "localhost" / str(self.host).lstrip("/"), rel, content)
+        mtime = time.time() - age_hours * 3600
+        os.utime(self.rsnapshot / snapshot, (mtime, mtime))
         return path
 
     def backup(self):
@@ -127,6 +138,10 @@ class Env:
 
     def docker_calls(self):
         return self.docker_log.read_text().splitlines()
+
+
+def staging_dirs(env):
+    return list(env.staging.iterdir()) if env.staging.exists() else []
 
 
 @pytest.fixture
@@ -378,7 +393,7 @@ def test_clean_slate_restores_every_item_and_writes_the_marker(env):
     assert (env.host / "pihole" / "pihole" / "gravity.db").read_text() == "pihole"
     assert env.marker.read_text().strip() == snapshot
     assert env.docker_calls() == []
-    assert not list(env.staging.iterdir()), "staging dirs are removed after the restore"
+    assert not staging_dirs(env), "staging dirs are removed after the restore"
 
 
 def test_clean_slate_markers_are_per_stack(env):
@@ -471,6 +486,7 @@ def test_clean_slate_fails_if_an_item_is_missing_from_the_snapshot(env):
     assert "not in the snapshot" in err
     assert not env.marker.exists()
     assert not (env.host / "portainer").exists(), "nothing is applied before every item is staged"
+    assert not staging_dirs(env), "the staged items are removed again"
 
 
 def test_clean_slate_finishes_an_interrupted_restore(env):
@@ -515,3 +531,344 @@ def test_clean_slate_takes_the_given_snapshot(env):
     assert code == 0, err
     assert (env.host / "portainer" / "data" / "portainer.db").read_text() == "old"
     assert env.marker.read_text().strip() == old
+
+
+# snapshots (#286)
+
+
+def test_snapshots_lists_every_snapshot_with_host_paths(env):
+    env.write(env.source, "portainer/data/portainer.db", "old")
+    old = env.backup()
+    env.write(env.source, "portainer/data/portainer.db", "new")
+    new = env.backup()
+
+    code, out, err = env.run("snapshots")
+
+    assert code == 0, err
+    lines = out.strip().splitlines()
+    assert [line.split()[2] for line in lines] == [old[:8], new[:8]]
+    assert str(env.host) in lines[0]
+    assert str(env.source) not in out
+
+
+def test_snapshots_copes_with_resticprofile_output_around_the_json(env):
+    noisy = env.tmp / "bin" / "noisy-restic"
+    noisy.write_text('#!/bin/sh\necho "[INFO] profile default"\n"$@"\nrc=$?\necho "[INFO] done"\nexit $rc\n')
+    noisy.chmod(0o755)
+    env.config["runners"]["exec"] = [str(noisy), *env.config["runners"]["exec"]]
+    env.config_path.write_text(json.dumps(env.config))
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    snapshot = env.backup()
+
+    code, out, err = env.run("snapshots")
+
+    assert code == 0, err
+    assert snapshot[:8] in out
+    assert "[INFO]" not in out
+
+
+def test_snapshots_from_rsnapshot_lists_the_newest_first(env):
+    env.rsnapshot_write("weekly.0", "portainer/data/portainer.db", "weekly", age_hours=72)
+    env.rsnapshot_write("daily.0", "portainer/data/portainer.db", "daily", age_hours=1)
+    env.rsnapshot_write("daily.1", "portainer/data/portainer.db", "daily", age_hours=25)
+    (env.rsnapshot / "not-a-snapshot").mkdir()
+
+    code, out, err = env.run("snapshots", "--from", "rsnapshot")
+
+    assert code == 0, err
+    assert [line.split()[-1] for line in out.strip().splitlines()] == ["daily.0", "daily.1", "weekly.0"]
+
+
+# ls and find (#286)
+
+
+def test_ls_lists_a_host_path_in_the_snapshot(env):
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    env.write(env.source, "portainer/data/certs/cert.pem", "x")
+    env.write(env.source, "pihole/pihole/gravity.db", "x")
+    env.backup()
+
+    code, out, err = env.run("ls", str(env.host / "portainer" / "data"))
+
+    assert code == 0, err
+    data = env.host / "portainer" / "data"
+    paths = [line.split()[-1] for line in out.strip().splitlines()]
+    assert paths == [str(data), str(data / "certs"), str(data / "portainer.db")]
+
+
+def test_ls_takes_the_given_snapshot(env):
+    env.write(env.source, "portainer/data/old.db", "x")
+    old = env.backup()
+    (env.source / "portainer" / "data" / "old.db").unlink()
+    env.write(env.source, "portainer/data/new.db", "x")
+    env.backup()
+
+    code, out, err = env.run("ls", str(env.host / "portainer" / "data"), "--snapshot", old[:8])
+
+    assert code == 0, err
+    assert "old.db" in out
+    assert "new.db" not in out
+
+
+def test_ls_rejects_a_path_outside_the_backup(env):
+    code, _, err = env.run("ls", "/opt/somewhere")
+    assert code != 0
+    assert "not in the backup" in err
+
+
+def test_find_prints_host_paths_of_the_matches(env):
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    env.write(env.source, "pihole/pihole/gravity.db", "x")
+    env.backup()
+
+    code, out, err = env.run("find", "*.db")
+
+    assert code == 0, err
+    assert sorted(out.strip().splitlines()) == [
+        str(env.host / "pihole" / "pihole" / "gravity.db"),
+        str(env.host / "portainer" / "data" / "portainer.db"),
+    ]
+
+
+def test_find_searches_the_latest_snapshot_by_default(env):
+    env.write(env.source, "portainer/data/old.db", "x")
+    old = env.backup()
+    (env.source / "portainer" / "data" / "old.db").unlink()
+    env.write(env.source, "portainer/data/new.db", "x")
+    env.backup()
+
+    _, latest, _ = env.run("find", "old.db")
+    code, given, err = env.run("find", "old.db", "--snapshot", old[:8])
+
+    assert code == 0, err
+    assert latest.strip() == ""
+    assert given.strip() == str(env.host / "portainer" / "data" / "old.db")
+
+
+# stage from rsnapshot and of a host path (#286)
+
+
+def test_stage_from_rsnapshot_takes_the_newest_local_copy(env):
+    env.rsnapshot_write("daily.1", "portainer/data/portainer.db", "older", age_hours=25)
+    env.rsnapshot_write("daily.0", "portainer/data/portainer.db", "newest", age_hours=1)
+
+    code, out, err = env.run("stage", "infrastructure/portainer", "--from", "rsnapshot")
+
+    assert code == 0, err
+    staging = Path(out.strip())
+    assert next(staging.rglob("portainer.db")).read_text() == "newest"
+    meta = json.loads((staging / ".restic-restore.json").read_text())
+    assert meta == {"stack": "infrastructure", "item": "portainer", "snapshot": "rsnapshot:daily.0"}
+
+
+def test_stage_from_rsnapshot_takes_the_given_snapshot(env):
+    env.rsnapshot_write("daily.1", "portainer/data/portainer.db", "older", age_hours=25)
+    env.rsnapshot_write("daily.0", "portainer/data/portainer.db", "newest", age_hours=1)
+
+    code, out, err = env.run("stage", "infrastructure/portainer", "--from", "rsnapshot", "--snapshot", "daily.1")
+
+    assert code == 0, err
+    assert next(Path(out.strip()).rglob("portainer.db")).read_text() == "older"
+
+
+def test_stage_from_rsnapshot_can_be_applied(env):
+    env.rsnapshot_write("daily.0", "pihole/pihole/gravity.db", "from rsnapshot")
+    env.write(env.host, "pihole/pihole/gravity.db", "changed")
+    env.write(env.host, "pihole/pihole/pihole-FTL.db", "live")
+    _, out, _ = env.run("stage", "infrastructure/pihole", "--from", "rsnapshot")
+
+    code, _, err = env.run("apply", out.strip())
+
+    assert code == 0, err
+    assert (env.host / "pihole" / "pihole" / "gravity.db").read_text() == "from rsnapshot"
+    assert (env.host / "pihole" / "pihole" / "pihole-FTL.db").read_text() == "live"
+
+
+def test_stage_from_rsnapshot_falls_back_to_restic_without_a_local_copy(env):
+    env.write(env.source, "portainer/data/portainer.db", "from restic")
+    snapshot = env.backup()
+
+    code, out, err = env.run("stage", "infrastructure/portainer", "--from", "rsnapshot")
+
+    assert code == 0, err
+    assert "falling back to restic" in err
+    staging = Path(out.strip())
+    assert next(staging.rglob("portainer.db")).read_text() == "from restic"
+    assert json.loads((staging / ".restic-restore.json").read_text())["snapshot"] == snapshot
+
+
+def test_stage_from_rsnapshot_does_not_fall_back_for_a_named_snapshot(env):
+    env.write(env.source, "portainer/data/portainer.db", "from restic")
+    env.backup()
+
+    code, _, err = env.run("stage", "infrastructure/portainer", "--from", "rsnapshot", "--snapshot", "daily.3")
+
+    assert code != 0
+    assert "daily.3" in err
+    assert not staging_dirs(env)
+
+
+def test_stage_of_a_host_path_restores_only_that_path(env):
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    env.write(env.source, "portainer/data/certs/cert.pem", "cert")
+    env.backup()
+    wanted = env.host / "portainer" / "data" / "certs"
+
+    code, out, err = env.run("stage", str(wanted))
+
+    assert code == 0, err
+    staging = Path(out.strip())
+    assert next(staging.rglob("cert.pem")).read_text() == "cert"
+    assert not list(staging.rglob("portainer.db"))
+    assert json.loads((staging / ".restic-restore.json").read_text())["paths"] == [str(wanted)]
+
+
+def test_stage_of_a_host_path_missing_from_the_snapshot_fails_and_leaves_nothing(env):
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    env.backup()
+
+    code, _, err = env.run("stage", str(env.host / "nothing" / "here"))
+
+    assert code != 0
+    assert "not in the snapshot" in err
+    assert not staging_dirs(env)
+
+
+def test_apply_refuses_a_staged_host_path(env):
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    env.backup()
+    _, out, _ = env.run("stage", str(env.host / "portainer" / "data"))
+
+    code, _, err = env.run("apply", out.strip())
+
+    assert code != 0
+    assert "copy what you need" in err
+    assert not (env.host / "portainer").exists()
+
+
+# diff (#286)
+
+
+def test_diff_shows_what_apply_would_change_and_changes_nothing(env):
+    env.write(env.source, "pihole/pihole/gravity.db", "from backup")
+    env.write(env.source, "pihole/pihole/custom.list", "same")
+    env.backup()
+    env.write(env.host, "pihole/pihole/gravity.db", "changed!")
+    env.write(env.host, "pihole/pihole/custom.list", "same")
+    env.write(env.host, "pihole/pihole/stray.conf", "not in the backup")
+    env.write(env.host, "pihole/pihole/pihole-FTL.db", "preserved")
+    _, out, _ = env.run("stage", "infrastructure/pihole")
+
+    code, diff, err = env.run("diff", out.strip())
+
+    assert code == 0, err
+    assert str(env.host / "pihole" / "pihole") in diff
+    assert "gravity.db" in diff
+    assert "deleting" in diff and "stray.conf" in diff
+    assert "custom.list" not in diff
+    assert "pihole-FTL.db" not in diff
+    assert (env.host / "pihole" / "pihole" / "gravity.db").read_text() == "changed!"
+    assert (env.host / "pihole" / "pihole" / "stray.conf").exists()
+
+
+def test_diff_reports_no_changes(env):
+    env.write(env.source, "portainer/data/portainer.db", "same")
+    env.backup()
+    _, out, _ = env.run("stage", "infrastructure/portainer")
+    env.run("apply", out.strip())
+
+    code, diff, err = env.run("diff", out.strip())
+
+    assert code == 0, err
+    assert "no changes" in diff
+
+
+def test_diff_works_on_a_staged_host_path(env):
+    env.write(env.source, "portainer/data/certs/cert.pem", "from backup")
+    env.backup()
+    env.write(env.host, "portainer/data/certs/cert.pem", "live!")
+    _, out, _ = env.run("stage", str(env.host / "portainer" / "data" / "certs"))
+
+    code, diff, err = env.run("diff", out.strip())
+
+    assert code == 0, err
+    assert "cert.pem" in diff
+
+
+def test_diff_of_a_missing_live_path_shows_everything_as_new(env):
+    env.write(env.source, "portainer/data/portainer.db", "x")
+    env.backup()
+    _, out, _ = env.run("stage", "infrastructure/portainer")
+
+    code, diff, err = env.run("diff", out.strip())
+
+    assert code == 0, err
+    assert "portainer.db" in diff
+    assert not (env.host / "portainer").exists()
+
+
+# clean (#286)
+
+
+def make_staging_dir(env, name, age_days):
+    staging = env.staging / name
+    (staging / "data").mkdir(parents=True)
+    meta = staging / ".restic-restore.json"
+    meta.write_text("{}")
+    mtime = time.time() - age_days * 86400
+    os.utime(meta, (mtime, mtime))
+    return staging
+
+
+def test_clean_removes_staging_dirs_older_than_a_week(env):
+    old = make_staging_dir(env, "20261001-000000-infrastructure-portainer", age_days=8)
+    recent = make_staging_dir(env, "20261019-000000-infrastructure-portainer", age_days=1)
+    other = env.staging / "not-from-the-helper"
+    other.mkdir()
+
+    code, out, err = env.run("clean")
+
+    assert code == 0, err
+    assert not old.exists()
+    assert recent.exists()
+    assert other.exists()
+    assert str(old) in out
+
+
+def test_clean_takes_the_given_age(env):
+    staging = make_staging_dir(env, "20261019-000000-infrastructure-portainer", age_days=1)
+
+    code, _, err = env.run("clean", "--older-than", "0")
+
+    assert code == 0, err
+    assert not staging.exists()
+
+
+def test_clean_all_removes_every_staging_dir(env):
+    staging = make_staging_dir(env, "20261020-000000-infrastructure-portainer", age_days=0)
+
+    code, _, err = env.run("clean", "--all")
+
+    assert code == 0, err
+    assert not staging.exists()
+
+
+def test_clean_without_staging_dir_does_nothing(env):
+    code, out, err = env.run("clean")
+    assert code == 0, err
+    assert out.strip() == ""
+
+
+# rsnapshot config
+
+
+def test_default_rsnapshot_config_matches_rsnapshot_conf():
+    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    conf = [line.split() for line in RSNAPSHOT_CONF.read_text().splitlines() if line and not line.startswith("#")]
+    root = next(fields[1] for fields in conf if fields[0] == "snapshot_root")
+    backups = {fields[1]: fields[2] for fields in conf if fields[0] == "backup"}
+    rsnapshot = defaults["stack_restore_rsnapshot"]
+    assert PurePosixPath(root) == PurePosixPath(rsnapshot["root"])
+    # Every restic source mount is also in the local copy, below the same destination
+    for host in defaults["stack_restore_source_mounts"]:
+        assert backups[f"{host}/"] == f"{rsnapshot['host']}/"
