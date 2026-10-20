@@ -65,8 +65,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/
 .venv/bin/ansible-lint --strict ansible/               # lint, must pass with 0 findings (CI blocks)
 ```
 
-Reports land in `test-results/` (JUnit XML). CI (`.github/workflows/molecule.yaml`) runs pytest and Molecule on
-every PR and every push to `main` that touches `ansible/`.
+Reports land in `test-results/` (JUnit XML). CI (`.github/workflows/ci.yaml`) runs ansible-lint, pytest and Molecule
+on every PR, weekly on `main` and on demand. Its `changes` job skips the jobs a PR doesn't touch (docs-only PRs run
+none of them); a skipped job counts as passed for required checks, a workflow skipped by `on.paths` would block the
+merge, so never filter by `on.paths` (`test_rulesets.py` checks this). `pytest -n auto` runs the tests in parallel.
 
 When writing or changing Ansible roles, follow the `ansible-role` skill in `.claude/skills/`.
 
