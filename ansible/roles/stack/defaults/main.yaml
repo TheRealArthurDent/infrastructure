@@ -13,3 +13,42 @@ stack_dungeon_host: dungeon
 stack_nginx_container: nginx
 # Networks, compose up and the nginx reload need a running Docker daemon (false in Molecule).
 stack_manage_containers: true
+
+# Clean-slate restore of restore_items before the stack starts on a fresh host (#287): tasks/restore.yaml.
+# resticprofile backs up the whole host, so the restore helper is a host service and every stack restores its own
+# items with it. -e skip_infrastructure_restore=true (a new host with nothing to restore) only writes this stack's
+# marker; -e infrastructure_restore_snapshot=<id> restores another snapshot than the latest.
+stack_skip_restore: "{{ skip_infrastructure_restore | default(false) }}"
+stack_restore_snapshot: "{{ infrastructure_restore_snapshot | default('latest') }}"
+# <stack>.done markers, written once a stack's restore is done or skipped
+stack_restore_state_dir: /var/lib/restic-restore
+# resticprofile only schedules backups once each of these stacks has its marker, so a fresh host never backs up a
+# half-restored state as the latest snapshot. Add a stack here once its deployment runs restic-restore clean-slate.
+stack_backup_stacks:
+  - "{{ stack_project_name }}"
+# Host path -> path inside the resticprofile container, as mounted in docker-compose.yaml.j2
+stack_restore_source_mounts:
+  /home: /source/home
+  /etc: /source/etc
+  /var/lib/docker/volumes: /source/docker-volumes
+# Where the helper stages a restore: on the host and inside the resticprofile container
+stack_restore_staging:
+  host: /var/restore
+  restic: /restore-target
+# How the helper runs restic: in the running container (exec) or, before the stack is up, in a one-off one
+stack_restore_runners:
+  exec: [docker, exec, resticprofile, resticprofile]
+  oneoff:
+    - docker
+    - compose
+    - --file
+    - "{{ stack_compose_dir }}/docker-compose.yaml"
+    - --project-name
+    - "{{ stack_project_name }}"
+    - run
+    - --rm
+    - --no-deps
+    - --no-TTY
+    - --entrypoint
+    - resticprofile
+    - resticprofile

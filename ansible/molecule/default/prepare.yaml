@@ -33,3 +33,57 @@
         owner: root
         group: root
         mode: '0644'
+
+    # A restic repository with a snapshot of the restore_items, for the clean-slate restore (#287). Local restic
+    # stands in for the resticprofile container (converge.yaml overrides the runners); the snapshot holds the
+    # container's paths (/source/etc/...).
+    - name: Install restic as a stand-in for the resticprofile container
+      ansible.builtin.apt:
+        name: restic
+        state: present
+        update_cache: true
+
+    - name: Create the test restic password
+      ansible.builtin.copy:
+        content: "test-restic\n"
+        dest: /srv/restic-password
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Create the test restic repository
+      ansible.builtin.command: restic -r /srv/restic-repo --password-file /srv/restic-password init
+      args:
+        creates: /srv/restic-repo/config
+
+    # root and 0755 like the stack role creates portainer/data, or its second run would change them back
+    - name: Create the backed up item directories
+      ansible.builtin.file:
+        path: "/source/etc/docker/infrastructure/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop: [portainer/data, pihole/pihole]
+
+    - name: Create backed up item data owned by a container user
+      ansible.builtin.copy:
+        content: "{{ item.content }}\n"
+        dest: "/source/etc/docker/infrastructure/{{ item.path }}"
+        owner: '1234'
+        group: '1234'
+        mode: '0600'
+      loop:
+        - {path: portainer/data/portainer.db, content: portainer from backup}
+        - {path: pihole/pihole/gravity.db, content: pihole from backup}
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Back up the item data
+      ansible.builtin.command: restic -r /srv/restic-repo --password-file /srv/restic-password backup /source
+      changed_when: true
+
+    - name: Remove the backed up source, so only the snapshot has it
+      ansible.builtin.file:
+        path: /source
+        state: absent

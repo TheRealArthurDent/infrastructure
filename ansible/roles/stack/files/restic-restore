@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""Restore the data of the stacks on this host from the resticprofile backup (#284).
+
+resticprofile backs up the whole host, so this is a host service shared by all stacks. Deployed by the stack role
+of the raspberry repo, which also writes the host config /etc/restic-restore/config.json. Every stack lists the
+state it restores in /etc/restic-restore/stacks/<stack>.json ({"items": {name: {paths, containers, preserve}}}).
+
+  restic-restore stage STACK/ITEM [--snapshot ID]  restore an item into a new staging dir and print it
+  restic-restore apply STAGING [--no-containers]   put a staged item in place (stops its containers meanwhile)
+  restic-restore --runner oneoff clean-slate STACK [--skip] [--snapshot ID] [--dry-run]
+                                                   restore all items of STACK on a fresh host, once (#287)
+
+clean-slate writes /var/lib/restic-restore/STACK.done; resticprofile schedules backups only once every stack it
+waits for has its marker. It exits with 10 if restic can't reach the repository and 11 if there is no snapshot.
+
+restic runs in the resticprofile container, so repository, password and SSH key are the same as for backups:
+--runner exec uses the running container, --runner oneoff a one-off container for when the stack isn't up yet.
+Snapshot paths are the container's (/source/etc/...); source_mounts in the config maps them to the host.
+"""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import PurePosixPath
+
+DEFAULT_CONFIG = "/etc/restic-restore/config.json"
+META = ".restic-restore.json"
+
+
+class RestoreError(Exception):
+    exit_code = 1
+
+
+# Not 2: argparse exits with 2 on a usage error
+class NoRepositoryAccess(RestoreError):
+    exit_code = 10
+
+
+class NoSnapshot(RestoreError):
+    exit_code = 11
+
+
+def snapshot_path(host_path, mounts):
+    """Where host_path lies in a snapshot, using the longest mount that covers it."""
+    path = PurePosixPath(host_path)
+    for host, source in sorted(mounts.items(), key=lambda m: -len(m[0])):
+        if path == PurePosixPath(host) or PurePosixPath(host) in path.parents:
+            return str(PurePosixPath(source) / path.relative_to(host))
+    raise RestoreError(f"{host_path} is not in the backup (no source mount covers it)")
+
+
+def log(message):
+    print(message, file=sys.stderr, flush=True)
+
+
+def restic(config, runner, *args):
+    """Runs restic through the runner; returns stdout. Its own output goes to stderr."""
+    command = [*config["runners"][runner], *args]
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        raise RestoreError(f"restic {args[0]} failed (exit {result.returncode}):\n{result.stderr.strip()}")
+    return result.stdout
+
+
+def resolve_snapshot(config, runner, snapshot):
+    """The full id of snapshot (an id, a short id or latest), or None if the repository has none."""
+    out = restic(config, runner, "snapshots", "--json", snapshot)
+    # resticprofile prints its own lines around restic's JSON, some of them starting with "[" too
+    for line in out.splitlines():
+        try:
+            snapshots = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(snapshots, list):
+            return snapshots[-1]["id"] if snapshots else None
+    raise RestoreError(f"no snapshot list in the output of restic snapshots:\n{out.strip()}")
+
+
+def stack_items(config, stack):
+    path = os.path.join(config["stacks_dir"], f"{stack}.json")
+    if not os.path.isfile(path):
+        known = sorted(f.removesuffix(".json") for f in os.listdir(config["stacks_dir"]) if f.endswith(".json"))
+        raise RestoreError(f"unknown stack {stack} (no {path}); known: {', '.join(known)}")
+    with open(path) as f:
+        return json.load(f)["items"]
+
+
+def item_config(config, stack, name):
+    items = stack_items(config, stack)
+    if name not in items:
+        raise RestoreError(f"unknown item {name} in stack {stack}; known: {', '.join(sorted(items))}")
+    return items[name]
+
+
+def stage(config, runner, stack, name, snapshot="latest", snapshot_id=None):
+    item = item_config(config, stack, name)
+    if snapshot_id is None:
+        snapshot_id = resolve_snapshot(config, runner, snapshot)
+        if snapshot_id is None:
+            raise RestoreError(f"snapshot {snapshot} not found")
+    dirname = f"{time.strftime('%Y%m%d-%H%M%S')}-{stack}-{name}"
+    host_dir = os.path.join(config["staging"]["host"], dirname)
+    os.makedirs(host_dir, mode=0o700)
+    includes = []
+    for path in item["paths"]:
+        includes += ["--include", snapshot_path(path, config["source_mounts"])]
+    target = os.path.join(config["staging"]["restic"], dirname)
+    restic(config, runner, "restore", snapshot_id, "--target", target, *includes)
+    with open(os.path.join(host_dir, META), "w") as f:
+        json.dump({"stack": stack, "item": name, "snapshot": snapshot_id}, f)
+    return host_dir
+
+
+def running(container):
+    result = subprocess.run(
+        ["docker", "inspect", "--format", "{{.State.Running}}", container],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+    )
+    return result.stdout.strip() == "true"
+
+
+def staged(config, staging_dir):
+    """The item of a staging dir and its (staged dir, host path) pairs; fails if a path is missing."""
+    meta_path = os.path.join(staging_dir, META)
+    if not os.path.isfile(meta_path):
+        raise RestoreError(f"{staging_dir} is not a staging directory (no {META})")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    item = item_config(config, meta["stack"], meta["item"])
+    sources = []
+    for path in item["paths"]:
+        source = os.path.join(staging_dir, snapshot_path(path, config["source_mounts"]).lstrip("/"))
+        if not os.path.isdir(source):
+            raise RestoreError(f"{path} is not in the snapshot (nothing at {source})")
+        sources.append((source, path))
+    return item, sources
+
+
+def apply(config, staging_dir, containers=True):
+    item, sources = staged(config, staging_dir)
+    stopped = [c for c in item["containers"] if running(c)] if containers else []
+    for container in stopped:
+        log(f"stopping {container}")
+        subprocess.run(["docker", "stop", container], check=True, stdout=subprocess.DEVNULL)
+    try:
+        for source, path in sources:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            # Excluded files are also kept from --delete: the backup doesn't have them (preserve)
+            excludes = [f"--exclude={pattern}" for pattern in item["preserve"]]
+            subprocess.run(
+                ["rsync", "-aH", "--numeric-ids", "--delete", *excludes, f"{source}/", f"{path}/"], check=True
+            )
+            log(f"restored {path}")
+    finally:
+        for container in stopped:
+            log(f"starting {container}")
+            subprocess.run(["docker", "start", container], check=True, stdout=subprocess.DEVNULL)
+
+
+def write_marker(marker, content):
+    os.makedirs(os.path.dirname(marker), mode=0o755, exist_ok=True)
+    with open(f"{marker}.tmp", "w") as f:
+        f.write(f"{content}\n")
+    os.replace(f"{marker}.tmp", marker)
+
+
+def existing_data(items):
+    """The first item path that already holds files, or None on a fresh host."""
+    for item in items.values():
+        for path in item["paths"]:
+            if os.path.isdir(path) and os.listdir(path):
+                return path
+    return None
+
+
+def clean_slate(config, runner, stack, skip=False, snapshot="latest", dry_run=False):
+    """Restores every item of stack once on a fresh host; returns (changed, message)."""
+    items = stack_items(config, stack)
+    marker = os.path.join(config["state_dir"], f"{stack}.done")
+    if os.path.exists(marker):
+        with open(marker) as f:
+            return False, f"already done: {f.read().strip()}"
+    # Written before the first item is put in place: a run that dies halfway finds the data of the items it
+    # already restored and must not take it for an existing host
+    restoring = f"{marker}.restoring"
+    verb = "would write" if dry_run else "wrote"
+    if skip:
+        content = "skipped: --skip"
+    elif not os.path.exists(restoring) and (path := existing_data(items)):
+        content = f"skipped: existing data in {path}"
+    else:
+        content = None
+    if content:
+        if not dry_run:
+            write_marker(marker, content)
+        return True, f"{verb} {marker}: {content}"
+    try:
+        snapshot_id = resolve_snapshot(config, runner, snapshot)
+    except RestoreError as e:
+        raise NoRepositoryAccess(str(e)) from e
+    if snapshot_id is None:
+        raise NoSnapshot(f"no snapshot {snapshot} to restore {stack} from")
+    names = sorted(items)
+    if dry_run:
+        return True, f"would restore {stack}: {', '.join(names)} from snapshot {snapshot_id}"
+    # Stage everything first, so a snapshot that lacks an item changes nothing
+    staging_dirs = [stage(config, runner, stack, name, snapshot_id=snapshot_id) for name in names]
+    try:
+        for staging_dir in staging_dirs:
+            staged(config, staging_dir)
+    except RestoreError:
+        for staging_dir in staging_dirs:
+            shutil.rmtree(staging_dir)
+        raise
+    write_marker(restoring, snapshot_id)
+    for staging_dir in staging_dirs:
+        apply(config, staging_dir, containers=False)
+        shutil.rmtree(staging_dir)
+    write_marker(marker, snapshot_id)
+    os.remove(restoring)
+    return True, f"restored {stack}: {', '.join(names)} from snapshot {snapshot_id}"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--config", default=DEFAULT_CONFIG)
+    parser.add_argument("--runner", choices=["exec", "oneoff"], default="exec")
+    commands = parser.add_subparsers(dest="command", required=True)
+    p = commands.add_parser("stage", help="restore an item into a new staging dir")
+    p.add_argument("item", metavar="STACK/ITEM")
+    p.add_argument("--snapshot", default="latest")
+    p = commands.add_parser("apply", help="put a staged item in place")
+    p.add_argument("staging_dir")
+    p.add_argument("--no-containers", action="store_true", help="don't stop and start the item's containers")
+    p = commands.add_parser("clean-slate", help="restore every item of a stack once on a fresh host")
+    p.add_argument("stack")
+    p.add_argument("--skip", action="store_true", help="don't restore, only write the marker")
+    p.add_argument("--snapshot", default="latest")
+    p.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+
+    with open(args.config) as f:
+        config = json.load(f)
+    try:
+        if args.command == "stage":
+            stack, sep, item = args.item.partition("/")
+            if not sep:
+                raise RestoreError(f"name the item as STACK/ITEM, e.g. infrastructure/{args.item}")
+            print(stage(config, args.runner, stack, item, args.snapshot))
+        elif args.command == "apply":
+            apply(config, args.staging_dir, containers=not args.no_containers)
+        else:
+            changed, msg = clean_slate(config, args.runner, args.stack, args.skip, args.snapshot, args.dry_run)
+            print(json.dumps({"changed": changed, "msg": msg}))
+    except RestoreError as e:
+        log(f"ERROR: {e}")
+        return e.exit_code
+    except subprocess.CalledProcessError as e:
+        log(f"ERROR: {e}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

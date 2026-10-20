@@ -305,3 +305,74 @@
     - name: Validate the compose file
       ansible.builtin.command: docker compose --project-directory /etc/docker/infrastructure/compose config --quiet
       changed_when: false
+
+    - name: Stat the restored item data
+      ansible.builtin.stat:
+        path: "/etc/docker/infrastructure/{{ item }}"
+      loop:
+        - portainer/data/portainer.db
+        - pihole/pihole/gravity.db
+      register: restored
+
+    - name: Check the clean-slate restore brought the data back with owner and mode (#287)
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg
+          - item.stat.uid == 1234
+          - item.stat.mode == '0600'
+        fail_msg: "{{ item.item }} wasn't restored from the snapshot made in prepare.yaml"
+      loop: "{{ restored.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Read the restored Portainer data
+      ansible.builtin.slurp:
+        src: /etc/docker/infrastructure/portainer/data/portainer.db
+      register: restored_portainer
+
+    - name: Read the latest test snapshot
+      ansible.builtin.command: restic -r /srv/restic-repo --password-file /srv/restic-password snapshots --json latest
+      register: test_snapshot
+      changed_when: false
+
+    - name: Read the restore marker
+      ansible.builtin.slurp:
+        src: /var/lib/restic-restore/infrastructure.done
+      register: restore_marker
+
+    - name: Check the restore marker names the restored snapshot and no backup was taken meanwhile
+      ansible.builtin.assert:
+        that:
+          - restored_portainer.content | b64decode == 'portainer from backup\n'
+          - restore_marker.content | b64decode | trim == (test_snapshot.stdout | from_json | first).id
+          - test_snapshot.stdout | from_json | length == 1
+
+    - name: Find leftover staging directories
+      ansible.builtin.find:
+        paths: /var/restore
+        file_type: any
+      register: restore_staging
+
+    - name: Check the restore cleaned up its staging directories
+      ansible.builtin.assert:
+        that: restore_staging.matched == 0
+
+    - name: Stat the restore helper
+      ansible.builtin.stat:
+        path: /usr/local/bin/restic-restore
+      register: restore_helper
+
+    - name: Read the restore items of this stack
+      ansible.builtin.slurp:
+        src: /etc/restic-restore/stacks/infrastructure.json
+      register: restore_stack_items
+
+    - name: Check this stack's items are listed for the helper
+      ansible.builtin.assert:
+        that: (restore_stack_items.content | b64decode | from_json)['items'].keys() | sort == ['pihole', 'portainer']
+
+    - name: Check the restore helper is installed and executable
+      ansible.builtin.assert:
+        that:
+          - restore_helper.stat.isreg
+          - restore_helper.stat.mode == '0755'

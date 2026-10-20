@@ -24,6 +24,16 @@
     certificate_check_reload_nginx: false
     stack_manage_containers: false
     certificate_check_root_ca_passphrase: test-ca-passphrase
+    # restic directly instead of the resticprofile container, on the repository from prepare.yaml
+    stack_restore_runners:
+      exec: &test_restic [restic, -r, /srv/restic-repo, --password-file, /srv/restic-password]
+      oneoff: *test_restic
+    stack_restore_staging:
+      host: /var/restore
+      restic: /var/restore
+  # The real restore_items (Molecule doesn't read the repo's inventory)
+  vars_files:
+    - ../../inventory/group_vars/all/restore_items.yaml
   pre_tasks:
     # Throwaway root CA on the control node, kept in the Molecule ephemeral directory so the
     # idempotence run signs with the same CA.
