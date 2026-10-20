@@ -15,6 +15,7 @@ state it restores in /etc/restic-restore/stacks/<stack>.json ({"items": {name: {
   restic-restore clean [--older-than DAYS | --all] remove staging dirs (default: older than 7 days)
   restic-restore --runner oneoff clean-slate STACK [--skip] [--snapshot ID] [--dry-run]
                                                    restore all items of STACK on a fresh host, once (#287)
+  restic-restore drill [--read-data-subset N/T]   check the repository and stage every item of every stack (#288)
 
 apply only puts items in place: their containers and preserved files are known. A staged host path is for copying
 by hand. --from rsnapshot takes the local rsnapshot copy (fast, no network); its snapshots are named like daily.0.
@@ -22,6 +23,11 @@ Without a local copy, stage --from rsnapshot falls back to the latest restic sna
 
 clean-slate writes /var/lib/restic-restore/STACK.done; resticprofile schedules backups only once every stack it
 waits for has its marker. It exits with 10 if restic can't reach the repository and 11 if there is no snapshot.
+
+drill runs monthly from cron: restic check reads one part of the pack data (a different part each month, so all of
+it over a year), then every item of every stack is staged from the latest snapshot and removed again; nothing is
+put in place. It writes its result to a Prometheus file that the resticprofile healthcheck reads, so healthmonitor
+alerts on a failed or missed drill.
 
 restic runs in the resticprofile container, so repository, password and SSH key are the same as for backups:
 --runner exec uses the running container, --runner oneoff a one-off container for when the stack isn't up yet.
@@ -420,6 +426,53 @@ def clean_slate(config, runner, stack, skip=False, snapshot="latest", dry_run=Fa
     return True, f"restored {stack}: {', '.join(names)} from snapshot {snapshot_id}"
 
 
+def drill_subset(month, parts):
+    """The part of the pack data restic check reads in month (1-12): every part once per parts months."""
+    return f"{(month - 1) % parts + 1}/{parts}"
+
+
+def drill(config, runner, subset):
+    """Checks the repository and stages every item of every stack from the latest snapshot; returns the messages."""
+    messages = []
+    restic(config, runner, "check", "--read-data-subset", subset)
+    messages.append(f"restic check --read-data-subset {subset}: ok")
+    snapshot_id = resolve_snapshot(config, runner, "latest")
+    if snapshot_id is None:
+        raise RestoreError("no snapshot to restore from")
+    stacks = sorted(f.removesuffix(".json") for f in os.listdir(config["stacks_dir"]) if f.endswith(".json"))
+    for stack in stacks:
+        for name in sorted(stack_items(config, stack)):
+            try:
+                staging_dir = stage(config, runner, stack, name, snapshot_id=snapshot_id)
+            except RestoreError as e:
+                raise RestoreError(f"{stack}/{name}: {e}") from e
+            shutil.rmtree(staging_dir)
+            messages.append(f"{stack}/{name}: staged from snapshot {snapshot_id[:8]} and removed")
+    return messages
+
+
+def write_drill_metrics(config, success):
+    """Writes the drill's result for the healthcheck; a failure keeps the time of the last success."""
+    path = config["drill"]["metrics"]
+    last_success = None
+    if os.path.isfile(path):
+        with open(path) as f:
+            for line in f:
+                if line.startswith("restic_restore_drill_last_success_timestamp_seconds "):
+                    last_success = line.split()[1]
+    now = str(int(time.time()))
+    if success:
+        last_success = now
+    lines = [f"restic_restore_drill_success {int(success)}", f"restic_restore_drill_last_run_timestamp_seconds {now}"]
+    if last_success:
+        lines.append(f"restic_restore_drill_last_success_timestamp_seconds {last_success}")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(f"{path}.tmp", "w") as f:
+        f.write("\n".join(lines) + "\n")
+    os.chmod(f"{path}.tmp", 0o644)
+    os.replace(f"{path}.tmp", path)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default=DEFAULT_CONFIG)
@@ -451,6 +504,8 @@ def main(argv=None):
     p.add_argument("--skip", action="store_true", help="don't restore, only write the marker")
     p.add_argument("--snapshot", default="latest")
     p.add_argument("--dry-run", action="store_true")
+    p = commands.add_parser("drill", help="check the repository and stage every item of every stack")
+    p.add_argument("--read-data-subset", metavar="N/T", help="default: a different part of 12 each month")
     args = parser.parse_args(argv)
 
     with open(args.config) as f:
@@ -478,6 +533,15 @@ def main(argv=None):
                 print(removed)
         elif args.command == "apply":
             apply(config, args.staging_dir, containers=not args.no_containers)
+        elif args.command == "drill":
+            subset = args.read_data_subset or drill_subset(time.localtime().tm_mon, config["drill"]["parts"])
+            try:
+                print("\n".join(drill(config, args.runner, subset)))
+            # Any failure counts, not only the ones the helper expects
+            except Exception:
+                write_drill_metrics(config, success=False)
+                raise
+            write_drill_metrics(config, success=True)
         else:
             changed, msg = clean_slate(config, args.runner, args.stack, args.skip, args.snapshot, args.dry_run)
             print(json.dumps({"changed": changed, "msg": msg}))

@@ -286,6 +286,24 @@ its deployment does. Its items then work with `stage <stack>/<item>` and `apply`
 smart-home stack follows in TheRealArthurDent/smart-home#276; until then, its files only come back with
 `stage <host path>`.
 
+### Monthly drill (every host)
+
+On the 1st of each month at 12:00, root's crontab runs `restic-restore drill`, which only reads: `restic check`
+reads one twelfth of the repository's data (a different part each month, all of it over a year), then every item
+of every stack is staged from the latest snapshot and removed again. Nothing is put in place, so it also runs on
+raspi. The result goes to `/var/lib/resticprofile/metrics/restore_drill.prom`; the resticprofile healthcheck
+turns unhealthy when the last drill failed or its last success is older than 35 days, and healthmonitor alerts.
+
+```sh
+journalctl -t restic-restore-drill                         # what the last drill did
+sudo restic-restore drill                                  # run it now, e.g. after fixing a failure
+sudo restic-restore drill --read-data-subset 1/1           # read all of the data (slow)
+```
+
+The schedule and the number of parts are in `stack_restore_drill` (stack role defaults). On a host that is often
+switched off on the 1st, set `stack_restore_drill_enabled: false` (testbed has it in `inventory/hosts.yaml`): a
+missed drill would turn the healthcheck red. `sudo restic-restore drill` still works there by hand.
+
 ### Restore drill (testbed only)
 
 Run the drill on testbed against testbed's own repository, never on raspi, e.g. after changes to the helper or
