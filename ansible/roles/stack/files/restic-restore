@@ -11,7 +11,7 @@ state it restores in /etc/restic-restore/stacks/<stack>.json ({"items": {name: {
                                                    restore all items of STACK on a fresh host, once (#287)
 
 clean-slate writes /var/lib/restic-restore/STACK.done; resticprofile schedules backups only once every stack it
-waits for has its marker. It exits with 2 if restic can't reach the repository and 3 if there is no snapshot.
+waits for has its marker. It exits with 10 if restic can't reach the repository and 11 if there is no snapshot.
 
 restic runs in the resticprofile container, so repository, password and SSH key are the same as for backups:
 --runner exec uses the running container, --runner oneoff a one-off container for when the stack isn't up yet.
@@ -34,12 +34,13 @@ class RestoreError(Exception):
     exit_code = 1
 
 
+# Not 2: argparse exits with 2 on a usage error
 class NoRepositoryAccess(RestoreError):
-    exit_code = 2
+    exit_code = 10
 
 
 class NoSnapshot(RestoreError):
-    exit_code = 3
+    exit_code = 11
 
 
 def snapshot_path(host_path, mounts):

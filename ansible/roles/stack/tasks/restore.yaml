@@ -12,6 +12,7 @@
     owner: root
     group: root
     mode: '0755'
+  register: stack_restore_helper_file
 
 - name: Ensure the restore helper config directories exist
   ansible.builtin.file:
@@ -39,6 +40,7 @@
       source_mounts: "{{ stack_restore_source_mounts }}"
       staging: "{{ stack_restore_staging }}"
       runners: "{{ stack_restore_runners }}"
+  register: stack_restore_config_file
 
 - name: Ensure the restore items of this stack are listed for the helper
   ansible.builtin.copy:
@@ -47,13 +49,17 @@
     owner: root
     group: root
     mode: '0644'
+  register: stack_restore_items_file
 
-# In check mode on a fresh host the helper isn't installed yet, and the compose file the one-off container needs
-# doesn't exist either.
-- name: Stat the restore helper
-  ansible.builtin.stat:
-    path: /usr/local/bin/restic-restore
-  register: stack_restore_helper
+# In check mode the files above aren't written: on a fresh host the helper doesn't exist yet, and where one of them
+# is due for an update, the dry run would run the old helper or config (it did on testbed).
+- name: Check whether the dry run can use the deployed helper
+  ansible.builtin.set_fact:
+    stack_restore_dry_run_possible: >-
+      {{ not ansible_check_mode
+         or not (stack_restore_helper_file is changed
+                 or stack_restore_config_file is changed
+                 or stack_restore_items_file is changed) }}
 
 - name: Ensure restore_items are restored on a fresh host
   ansible.builtin.command:
@@ -68,17 +74,17 @@
   failed_when: false
   # Read-only with --dry-run, so it also reports in check mode what a real run would do
   check_mode: false
-  when: stack_restore_helper.stat.exists
+  when: stack_restore_dry_run_possible | bool
 
 - name: Ensure the restore succeeded
   ansible.builtin.fail:
     msg: "{{ stack_restore.stderr }}\n{{ stack_restore_hints[stack_restore.rc] | default('') }}"
   vars:
     stack_restore_hints:
-      2: >-
+      10: >-
         Check that the backup host accepts this host's restic SSH key: run sudo {{ stack_dir }}/init-restic.sh
         on the host, then run the playbook again.
-      3: >-
+      11: >-
         If this is a new host with nothing to restore, run the playbook again with
         -e skip_infrastructure_restore=true.
   when: stack_restore is not skipped and stack_restore.rc != 0
@@ -88,9 +94,10 @@
     msg: "{{ (stack_restore.stdout | from_json).msg }}"
   when: stack_restore is not skipped
 
-- name: Report the restore in check mode on a fresh host
+- name: Report the restore in check mode before the helper is up to date
   ansible.builtin.debug:
     msg: >-
-      restic-restore isn't installed yet: a real run restores {{ restore_items | list | join(', ') }} from
-      snapshot {{ stack_restore_snapshot }}, unless the host has data already or skip_infrastructure_restore is set.
+      restic-restore isn't installed or up to date yet, so no dry run: a real run restores
+      {{ restore_items | list | join(', ') }} from snapshot {{ stack_restore_snapshot }} unless the marker exists,
+      the host has data already or skip_infrastructure_restore is set.
   when: stack_restore is skipped
