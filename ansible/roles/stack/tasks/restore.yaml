@@ -42,7 +42,9 @@
       runners: "{{ stack_restore_runners }}"
       rsnapshot: "{{ stack_restore_rsnapshot }}"
       # One expression, so parts stays a number in the JSON
-      drill: "{{ {'metrics': stack_restore_drill.metrics, 'parts': stack_restore_drill.parts | int} }}"
+      drill: >-
+        {{ {'metrics': stack_restore_drill.metrics, 'parts': stack_restore_drill.parts | int,
+            'enabled': stack_restore_drill_enabled | bool} }}
   register: stack_restore_config_file
 
 - name: Ensure the restore items of this stack are listed for the helper

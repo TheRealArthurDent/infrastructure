@@ -1051,3 +1051,19 @@ def test_healthcheck_still_needs_a_recent_backup(healthcheck):
     healthcheck.backup(age_hours=27)
     healthcheck.drill(1, age_days=1)
     assert not healthcheck.healthy()
+
+
+def test_drill_by_hand_on_a_host_without_the_monthly_drill_records_nothing(env):
+    # A recorded success would turn the healthcheck red 35 days later, with no monthly drill to renew it
+    env.config["drill"]["enabled"] = False
+    env.config_path.write_text(json.dumps(env.config))
+    env.write(env.source, "portainer/data/portainer.db", "portainer")
+    env.write(env.source, "pihole/pihole/gravity.db", "pihole")
+    env.backup()
+
+    code, out, err = env.run("drill", "--read-data-subset", "1/1")
+
+    assert code == 0, err
+    assert "infrastructure/portainer" in out
+    assert "not recorded" in err
+    assert not env.drill_metrics.exists()
