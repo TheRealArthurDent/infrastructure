@@ -1,0 +1,52 @@
+---
+- name: Require --limit
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure the run is limited to explicit hosts
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Run with --limit <host>"
+        quiet: true
+      tags: always
+
+# With --limit, the play above matches no host and is skipped. This one stops a limit that selects several hosts
+# (all, *, a list or a group), so a run never reaches production by accident. assert needs no connection.
+- name: Require --limit to select exactly one host
+  hosts: all
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Ensure the run is limited to one host
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: "Run with --limit <one host>"
+        quiet: true
+      tags: always
+
+
+# Package upgrades, run on purpose rather than with every bootstrap run (#237). An upgrade of docker-ce or
+# containerd restarts the Docker daemon and with it the containers. A new kernel needs a reboot, which this
+# playbook only reports.
+- name: Upgrade packages
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: dist
+        autoclean: true
+        autoremove: true
+
+    - name: Check whether a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: update_reboot_required
+
+    - name: Report a required reboot
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} needs a reboot to finish the upgrade: sudo reboot"
+      when: update_reboot_required.stat.exists

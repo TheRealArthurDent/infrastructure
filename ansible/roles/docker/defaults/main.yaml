@@ -1,0 +1,15 @@
+---
+# Docker's apt repository, from facts (#237). Docker names the architectures like Debian does: the Pi's aarch64
+# is arm64, CI's x86_64 is amd64.
+docker_apt_distribution: "{{ ansible_facts['distribution'] | lower }}"
+docker_apt_release: "{{ ansible_facts['distribution_release'] }}"
+docker_apt_architecture: >-
+  {{ {'aarch64': 'arm64', 'x86_64': 'amd64', 'armv7l': 'armhf'}[ansible_facts['architecture']]
+     | default(ansible_facts['architecture']) }}
+
+# DNS servers for the containers: the Pi-hole on the host itself.
+docker_daemon_dns:
+  - "{{ ansible_facts['default_ipv4']['address'] }}"
+
+# Restart the daemon when its config changes. Molecule turns this off: no Docker daemon runs in the test container.
+docker_restart_daemon: true

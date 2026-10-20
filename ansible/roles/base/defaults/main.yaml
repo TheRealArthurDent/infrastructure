@@ -1,0 +1,3 @@
+---
+# Apply sysctl settings right away. Molecule turns this off: a container can't change the host's kernel settings.
+base_sysctl_reload: true

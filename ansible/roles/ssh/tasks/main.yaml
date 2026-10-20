@@ -34,8 +34,9 @@
     connect_timeout: "5"
     timeout: "10"
   delegate_to: "localhost"
-  ignore_errors: true
   register: ssh_configured_check
+  # A closed port times out: that's an answer, not an error; the tasks below read the result.
+  failed_when: ssh_configured_check.failed and 'Timeout' not in ssh_configured_check.msg | default('')
 
 # If {{ ansible_port }} is reachable, we don't need to do anything special
 - name: SSH port is configured properly
@@ -57,8 +58,9 @@
     connect_timeout: "5"
     timeout: "10"
   delegate_to: "localhost"
-  ignore_errors: true
   register: ssh_default_check
+  # A closed port times out: that's an answer, not an error; the tasks below read the result.
+  failed_when: ssh_default_check.failed and 'Timeout' not in ssh_default_check.msg | default('')
   when: ssh_configured_check is defined and
     ssh_configured_check.state is undefined
 

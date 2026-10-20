@@ -6,7 +6,8 @@ the repo root still works as a fallback until the stack role has proven itself o
 
 | Playbook | What it does |
 | --- | --- |
-| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `stack`: SSH port and key-only login, apt dist-upgrade, packages, sysctl, sudoers, rsnapshot cron, Docker, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
+| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `stack`: SSH port and key-only login, packages, sysctl, sudoers, rsnapshot cron, Docker, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
+| `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (#237) |
 | `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days, restarts nginx |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
 
@@ -79,8 +80,11 @@ ansible testbed -m ping
 # Dry run first, always
 ansible-playbook bootstrap.yaml --limit testbed --check --diff
 
-# Apply: OS updates (apt dist-upgrade), config, Docker, secrets
+# Apply: config, Docker, secrets
 ansible-playbook bootstrap.yaml --limit testbed
+
+# OS updates (apt dist-upgrade); tells you when a reboot is needed
+ansible-playbook update.yaml --limit testbed
 
 # Check / renew the nginx certificate
 ansible-playbook check-certificates.yaml --limit testbed
@@ -137,7 +141,7 @@ The `ssh` role finds SSH on port 22, moves it to the port from the inventory and
 off password and root logins, so make sure key login works first (step 2). If `sudo` asks
 for a password on the fresh install, add `--ask-become-pass` to this first run.
 
-Reboot afterwards so the Docker group membership and sysctl settings take effect:
+Reboot afterwards so the Docker group membership takes effect:
 `ssh -p 4242 testuser@192.168.1.7 sudo reboot`
 
 ### 4. Backup access

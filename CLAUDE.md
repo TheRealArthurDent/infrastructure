@@ -23,8 +23,8 @@ Review findings from the migration are GitHub issues. Still open are #237 (idemp
 ## Layout
 
 - `docker-compose.yaml`, `setup/` – the stack and its config for `deploy.sh` (fallback, copies of `ansible/roles/stack/templates/`)
-- `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`),
-  `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`, `inventory/hosts.yaml`,
+- `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`,
+  `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`, `inventory/hosts.yaml`,
   `lookup_plugins/keepass.py`
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets, repo hygiene)
