@@ -56,3 +56,10 @@ def test_workflows_use_no_repository_secrets():
         if secret != "GITHUB_TOKEN"
     ]
     assert offenders == []
+
+
+def test_yaml_files_use_the_yaml_extension():
+    """YAML files end in .yaml; only names a tool requires stay .yml (Molecule finds scenarios by molecule.yml)."""
+    tracked = git("ls-files").stdout.splitlines()
+    offenders = [f for f in tracked if f.endswith(".yml") and Path(f).name != "molecule.yml"]
+    assert offenders == []
