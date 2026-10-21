@@ -1,5 +1,6 @@
 """.env files are never committed, and the git hooks catch secrets and commits to main before they leave the machine."""
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -43,3 +44,15 @@ def test_pre_commit_refuses_commits_on_main():
 def test_pre_commit_is_installed_with_the_tooling():
     requirements = (ROOT / "requirements.txt").read_text().splitlines()
     assert any(line.startswith("pre-commit==") for line in requirements)
+
+
+def test_workflows_use_no_repository_secrets():
+    """The repo is meant to go public (#38): workflows get by with GITHUB_TOKEN and hold no other secrets."""
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.y*ml"))
+    offenders = [
+        f"{workflow.name}: {secret}"
+        for workflow in workflows
+        for secret in re.findall(r"secrets\.(\w+)", workflow.read_text())
+        if secret != "GITHUB_TOKEN"
+    ]
+    assert offenders == []
