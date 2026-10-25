@@ -14,7 +14,7 @@ if [ -f "$ENV_FILE" ]; then
       docker network create --subnet 172.30.1.128/25 --ip-range 172.30.1.192/26 outbound
     fi
     export HOSTNAME
-    export DUNGEON_IP; DUNGEON_IP=$(getent ahosts dungeon | awk '/STREAM/ {print $1; exit}')
+    export DUNGEON_IP; DUNGEON_IP=$(getent ahostsv4 dungeon | awk '/STREAM/ {print $1; exit}')
 
     nice -n 10 docker compose config --services | while read service; do
       nice -n 10 docker compose pull "$service"
