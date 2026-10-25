@@ -3,6 +3,15 @@
   become: true
   gather_facts: false
   tasks:
+    # Raspberry Pi OS manages the network with NetworkManager; the base role puts its DNS fallback there.
+    - name: Ensure the NetworkManager config directory exists like on Raspberry Pi OS
+      ansible.builtin.file:
+        path: /etc/NetworkManager/conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
     # Simulates a host set up before #229, so verify can check the role removes the CA key.
     - name: Plant a root CA private key like the old certificate_check role left behind
       ansible.builtin.copy:
