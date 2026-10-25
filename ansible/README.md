@@ -134,12 +134,13 @@ Booting from USB needs a bootloader with USB boot enabled. If the Pi does not bo
 
 ```sh
 cd ansible
-ansible-playbook bootstrap.yaml --limit testbed --skip-tags stack
+ansible-playbook bootstrap.yaml --limit testbed --skip-tags stack --ask-become-pass
 ```
 
 The `ssh` role finds SSH on port 22, moves it to the port from the inventory and continues there. It also turns
-off password and root logins, so make sure key login works first (step 2). If `sudo` asks
-for a password on the fresh install, add `--ask-become-pass` to this first run.
+off password and root logins, so make sure key login works first (step 2). `sudo` on the fresh install asks for
+the password set in the Imager, hence `--ask-become-pass` on this first run; the `base` role's sudoers entry
+drops that for later runs.
 
 Reboot afterwards so the Docker group membership takes effect:
 `ssh -p 4242 testuser@192.168.1.7 sudo reboot`
@@ -247,8 +248,11 @@ The host is rebuilt and its non-IaC state comes back from restic automatically, 
 1. Flash and first boot (steps 1 and 2), then bootstrap the host without the stack (step 3):
 
    ```sh
-   bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --skip-tags stack
+   bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --skip-tags stack --ask-become-pass
    ```
+
+   The fresh install's `sudo` asks for the password set in the Imager (`Missing sudo password` without
+   `--ask-become-pass`); the `base` role's sudoers entry drops that, so later runs don't need the flag.
 
    Reboot afterwards, so the Docker group membership takes effect (port and user from the inventory):
 
