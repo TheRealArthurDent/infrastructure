@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+# Global DNS: replaces the servers from DHCP. glibc asks them in order and only moves on when one doesn't answer,
+# so Pi-hole's blocking stays in effect while it runs.
+[global-dns]
+options={{ base_dns_options | join(',') }}
+
+[global-dns-domain-*]
+servers={{ (base_dns_servers + base_dns_fallback) | join(',') }}

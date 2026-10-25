@@ -1,3 +1,17 @@
 ---
 # Apply sysctl settings right away. Molecule turns this off: a container can't change the host's kernel settings.
 base_sysctl_reload: true
+
+# DNS servers of the host itself. Pi-hole on this host comes first; it doesn't exist yet on a freshly installed Pi,
+# and is down while its container restarts. Then the host resolves through the fallback, by default the Fritzbox.
+base_dns_servers:
+  - "{{ ansible_facts['default_ipv4']['address'] }}"
+base_dns_fallback:
+  - 192.168.1.1
+# Move on to the next server after one second instead of five.
+base_dns_options:
+  - timeout:1
+
+# Reload NetworkManager when the DNS config changes. Molecule turns this off: no NetworkManager runs in the test
+# container.
+base_networkmanager_reload: true

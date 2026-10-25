@@ -1,5 +1,5 @@
-Set DNS resolver in Fritzbox to something else than 192.168.1.2 (e.g. 9.9.9.9)
-If only FritzBox would support alternative DNS...
+No need to change the Fritzbox DNS for a fresh install anymore: the base role makes the Pi fall back to the Fritzbox (192.168.1.1) for DNS
+while its own Pi-hole is down or not installed yet (variable base_dns_fallback).
 
 
 # Maybe somehow automate that down the road

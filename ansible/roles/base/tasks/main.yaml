@@ -1,3 +1,17 @@
+# Before anything downloads: on a freshly installed Pi, the network's DNS server (Pi-hole on this very host) doesn't
+# exist yet, and apt couldn't resolve deb.debian.org.
+- name: Ensure the host falls back to another DNS server while Pi-hole is down
+  ansible.builtin.template:
+    src: etc/NetworkManager/conf.d/90-dns-fallback.conf.j2
+    dest: /etc/NetworkManager/conf.d/90-dns-fallback.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload NetworkManager
+
+- name: Flush handlers so apt resolves through the new DNS config
+  ansible.builtin.meta: flush_handlers
+
 - name: "Generate Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
   community.crypto.openssl_dhparam:
     path: /etc/ssl/certs/dhparam.pem

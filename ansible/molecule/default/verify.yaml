@@ -96,6 +96,29 @@
           - "'Architectures: ' ~ expected_arch in sources"
         fail_msg: "docker.sources doesn't match this host: {{ sources }}"
 
+    - name: Stat the NetworkManager DNS fallback
+      ansible.builtin.stat:
+        path: /etc/NetworkManager/conf.d/90-dns-fallback.conf
+      register: dns_fallback_file
+
+    - name: Read the NetworkManager DNS fallback
+      ansible.builtin.slurp:
+        src: /etc/NetworkManager/conf.d/90-dns-fallback.conf
+      register: dns_fallback_config
+
+    # Pi-hole on this host first, the Fritzbox only when Pi-hole doesn't answer, e.g. before it exists.
+    - name: Check the host resolves through its own Pi-hole and falls back to the router
+      vars:
+        config: "{{ dns_fallback_config.content | b64decode }}"
+      ansible.builtin.assert:
+        that:
+          - dns_fallback_file.stat.pw_name == 'root'
+          - dns_fallback_file.stat.mode == '0644'
+          - "'servers=' ~ ansible_facts['default_ipv4']['address'] ~ ',192.168.1.1' in config.splitlines()"
+          - "'options=timeout:1' in config.splitlines()"
+          - "'[global-dns-domain-*]' in config.splitlines()"
+        fail_msg: "Unexpected DNS fallback config: {{ config }}"
+
     - name: Stat Docker daemon config
       ansible.builtin.stat:
         path: /etc/docker/daemon.json
