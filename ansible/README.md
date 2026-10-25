@@ -241,18 +241,69 @@ sudo restic-restore stage /etc/docker/smart-home/some/file --snapshot <id>
 ### Clean slate (reinstall or crash)
 
 The host is rebuilt and its non-IaC state comes back from restic automatically, before the stack starts. Follow
-[Set up a host from scratch](#set-up-a-host-from-scratch):
+[Set up a host from scratch](#set-up-a-host-from-scratch); `<target>` is the inventory host (`raspi` or
+`testbed`), and the playbooks run in `ansible/` on the control node.
 
-1. Flash, first boot, `bootstrap.yaml --skip-tags stack`, reboot (steps 1 to 3).
-2. Authorise the new restic key on `dungeon` with `sudo /etc/docker/infrastructure/init-restic.sh` (step 4). The
-   `secrets` role creates a new key per install; it reaches the existing repository of the host, since the
+1. Flash and first boot (steps 1 and 2), then bootstrap the host without the stack (step 3):
+
+   ```sh
+   bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --skip-tags stack
+   ```
+
+   Reboot afterwards, so the Docker group membership takes effect (port and user from the inventory):
+
+   ```sh
+   ssh -p <port> <user>@<ip> sudo reboot
+   ```
+
+2. Authorise the new restic key on `dungeon` (step 4). On the Pi:
+
+   ```sh
+   sudo /etc/docker/infrastructure/init-restic.sh
+   ```
+
+   The `secrets` role creates a new key per install; it reaches the existing repository of the host, since the
    repository path is the hostname and the passphrase comes from KeePass.
-3. `check-certificates.yaml`, then `bootstrap.yaml --tags stack` (step 5). Before `docker compose up`, the role
-   runs `restic-restore --runner oneoff clean-slate infrastructure`, which restores every item from the latest
-   snapshot in a one-off resticprofile container and writes the marker `/var/lib/restic-restore/infrastructure.done`.
-   The `--check --diff` run before it reports `would restore infrastructure: pihole, portainer from snapshot <id>`.
-4. `setup-pihole.yaml` (step 5) puts the Pi-hole configuration from `configs/pihole.yaml` on top.
-5. A second `bootstrap.yaml --tags stack` run ends with `changed=0`: the marker makes the restore a no-op.
+
+3. Certificate, then a dry run and the real run of the stack (step 5):
+
+   ```sh
+   bin/with-keepass ansible-playbook check-certificates.yaml --limit <target>
+   bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack --check --diff
+   bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
+   ```
+
+   The dry run reports `would restore infrastructure: pihole, portainer from snapshot <id>`. Before
+   `docker compose up`, the real run runs `restic-restore --runner oneoff clean-slate infrastructure`, which
+   restores every item from the latest snapshot in a one-off resticprofile container and writes the marker
+   `/var/lib/restic-restore/infrastructure.done`.
+
+4. Put the Pi-hole configuration from `configs/pihole.yaml` on top (step 5):
+
+   ```sh
+   bin/with-keepass ansible-playbook setup-pihole.yaml --limit <target>
+   ```
+
+5. A second stack run ends with `changed=0`: the marker makes the restore a no-op.
+
+   ```sh
+   bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
+   ```
+
+6. Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
+   Backups wait for its marker too (`stack_backup_stacks`), so don't skip this. In `ansible/` of the smart-home
+   repo:
+
+   ```sh
+   ansible-playbook deploy.yaml --limit <target> --check --diff
+   ansible-playbook deploy.yaml --limit <target>
+   ```
+
+   Then check that resticprofile no longer waits for a marker:
+
+   ```sh
+   ssh -p <port> <user>@<ip> docker logs resticprofile
+   ```
 
 What the role decides:
 
@@ -266,8 +317,22 @@ What the role decides:
 Options and failures:
 
 - `-e infrastructure_restore_snapshot=<id>`: restore another snapshot than the latest, e.g. when the latest
-  one was taken after the data was already broken. Find the ID with `sudo restic-restore --runner oneoff snapshots`.
+  one was taken after the data was already broken. Find the ID on the Pi with:
+
+  ```sh
+  sudo restic-restore --runner oneoff snapshots
+  ```
+
+  ```sh
+  bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack -e infrastructure_restore_snapshot=<id>
+  ```
+
 - `-e skip_infrastructure_restore=true`: a new host with nothing to restore; only writes the marker.
+
+  ```sh
+  bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack -e skip_infrastructure_restore=true
+  ```
+
 - The run stops with a hint if `dungeon` refuses the key (run `init-restic.sh`, then the playbook again) or the
   repository has no snapshot (a new host: run again with `skip_infrastructure_restore`).
 
