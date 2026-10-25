@@ -34,3 +34,9 @@ restore_items:
     note: >-
       To be removed later: the folder used to be the provisioning path; setup-pihole.yaml now configures the
       Pi-hole through its API.
+
+# resticprofile schedules backups only once each of these stacks has its marker (stack role defaults). smart-home
+# runs restic-restore clean-slate before it starts (TheRealArthurDent/smart-home#1), and both hosts run it.
+stack_backup_stacks:
+  - "{{ stack_project_name }}"
+  - smart-home

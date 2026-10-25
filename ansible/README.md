@@ -283,8 +283,9 @@ resticprofile backs up the whole host, so the helper is shared. Every stack list
 `/etc/restic-restore/stacks/<stack>.json` (`{"items": {name: {paths, containers, preserve}}}`), runs
 `restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to `stack_backup_stacks` once
 its deployment does. Its items then work with `stage <stack>/<item>` and `apply` like this stack's. The
-smart-home stack follows in TheRealArthurDent/smart-home#276; until then, its files only come back with
-`stage <host path>`.
+smart-home stack does since TheRealArthurDent/smart-home#1, so `inventory/group_vars/all/restore_items.yaml` adds
+it to `stack_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`. `deploy.sh` still
+renders the old list (only this stack).
 
 ### Monthly drill (every host)
 

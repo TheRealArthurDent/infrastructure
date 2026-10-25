@@ -146,3 +146,12 @@ def test_matcher_follows_restic():
     assert not excluded(PurePosixPath("/source/home/pi/.ssh/known_hosts"))
     assert excluded(PurePosixPath("/source/etc/docker/infrastructure/.env"))
     assert not excluded(PurePosixPath("/source/etc/docker/infrastructure/pihole"))
+
+
+def test_backups_wait_for_the_smart_home_restore_too():
+    """smart-home restores its volumes with clean-slate before it starts (smart-home#1), and both hosts run it.
+
+    resticprofile schedules backups only once every stack in stack_backup_stacks has its marker.
+    """
+    group_vars = yaml.safe_load(read(RESTORE_ITEMS))
+    assert group_vars["stack_backup_stacks"] == ["{{ stack_project_name }}", "smart-home"]
