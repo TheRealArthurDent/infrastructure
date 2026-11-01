@@ -24,6 +24,8 @@
     docker_restart_daemon: false
     # A container can't change the host's kernel settings.
     base_sysctl_reload: false
+    # No NetworkManager runs in the test container.
+    base_networkmanager_reload: false
     stack_manage_containers: false
     certificate_check_root_ca_passphrase: test-ca-passphrase
     # restic directly instead of the resticprofile container, on the repository from prepare.yaml

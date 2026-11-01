@@ -15,8 +15,10 @@
 - name: Resolve the backup host
   when: stack_dungeon_ip is not defined
   block:
+    # IPv4 only: the resticprofile container has no IPv6 network, and the Fritzbox answers with IPv6 first while
+    # Pi-hole isn't up yet.
     - name: Look up the backup host on the Pi
-      ansible.builtin.command: getent ahosts {{ stack_dungeon_host }}
+      ansible.builtin.command: getent ahostsv4 {{ stack_dungeon_host }}
       register: stack_dungeon_getent
       changed_when: false
       failed_when: false
