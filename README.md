@@ -1,8 +1,7 @@
 # raspberry
 
 [![Spell Check](https://github.com/TheRealArthurDent/raspberry/actions/workflows/spell-check.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/spell-check.yaml)
-[![Ansible Lint](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ansible-lint.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ansible-lint.yaml)
-[![Ansible Tests](https://github.com/TheRealArthurDent/raspberry/actions/workflows/molecule.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/molecule.yaml)
+[![CI](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ci.yaml)
 
 Basic setup of the pi-4
 
@@ -47,4 +46,4 @@ molecule destroy       # remove the container when done
   - `pytest ... --junitxml=test-results/pytest.xml` for the unit tests.
 - In GitHub Actions, the reports are published as check runs ("Unit test report", "Molecule test report") with a
   summary on the run page, and the raw XML files are attached as the `molecule-reports` artifact.
-  The workflow can also be started by hand: Actions → Ansible Tests → Run workflow.
+  The workflow can also be started by hand: Actions → CI → Run workflow.

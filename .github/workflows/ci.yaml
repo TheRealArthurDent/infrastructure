@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  # Every PR, without a paths filter: the main ruleset requires these checks, and a workflow skipped by `paths`
+  # never reports them, which blocks the merge forever. The `changes` job skips the jobs instead; a skipped job
+  # counts as passed.
+  pull_request:
+  # No run after the merge: the PR already tested the merge result. The weekly run catches drift from outside
+  # the repo (collections, apt packages, base images) and keeps the README badge current.
+  schedule:
+    - cron: '0 6 * * MON'
+  workflow_dispatch:
+
+# A new push to a PR cancels the run for the previous one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read  # paths-filter lists the PR's files
+  checks: write  # publish test reports as check runs
+
+jobs:
+  # Which jobs a PR needs. Outside PRs the filter doesn't run, its outputs are empty and every job runs; jobs
+  # check `!= 'false'` so that a failing filter runs them too instead of skipping them as passed.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      lint: ${{ steps.filter.outputs.lint }}
+      unit: ${{ steps.filter.outputs.unit }}
+      molecule: ${{ steps.filter.outputs.molecule }}
+    steps:
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3.0.2
+        with:
+          # A file counts for a filter only if it matches every pattern of it.
+          predicate-quantifier: every
+          filters: |
+            lint:
+              - '{ansible/**,.ansible-lint,.yamllint.yaml,requirements.txt,.github/workflows/ci.yaml}'
+              - '!**/*.md'
+            # The unit tests also check files outside ansible/ (docker-compose.yaml, setup/, deploy.sh, .claude/,
+            # .github/, .gitignore, .pre-commit-config.yaml), so anything but docs runs them.
+            unit:
+              - '**'
+              - '!**/*.md'
+            molecule:
+              - '{ansible/**,requirements.txt,.github/workflows/ci.yaml}'
+              - '!ansible/tests/**'
+              - '!**/*.md'
+
+  lint:
+    name: Lint Ansible Code
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.lint != 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      # Same pinned versions as local runs and pre-commit, so results match.
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Without the collections, syntax-check can't resolve community.* modules.
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yaml
+
+      - name: Run ansible-lint
+        run: |
+          ansible-lint --strict ansible/
+
+  unit:
+    name: Unit tests
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.unit != 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # The --limit guard tests load the playbooks, which need the collections.
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yaml
+
+      # The restic-restore tests run the helper against a local restic repository (#287).
+      - name: Install restic and rsync
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends restic rsync
+
+      # Most of the time goes into tests that wait for ansible-playbook and restic, so they run in parallel.
+      - name: Run pytest
+        run: pytest -v -n auto ansible/tests/unit --junitxml=test-results/pytest.xml
+
+      - name: Publish test report
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v6.6.1
+        with:
+          check_name: Unit test report
+          report_paths: test-results/pytest.xml
+          detailed_summary: true
+          include_passed: true
+
+  molecule:
+    name: Molecule
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.molecule != 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Molecule tests
+        working-directory: ansible
+        run: molecule test
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+
+      - name: Publish test report
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v6.6.1
+        with:
+          check_name: Molecule test report
+          report_paths: test-results/molecule/*.xml
+          detailed_summary: true
+          include_passed: true
+
+      - name: Upload raw reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: molecule-reports
+          path: test-results/
