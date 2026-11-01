@@ -44,7 +44,7 @@ jobs:
             lint:
               - '{ansible/**,.ansible-lint,.yamllint.yaml,requirements.txt,.github/workflows/ci.yaml}'
               - '!**/*.md'
-            # The unit tests also check files outside ansible/ (docker-compose.yaml, setup/, deploy.sh, .claude/,
+            # The unit tests also check files outside ansible/ (renovate.json, .claude/,
             # .github/, .gitignore, .pre-commit-config.yaml), so anything but docs runs them.
             unit:
               - '**'
