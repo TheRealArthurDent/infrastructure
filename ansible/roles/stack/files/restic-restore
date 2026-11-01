@@ -535,13 +535,23 @@ def main(argv=None):
             apply(config, args.staging_dir, containers=not args.no_containers)
         elif args.command == "drill":
             subset = args.read_data_subset or drill_subset(time.localtime().tm_mon, config["drill"]["parts"])
+            # Without the monthly drill, a recorded result would turn the healthcheck red 35 days later
+            record = config["drill"].get("enabled", True)
+            if not record and os.path.exists(config["drill"]["metrics"]):
+                # Left from when the drill was enabled
+                os.remove(config["drill"]["metrics"])
+                log(f"removed {config['drill']['metrics']}")
             try:
                 print("\n".join(drill(config, args.runner, subset)))
             # Any failure counts, not only the ones the helper expects
             except Exception:
-                write_drill_metrics(config, success=False)
+                if record:
+                    write_drill_metrics(config, success=False)
                 raise
-            write_drill_metrics(config, success=True)
+            if record:
+                write_drill_metrics(config, success=True)
+            else:
+                log("monthly drill disabled on this host, result not recorded for the healthcheck")
         else:
             changed, msg = clean_slate(config, args.runner, args.stack, args.skip, args.snapshot, args.dry_run)
             print(json.dumps({"changed": changed, "msg": msg}))
