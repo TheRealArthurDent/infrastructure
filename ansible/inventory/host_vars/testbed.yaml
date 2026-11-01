@@ -1,0 +1,5 @@
+---
+# Test Pi. Smaller DH parameters, so a fresh testbed doesn't spend an hour generating them.
+dhparameter_bits: 2048
+# Often switched off on the 1st: a missed monthly restore drill would turn resticprofile unhealthy (#288)
+stack_restore_drill_enabled: false

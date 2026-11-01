@@ -1,0 +1,4 @@
+---
+# Production. Pi-hole host, Docker DNS and the dungeon IP need no entry here: they default to the host's name,
+# its own IP and a lookup on the host (#237, #271).
+dhparameter_bits: 4096

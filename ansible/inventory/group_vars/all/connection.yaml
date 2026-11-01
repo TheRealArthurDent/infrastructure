@@ -1,0 +1,4 @@
+---
+# The same for every host: connect with this key and become root.
+ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+ansible_become: true

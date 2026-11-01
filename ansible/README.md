@@ -13,10 +13,12 @@ the repo root still works as a fallback until the stack role has proven itself o
 
 ## Hosts
 
-Defined in `inventory/hosts.yaml`:
+Defined in `inventory/hosts.yaml`, which only says how to reach each host. Settings shared by all hosts (SSH key,
+`become`, KeePass paths) are in `inventory/group_vars/all/`, per-host values (`dhparameter_bits`) in
+`inventory/host_vars/<host>.yaml`:
 
 | Host | IP | SSH port | User |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `raspi` | 192.168.1.2 | 1357 | `smarthome` (production) |
 | `testbed` | 192.168.1.7 | 4242 | `testuser` |
 
@@ -354,9 +356,9 @@ sudo restic-restore drill --read-data-subset 1/1           # read all of the dat
 ```
 
 The schedule and the number of parts are in `stack_restore_drill` (stack role defaults). On a host that is often
-switched off on the 1st, set `stack_restore_drill_enabled: false` (testbed has it in `inventory/hosts.yaml`): a
-missed drill would turn the healthcheck red. `sudo restic-restore drill` still works there by hand, without
-recording a result.
+switched off on the 1st, set `stack_restore_drill_enabled: false` (testbed has it in
+`inventory/host_vars/testbed.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
+still works there by hand, without recording a result.
 
 ### Restore drill (testbed only)
 
