@@ -47,6 +47,7 @@ services:
     environment:
       TZ: 'Europe/Berlin'
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
+      FTLCONF_dns_listeningMode: 'ALL'  # Answer on every network, their interface order can change (SINGLE broke DNS)
       FTLCONF_dns_dnssec: 'true'
       FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Volumes store your data between container upgrades
@@ -90,6 +91,7 @@ services:
     environment:
       TZ: 'Europe/Berlin'
       FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
+      FTLCONF_dns_listeningMode: 'ALL'  # Answer on every network, their interface order can change (SINGLE broke DNS)
       FTLCONF_dns_dnssec: 'true'
       FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Only a cache: setup-pihole.yaml provisions this Pi-hole, so the volume isn't backed up. It keeps the egress
