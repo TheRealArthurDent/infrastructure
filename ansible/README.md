@@ -356,9 +356,9 @@ sudo restic-restore drill --read-data-subset 1/1           # read all of the dat
 ```
 
 The schedule and the number of parts are in `stack_restore_drill` (stack role defaults). On a host that is often
-switched off on the 1st, set `stack_restore_drill_enabled: false` (testbed has it in `inventory/hosts.yaml`): a
-missed drill would turn the healthcheck red. `sudo restic-restore drill` still works there by hand, without
-recording a result.
+switched off on the 1st, set `stack_restore_drill_enabled: false` (testbed has it in
+`inventory/host_vars/testbed.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
+still works there by hand, without recording a result.
 
 ### Restore drill (testbed only)
 
