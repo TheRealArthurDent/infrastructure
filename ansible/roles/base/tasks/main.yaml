@@ -12,6 +12,9 @@
 - name: Flush handlers so apt resolves through the new DNS config
   ansible.builtin.meta: flush_handlers
 
+- name: Ensure the kernel command line enables the memory cgroup
+  ansible.builtin.import_tasks: kernel_cmdline.yaml
+
 - name: "Generate Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
   community.crypto.openssl_dhparam:
     path: /etc/ssl/certs/dhparam.pem
