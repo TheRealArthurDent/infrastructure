@@ -196,6 +196,27 @@
       ansible.builtin.assert:
         that: "'FTLCONF_webserver_api_password=LEAKCANARY-pihole' in (infra_env.content | b64decode)"
 
+    - name: Read the kernel command line
+      ansible.builtin.slurp:
+        src: /boot/firmware/cmdline.txt
+      register: cmdline
+
+    # prepare.yaml planted it with cgroup_enable=cpuset already present (#313)
+    - name: Check the memory cgroup is enabled once each and the rest of the line is kept
+      ansible.builtin.assert:
+        that:
+          - cmdline_text.endswith('\n')
+          - cmdline_text.splitlines() | length == 1
+          - cmdline_text.startswith('console=serial0,115200 console=tty1 root=PARTUUID=0a1b2c3d-02 rootfstype=ext4 '
+                                    'fsck.repair=yes rootwait cfg80211.ieee80211_regdom=DE cgroup_enable=cpuset')
+          - cmdline_words | select('eq', 'cgroup_enable=cpuset') | list | length == 1
+          - cmdline_words | select('eq', 'cgroup_enable=memory') | list | length == 1
+          - cmdline_words | select('eq', 'cgroup_memory=1') | list | length == 1
+        fail_msg: "Unexpected kernel command line: {{ cmdline_text }}"
+      vars:
+        cmdline_text: "{{ cmdline.content | b64decode }}"
+        cmdline_words: "{{ cmdline_text.split() }}"
+
     - name: Stat DH parameters
       ansible.builtin.stat:
         path: /etc/ssl/certs/dhparam.pem

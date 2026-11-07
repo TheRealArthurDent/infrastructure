@@ -15,3 +15,11 @@ base_dns_options:
 # Reload NetworkManager when the DNS config changes. Molecule turns this off: no NetworkManager runs in the test
 # container.
 base_networkmanager_reload: true
+
+# Kernel parameters the base role makes sure are on the kernel command line (#313). The memory cgroup lets Docker
+# apply the containers' mem_limit. A host without the file (no Raspberry Pi) is left alone.
+base_kernel_cmdline_file: /boot/firmware/cmdline.txt
+base_kernel_cmdline_params:
+  - cgroup_enable=cpuset
+  - cgroup_enable=memory
+  - cgroup_memory=1

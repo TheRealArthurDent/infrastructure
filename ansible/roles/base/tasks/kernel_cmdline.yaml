@@ -1,0 +1,19 @@
+---
+# Raspberry Pi OS boots without the memory cgroup, so Docker drops every mem_limit (#313). The kernel command line is
+# one line; each missing parameter is appended to it, the rest of the line stays as it is. It only takes effect
+# after a reboot, which the role leaves to the user: a reboot of raspi stops the smart home.
+- name: Stat the kernel command line
+  ansible.builtin.stat:
+    path: "{{ base_kernel_cmdline_file }}"
+  register: base_kernel_cmdline_stat
+
+- name: Ensure the kernel command line has the parameter {{ item }}
+  ansible.builtin.lineinfile:
+    path: "{{ base_kernel_cmdline_file }}"
+    # Matches the line only while it lacks the parameter as a whole word
+    regexp: '^(?!.*(?:^|\s){{ item | regex_escape }}(?:\s|$))(.*?)\s*$'
+    line: '\1 {{ item }}'
+    backrefs: true
+  loop: "{{ base_kernel_cmdline_params }}"
+  when: base_kernel_cmdline_stat.stat.exists
+  notify: Report that the kernel command line takes effect after a reboot
