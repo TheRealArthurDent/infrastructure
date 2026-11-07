@@ -217,6 +217,66 @@
         cmdline_text: "{{ cmdline.content | b64decode }}"
         cmdline_words: "{{ cmdline_text.split() }}"
 
+    - name: Read the boot config
+      ansible.builtin.slurp:
+        src: /boot/firmware/config.txt
+      register: boot_config
+
+    - name: Check I2C is enabled once and the rest of the boot config is kept (#325)
+      ansible.builtin.assert:
+        that:
+          - boot_lines | select('match', '^#?\\s*dtparam=i2c_arm=') | list == ['dtparam=i2c_arm=on']
+          - "'#dtparam=spi=on' in boot_lines"
+          - "'dtparam=audio=on' in boot_lines"
+        fail_msg: "Unexpected boot config: {{ boot_lines }}"
+      vars:
+        boot_lines: "{{ (boot_config.content | b64decode).splitlines() }}"
+
+    - name: Stat the fan control files
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      register: argon_fan_files
+      loop:
+        - {path: /usr/local/bin/argon-fan, mode: '0755'}
+        - {path: /etc/argon-fan.json, mode: '0644'}
+        - {path: /etc/systemd/system/argon-fan.service, mode: '0644'}
+        - {path: /etc/modules-load.d/i2c-dev.conf, mode: '0644'}
+
+    - name: Check the fan control files exist, owned by root
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == item.item.mode
+        fail_msg: "{{ item.item.path }} is missing or has the wrong owner or mode"
+      loop: "{{ argon_fan_files.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+
+    - name: Read the fan config
+      ansible.builtin.slurp:
+        src: /etc/argon-fan.json
+      register: argon_fan_config
+
+    - name: Check the fan config has raspi's thresholds
+      ansible.builtin.assert:
+        that:
+          - "fan_config.thresholds == {'55': 10, '60': 55, '65': 100}"
+          - fan_config.interval == 30
+          - fan_config.bus == 1
+      vars:
+        fan_config: "{{ argon_fan_config.content | b64decode | from_json }}"
+
+    # Loads its config and the I2C library on the target, short of opening the bus
+    - name: Check the fan daemon runs with the deployed Python and its config
+      ansible.builtin.command: >-
+        python3 -c "import runpy, smbus;
+        d = runpy.run_path('/usr/local/bin/argon-fan', run_name='argon_fan');
+        print(d['load_config']('/etc/argon-fan.json')['thresholds'])"
+      register: argon_fan_run
+      changed_when: false
+      failed_when: "argon_fan_run.stdout != '[(55.0, 10), (60.0, 55), (65.0, 100)]'"
+
     - name: Stat DH parameters
       ansible.builtin.stat:
         path: /etc/ssl/certs/dhparam.pem

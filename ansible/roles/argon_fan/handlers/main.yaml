@@ -1,0 +1,14 @@
+---
+- name: Restart argon-fan
+  ansible.builtin.systemd_service:
+    name: argon-fan
+    state: restarted
+    daemon_reload: true
+  when: argon_fan_manage_service | bool
+
+# The role doesn't reboot: a reboot of raspi stops the smart home.
+- name: Report that I2C is enabled after a reboot
+  ansible.builtin.debug:
+    msg: >-
+      {{ argon_fan_boot_config }} changed. Reboot {{ inventory_hostname }} when it suits you; until then the fan
+      control can't reach the case.

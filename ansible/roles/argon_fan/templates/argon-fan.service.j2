@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Fan control for the Argon ONE V2 case
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/argon-fan --config /etc/argon-fan.json
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

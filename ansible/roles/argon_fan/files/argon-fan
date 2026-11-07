@@ -1,0 +1,107 @@
+#!/usr/bin/python3
+"""Fan control for the Argon ONE V2 case (#325), installed by the argon_fan role of the raspberry repo.
+
+Replaces Argon's own argononed (fan part only; the power button isn't used). Every interval it reads the CPU
+temperature and sets the fan to the speed of the highest threshold reached, over I2C to the case's controller at
+0x1a: its duty cycle register 0x80 where the firmware has it, a plain byte on older firmware (the same protocol as
+Argon's argonregister.py). A higher speed applies at once, a lower one only when the next check still asks for it.
+
+  argon-fan [--config /etc/argon-fan.json]
+"""
+
+import argparse
+import json
+import sys
+import time
+
+ADDRESS = 0x1a
+DUTY_CYCLE = 0x80
+
+
+def target_speed(temperature, thresholds):
+    """The speed (percent) of the highest threshold (degrees Celsius) the temperature has reached, else 0."""
+    reached = [(threshold, speed) for threshold, speed in thresholds if temperature >= threshold]
+    return max(reached)[1] if reached else 0
+
+
+def read_temperature(path):
+    """The temperature in degrees Celsius from a thermal zone file (millidegrees)."""
+    with open(path) as file:
+        return int(file.read().strip()) / 1000
+
+
+def load_config(path):
+    with open(path) as file:
+        config = json.load(file)
+    config["thresholds"] = sorted((float(t), int(s)) for t, s in config["thresholds"].items())
+    return config
+
+
+class FanController:
+    """Sets the fan speed over I2C."""
+
+    def __init__(self, bus):
+        self.bus = bus
+        self.registers = self._has_registers()
+
+    def _has_registers(self):
+        # Like argonregister.py: newer firmware keeps a value written to the duty cycle register, older ignores it
+        try:
+            old = self.bus.read_byte_data(ADDRESS, DUTY_CYCLE)
+            probe = 98 if old + 1 >= 100 else old + 1
+            self.bus.write_byte_data(ADDRESS, DUTY_CYCLE, probe)
+            return self.bus.read_byte_data(ADDRESS, DUTY_CYCLE) != old
+        except OSError:
+            return False
+
+    def set_speed(self, speed):
+        speed = min(100, max(0, int(speed)))
+        if self.registers:
+            self.bus.write_byte_data(ADDRESS, DUTY_CYCLE, speed)
+        else:
+            self.bus.write_byte(ADDRESS, speed)
+
+
+class Daemon:
+    def __init__(self, controller, thresholds):
+        self.controller = controller
+        self.thresholds = thresholds
+        self.speed = None
+        self.pending_lower = None
+
+    def check(self, temperature):
+        """Adjusts the fan to the temperature and returns the speed it runs at now."""
+        target = target_speed(temperature, self.thresholds)
+        if self.speed is not None and target < self.speed:
+            # Slow down only if the next check still asks for a lower speed
+            if self.pending_lower is None:
+                self.pending_lower = target
+                return self.speed
+            target = max(target, self.pending_lower)
+        self.pending_lower = None
+        if target != self.speed:
+            self.controller.set_speed(target)
+            self.speed = target
+        return self.speed
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--config", default="/etc/argon-fan.json")
+    args = parser.parse_args(argv)
+    config = load_config(args.config)
+
+    import smbus  # python3-smbus, only on the Pi
+
+    daemon = Daemon(FanController(smbus.SMBus(config["bus"])), config["thresholds"])
+    print(f"argon-fan: thresholds {config['thresholds']}, every {config['interval']} s", flush=True)
+    while True:
+        temperature = read_temperature(config["temperature_file"])
+        speed = daemon.speed
+        if daemon.check(temperature) != speed:
+            print(f"argon-fan: {temperature:.1f} °C, fan at {daemon.speed} %", flush=True)
+        time.sleep(config["interval"])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

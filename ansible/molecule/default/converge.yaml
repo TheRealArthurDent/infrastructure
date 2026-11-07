@@ -27,6 +27,8 @@
     # No NetworkManager runs in the test container.
     base_networkmanager_reload: false
     stack_manage_containers: false
+    # No systemd and no I2C in the test container
+    argon_fan_manage_service: false
     certificate_check_root_ca_passphrase: test-ca-passphrase
     # restic directly instead of the resticprofile container, on the repository from prepare.yaml
     stack_restore_runners:
@@ -86,4 +88,5 @@
     - docker
     - secrets
     - certificate_check
+    - argon_fan
     - stack
