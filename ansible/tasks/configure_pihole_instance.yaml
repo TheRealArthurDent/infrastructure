@@ -19,6 +19,8 @@
     pihole_groups: "{{ pihole_instance.groups | default(none) }}"
     pihole_clients: "{{ pihole_instance.clients | default(none) }}"
     pihole_domains: "{{ pihole_instance.domains | default(none) }}"
+  # Logging in and out and every GET also run in check mode (check_mode: false): they change nothing, and the
+  # dry run needs them to report what a real run would change. Only the changing requests are skipped.
   block:
     - name: Authenticate with Pi-hole API
       ansible.builtin.uri:
@@ -29,6 +31,7 @@
           password: "{{ pihole_password }}"
         status_code: 200
         ca_path: "{{ pihole_ca_file.path }}"
+      check_mode: false
       register: auth_response
       no_log: true
       until: >-
@@ -84,6 +87,7 @@
           X-FTL-SID: "{{ pihole_session }}"
         status_code: 200
         ca_path: "{{ pihole_ca_file.path }}"
+      check_mode: false
       register: group_ids_response
       when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
       until: >-
@@ -92,9 +96,14 @@
       retries: "{{ pihole_api_retries }}"
       delay: "{{ pihole_api_delay }}"
 
+    # In check mode the groups a real run would add don't exist yet: -1 stands in for their ids, so the clients
+    # and domains in them are still checked and reported.
     - name: Map group names to ids
       ansible.builtin.set_fact:
-        pihole_group_ids: "{{ group_ids_response.json.groups | items2dict(key_name='name', value_name='id') }}"
+        pihole_group_ids: >-
+          {{ (dict(pihole_groups | default([], true) | map(attribute='name') | zip_longest([], fillvalue=-1))
+              if ansible_check_mode else {})
+             | combine(group_ids_response.json.groups | items2dict(key_name='name', value_name='id')) }}
       when: pihole_clients | default(none) is not none or pihole_domains | default(none) is not none
 
     - name: Ensure clients and domains only use existing groups
@@ -131,6 +140,7 @@
         status_code: [204, 401]
         ca_path: "{{ pihole_ca_file.path }}"
       when: pihole_session | default(none) is not none
+      check_mode: false
       register: pihole_api_result
       until: >-
         pihole_api_result.status not in pihole_api_unavailable

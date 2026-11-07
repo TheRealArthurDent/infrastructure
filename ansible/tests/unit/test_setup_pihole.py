@@ -390,7 +390,7 @@ def serve(pihole, cert):
 def run(tmp_path, keepass, pki):
     servers = []
 
-    def _run(pihole, cert="trusted", desired=None, instances=None):
+    def _run(pihole, cert="trusted", desired=None, instances=None, args=()):
         """Run against one fake Pi-hole, or against several given as instances: [(name, fake, desired)]."""
         if instances is None:
             instances = [("pihole", pihole, DESIRED if desired is None else desired)]
@@ -408,7 +408,7 @@ def run(tmp_path, keepass, pki):
         }))
         return subprocess.run(
             # testbed is not reachable from here: if anything tries to connect to it, the run fails.
-            ["ansible-playbook", "setup-pihole.yaml", "--limit", "testbed", "-e", f"@{extra_vars}"],
+            ["ansible-playbook", "setup-pihole.yaml", "--limit", "testbed", "-e", f"@{extra_vars}", *args],
             cwd=ANSIBLE_DIR,
             env={**os.environ, "KEEPASS_PASSWORD": KEEPASS_PASSWORD, "ANSIBLE_TIMEOUT": "3"},
             stdin=subprocess.DEVNULL,
@@ -470,6 +470,19 @@ def test_second_run_changes_nothing(run):
     assert result.returncode == 0, output(result)
     assert pihole.changing_requests() == []
     assert pihole.gravity_runs == 1
+
+
+def test_check_mode_reports_changes_without_making_them(run):
+    pihole = FakePihole(hosts=["10.0.0.9 old"], lists=[OLD_LIST])
+
+    result = run(pihole, args=("--check", "--diff"))
+
+    assert result.returncode == 0, output(result)
+    assert pihole.changing_requests() == []
+    assert pihole.records["hosts"] == ["10.0.0.9 old"]
+    assert "Hosts to delete: ['10.0.0.9 old']" in result.stdout
+    assert "Lists to delete: ['" + OLD_LIST + "']" in result.stdout
+    assert ("DELETE", "/api/auth") in pihole.requests
 
 
 @pytest.mark.parametrize("unavailable_as", ["bad_gateway", "database"])

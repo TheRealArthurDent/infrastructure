@@ -84,6 +84,7 @@
     - config/profiles.yaml
     - config/excludes
     - ssh_config
+  register: stack_resticprofile_config_files
 
 - name: Ensure the compose file is present
   ansible.builtin.template:
@@ -92,6 +93,7 @@
     owner: root
     group: root
     mode: '0644'
+  register: stack_compose_file
 
 - name: Restore restore_items on a fresh host
   ansible.builtin.import_tasks: restore.yaml

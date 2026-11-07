@@ -17,6 +17,7 @@
       X-FTL-SID: "{{ pihole_session }}"
     status_code: 200
     ca_path: "{{ pihole_ca_file.path }}"
+  check_mode: false
   register: api_response
   until: >-
     api_response.status not in pihole_api_unavailable

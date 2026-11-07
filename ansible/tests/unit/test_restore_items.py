@@ -155,3 +155,33 @@ def test_backups_wait_for_the_smart_home_restore_too():
     """
     group_vars = yaml.safe_load(read(RESTORE_ITEMS))
     assert group_vars["stack_backup_stacks"] == ["{{ stack_project_name }}", "smart-home"]
+
+
+
+def _stack_tasks():
+    """The tasks of the stack role up to the restore, including the ones nested in blocks."""
+    pending = []
+    for name in ("main.yaml", "restore.yaml"):
+        pending += yaml.safe_load(open(ANSIBLE_DIR / "roles/stack/tasks" / name).read())
+    while pending:
+        task = pending.pop(0)
+        for key in ("block", "rescue", "always"):
+            pending[:0] = task.get(key, [])
+        yield task
+
+
+def test_check_mode_skips_the_dry_run_while_its_files_are_outdated():
+    # In check mode nothing is written, so the dry run would use the deployed helper, configs and compose file. On
+    # a host where one of them is due for an update it ran with the old one: the old compose file sent restic to
+    # dungeon's IPv6 address and the dry run failed. Every file the one-off runner reads must count.
+    tasks = list(_stack_tasks())
+    dry_run_check = next(t for t in tasks if "stack_restore_dry_run_possible" in str(t.get("ansible.builtin.set_fact")))
+    condition = str(dry_run_check["ansible.builtin.set_fact"]["stack_restore_dry_run_possible"])
+    read_by_the_runner = ("restic-restore", "resticprofile", "docker-compose.yaml")
+    for task in tasks:
+        module = task.get("ansible.builtin.template") or task.get("ansible.builtin.copy") or {}
+        file = f"{module.get('src', '')} {module.get('dest', '')}"
+        if not any(name in file for name in read_by_the_runner):
+            continue
+        assert task.get("register"), f"{task['name']} isn't registered"
+        assert f"{task['register']} is changed" in condition, f"the dry run ignores {task['name']}"

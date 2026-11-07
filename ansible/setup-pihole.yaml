@@ -56,12 +56,14 @@
       delegate_to: localhost
       become: false
       block:
-        # uri can only verify against a CA file, so the certificate goes into a temporary file.
+        # uri can only verify against a CA file, so the certificate goes into a temporary file. It's needed in
+        # check mode too, where the API is read to report the changes.
         - name: Create temporary file for the root CA certificate
           ansible.builtin.tempfile:
             suffix: .pem
           register: pihole_ca_file
           changed_when: false
+          check_mode: false
 
         - name: Ensure the root CA certificate is in the temporary file
           ansible.builtin.copy:
@@ -69,6 +71,7 @@
             dest: "{{ pihole_ca_file.path }}"
             mode: '0600'
           changed_when: false
+          check_mode: false
 
         - name: Configure each Pi-hole instance
           ansible.builtin.include_tasks: tasks/configure_pihole_instance.yaml
@@ -84,3 +87,4 @@
             state: absent
           when: pihole_ca_file.path is defined
           changed_when: false
+          check_mode: false
