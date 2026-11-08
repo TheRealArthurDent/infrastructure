@@ -1,5 +1,5 @@
 ---
-# Fan control for the Argon ONE V2 case (#325). Only hosts in that case run the role (bootstrap.yaml, when
+# Fan control for the Argon ONE V2 case (raspberry#325). Only hosts in that case run the role (bootstrap.yaml, when
 # argon_fan_enabled). Minimum CPU temperature (°C) -> fan speed (%): raspi's former /etc/argononed.conf, which are
 # Argon's defaults. Below the lowest threshold the fan is off.
 argon_fan_enabled: false

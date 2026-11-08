@@ -1,5 +1,5 @@
 ---
-# Sync Pi-hole allow and deny domains (exact and regex) with pihole_domains (#234). A domain is identified by
+# Sync Pi-hole allow and deny domains (exact and regex) with pihole_domains (raspberry#234). A domain is identified by
 # type, kind and domain; groups are given by name and mapped to their ids.
 # Expects pihole_host, pihole_port, pihole_session, pihole_ca_file and pihole_group_ids from setup-pihole.yaml.
 

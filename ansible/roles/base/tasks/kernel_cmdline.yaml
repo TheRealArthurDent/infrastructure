@@ -1,6 +1,6 @@
 ---
-# Raspberry Pi OS boots without the memory cgroup, so Docker drops every mem_limit (#313). The kernel command line is
-# one line; each missing parameter is appended to it, the rest of the line stays as it is. It only takes effect
+# Raspberry Pi OS boots without the memory cgroup, so Docker drops every mem_limit (raspberry#313). The kernel command
+# line is one line; each missing parameter is appended to it, the rest of the line stays as it is. It only takes effect
 # after a reboot, which the role leaves to the user: a reboot of raspi stops the smart home.
 - name: Stat the kernel command line
   ansible.builtin.stat:

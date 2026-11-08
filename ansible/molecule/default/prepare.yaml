@@ -13,7 +13,7 @@
         mode: '0755'
 
     # Raspberry Pi OS boots from this one-line kernel command line; cpuset is already there, so verify can check
-    # the base role neither duplicates a parameter nor touches the rest of the line (#313).
+    # the base role neither duplicates a parameter nor touches the rest of the line (raspberry#313).
     - name: Ensure the boot firmware directory exists like on Raspberry Pi OS
       ansible.builtin.file:
         path: /boot/firmware
@@ -31,7 +31,7 @@
         group: root
         mode: '0755'
 
-    # Raspberry Pi OS ships I2C commented out; verify checks the argon_fan role enables it once (#325)
+    # Raspberry Pi OS ships I2C commented out; verify checks the argon_fan role enables it once (raspberry#325)
     - name: Plant a boot config like a fresh Raspberry Pi OS install
       ansible.builtin.copy:
         content: |
@@ -45,7 +45,7 @@
         group: root
         mode: '0755'
 
-    # Simulates a host set up before #229, so verify can check the role removes the CA key.
+    # Simulates a host set up before raspberry#229, so verify can check the role removes the CA key.
     - name: Plant a root CA private key like the old certificate_check role left behind
       ansible.builtin.copy:
         content: "old root CA key\n"
@@ -54,7 +54,7 @@
         group: root
         mode: '0600'
 
-    # Simulates a host set up before #231: Docker key in trusted.gpg.d (trusted for every repo)
+    # Simulates a host set up before raspberry#231: Docker key in trusted.gpg.d (trusted for every repo)
     # and a one-line docker.list, so verify can check the role migrates both.
     - name: Download the Docker signing key like the old docker role did
       ansible.builtin.get_url:
@@ -76,8 +76,8 @@
         group: root
         mode: '0644'
 
-    # A restic repository with a snapshot of the restore_items, for the clean-slate restore (#287). Local restic
-    # stands in for the resticprofile container (converge.yaml overrides the runners); the snapshot holds the
+    # A restic repository with a snapshot of the restore_items, for the clean-slate restore (raspberry#287). Local
+    # restic stands in for the resticprofile container (converge.yaml overrides the runners); the snapshot holds the
     # container's paths (/source/etc/...).
     - name: Install restic as a stand-in for the resticprofile container
       ansible.builtin.apt:

@@ -1,5 +1,5 @@
 ---
-# Docker's apt repository, from facts (#237). Docker names the architectures like Debian does: the Pi's aarch64
+# Docker's apt repository, from facts (raspberry#237). Docker names the architectures like Debian does: the Pi's aarch64
 # is arm64, CI's x86_64 is amd64.
 docker_apt_distribution: "{{ ansible_facts['distribution'] | lower }}"
 docker_apt_release: "{{ ansible_facts['distribution_release'] }}"

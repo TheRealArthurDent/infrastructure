@@ -98,9 +98,9 @@ never from files in the repo and not from ansible-vault.
   value in `converge.yaml` the `LEAKCANARY-` prefix so the leak test covers it.
 - Secret files on the host: `owner: root`, `mode: '0600'`, below `/etc/docker/<stack>/`.
 - Resolve each secret **once** (e.g. a single `set_fact` with `no_log: true` at the start of the play) instead of
-  referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (#235).
+  referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (raspberry#235).
 - Private keys of the root CA never go to the Pi. Sign on the control node (`delegate_to: localhost`) and copy
-  only the leaf cert and key (#229).
+  only the leaf cert and key (raspberry#229).
 - In Molecule, replace lookups with plain dummy values in `converge.yaml` vars
   (e.g. `pihole_password: LEAKCANARY-pihole`),
   so tests never need the real KeePass DB.

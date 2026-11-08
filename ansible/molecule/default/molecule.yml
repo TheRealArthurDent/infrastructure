@@ -33,7 +33,7 @@ provisioner:
     JUNIT_OUTPUT_DIR: ${MOLECULE_PROJECT_DIRECTORY}/../test-results/molecule
     JUNIT_TASK_CLASS: "true"
     JUNIT_HIDE_TASK_ARGUMENTS: "true"
-    # Leak test (#230): log every run at -v with --diff;
+    # Leak test (raspberry#230): log every run at -v with --diff;
     # verify.yaml checks the log for secrets.
     ANSIBLE_VERBOSITY: "1"
     ANSIBLE_DIFF_ALWAYS: "true"

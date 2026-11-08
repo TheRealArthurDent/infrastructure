@@ -1,4 +1,4 @@
-"""Static rules that keep a second bootstrap run at changed=0 (#237). Molecule's idempotence step can only catch
+"""Static rules that keep a second bootstrap run at changed=0 (raspberry#237). Molecule's idempotence step can only catch
 some of them: a package upgrade only changes something when Debian has published an update."""
 
 from pathlib import Path

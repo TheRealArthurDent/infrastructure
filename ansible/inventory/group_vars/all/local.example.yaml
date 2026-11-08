@@ -1,5 +1,5 @@
 ---
-# Copy to local.yaml in this directory and adjust. local.yaml is ignored by git (#267).
+# Copy to local.yaml in this directory and adjust. local.yaml is ignored by git (raspberry#267).
 #
 # Path to the KeePass database. Use a path under /mnt/c, not a Google Drive drive letter such as /mnt/h,
 # whose WSL mount breaks regularly (see README.md, section KeePass).

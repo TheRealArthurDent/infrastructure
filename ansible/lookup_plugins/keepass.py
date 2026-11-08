@@ -4,7 +4,7 @@ from pykeepass import PyKeePass
 import hashlib
 import os
 
-# Opened databases, so the key derivation runs once per process instead of on every lookup (#235).
+# Opened databases, so the key derivation runs once per process instead of on every lookup (raspberry#235).
 # Ansible creates a new LookupModule for each lookup call, so this lives at module level.
 # The key covers the file's state and the credentials: a changed file or a wrong password opens anew.
 _databases = {}
@@ -81,7 +81,7 @@ class LookupModule(LookupBase):
       if not attachment:
         raise AnsibleError(f'Attachment "{attachment_name}" not found in entry "{group_name}/{title}". Available: {[a.filename for a in entry.attachments]}')
 
-      # Without output_path, return the content so secrets never touch the disk (#229)
+      # Without output_path, return the content so secrets never touch the disk (raspberry#229)
       if not output_path:
         return [attachment.data.decode('utf-8')]
 

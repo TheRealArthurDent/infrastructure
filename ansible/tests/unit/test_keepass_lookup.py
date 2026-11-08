@@ -103,7 +103,7 @@ def test_single_group_name_finds_nested_group(kdbx):
 
 
 def test_unknown_group_raises(kdbx):
-    # Used to fall back to searching the whole database (#235).
+    # Used to fall back to searching the whole database (raspberry#235).
     with pytest.raises(AnsibleError, match='Group "no-such-group" not found'):
         lookup(kdbx, group="no-such-group", title="pihole")
 
@@ -172,7 +172,7 @@ def test_attachment_export(kdbx, tmp_path):
 
 
 def test_attachment_content_without_output_path(kdbx):
-    # Returns the attachment as text instead of writing it to disk (#229).
+    # Returns the attachment as text instead of writing it to disk (raspberry#229).
     assert lookup(kdbx, group="Domain", title="rootCA", attachment="rootCA.pem") == [
         "-----BEGIN CERTIFICATE-----\n"
     ]
@@ -184,7 +184,7 @@ def test_missing_attachment_raises(kdbx, tmp_path):
 
 
 def test_attachment_export_prints_nothing(kdbx, tmp_path, capfd):
-    # Lookup output ends up in terminals and CI logs; the plugin must stay silent (#230).
+    # Lookup output ends up in terminals and CI logs; the plugin must stay silent (raspberry#230).
     lookup(kdbx, group="Domain", title="rootCA", attachment="rootCA.pem", output_path=str(tmp_path / "rootCA.pem"))
     out, err = capfd.readouterr()
     assert out == ""

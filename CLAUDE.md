@@ -1,4 +1,4 @@
-# raspberry – smart home infrastructure on Raspberry Pi
+# infrastructure – smart home infrastructure (Raspberry Pi)
 
 Docker-based smart home stack (nginx reverse proxy, Pi-hole ×2, unbound, portainer, resticprofile backups,
 container health monitoring) for a Raspberry Pi running Debian/Raspberry Pi OS trixie (arm64).
@@ -6,16 +6,19 @@ container health monitoring) for a Raspberry Pi running Debian/Raspberry Pi OS t
 ## State of the repo
 
 Everything is deployed with Ansible (`ansible/`); the former bash scripts (`deploy.sh` → `setup/setup.sh` →
-`run.sh`) are gone (#238).
+`run.sh`) are gone (raspberry#238).
 
 - **Ansible** (`ansible/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
   (`.env` files from KeePass), certificates, and Pi-hole DNS records, lists, groups, clients and domains through its
   REST API.
 - The **`stack` role** deploys the Docker stack itself (nginx/restic config as Jinja templates, docker networks,
-  `docker compose up`), in `bootstrap.yaml` under the tag `stack` (#238).
+  `docker compose up`), in `bootstrap.yaml` under the tag `stack` (raspberry#238).
 
-Review findings from the migration are GitHub issues. Still open are #238 (migration) and #239
-(refactor). Check the open issues before changing an affected area, and reference them in commits.
+The repo was created on 2026-11-08 from the private `TheRealArthurDent/raspberry` with a cleaned history
+(no private e-mail addresses, no `.env` files). Issues and PRs from before that live there; references in old
+commits and in the code point there (`raspberry#238`). Still open, moved here: #5 (refactor), #1–#4 (nginx and
+landing page ideas). Check the open issues before changing an affected area, and reference them in commits.
+Never push from a clone of raspberry: it would bring back the old history. The host `dungeon` will join this repo.
 
 ## Layout
 
@@ -45,9 +48,9 @@ the hook and settings themselves. Don't work around a block; give the user the c
 
 Secrets come from a KeePass database through the custom `keepass` lookup plugin (pykeepass). Its paths are in the
 user's git-ignored `ansible/inventory/group_vars/all/local.yaml`; the master password comes from `KEEPASS_PASSWORD`
-(`ansible/bin/with-keepass` sets it from Windows Credential Manager) or a prompt. There is no ansible-vault (#241
-was dropped). Never run `with-keepass --store` or read the stored password yourself. Never commit secrets, and
-never print them: every task that handles secret values needs `no_log: true`.
+(`ansible/bin/with-keepass` sets it from Windows Credential Manager) or a prompt. There is no ansible-vault
+(raspberry#241 was dropped). Never run `with-keepass --store` or read the stored password yourself. Never commit
+secrets, and never print them: every task that handles secret values needs `no_log: true`.
 
 ## Commands
 
@@ -70,7 +73,7 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
 
 ## Conventions
 
-- Commit messages: conventional style (`feat:`, `fix:`, `test:`, `chore:`), referencing issues (`Refs #238`).
+- Commit messages: conventional style (`feat:`, `fix:`, `test:`, `chore:`), referencing issues (`Refs #5`).
 - Never commit or push to `main`. Branch off `main` and open a PR into `main`; the user merges.
 - Container images in `ansible/roles/stack/templates/docker-compose.yaml.j2` are pinned and updated by Renovate
   (`renovate.json` points its docker-compose manager at the template); keep them pinned.

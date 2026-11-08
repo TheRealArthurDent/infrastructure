@@ -95,7 +95,7 @@ services:
       FTLCONF_dns_dnssec: 'true'
       FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
     # Only a cache: setup-pihole.yaml provisions this Pi-hole, so the volume isn't backed up. It keeps the egress
-    # filter closed when the container is recreated; an empty Pi-hole would allow everything (#293).
+    # filter closed when the container is recreated; an empty Pi-hole would allow everything (raspberry#293).
     volumes:
       - outbound_pihole:/etc/pihole
     # Recommended but not required (DHCP needs NET_ADMIN)
@@ -118,7 +118,7 @@ services:
     hostname: resticprofile
     container_name: resticprofile
     image: creativeprojects/resticprofile:0.33.1
-    # On stop, let a running backup shut down cleanly so restic removes its repository lock (#250)
+    # On stop, let a running backup shut down cleanly so restic removes its repository lock (raspberry#250)
     init: true
     stop_grace_period: 2m
     deploy:
@@ -137,7 +137,7 @@ services:
       - /etc:/source/etc:ro
       - /var/lib/docker/volumes:/source/docker-volumes:ro
       - /var/restore:/restore-target:rw
-      # The clean-slate restore markers of the stacks (#287)
+      # The clean-slate restore markers of the stacks (raspberry#287)
       - /var/lib/restic-restore:/restore-state:ro
       # Prom metrics for telegraf
       - /var/lib/resticprofile/metrics:/metrics
@@ -147,9 +147,9 @@ services:
     extra_hosts:
       dungeon: "{{ stack_dungeon_ip }}"
     # Unhealthy when the last successful backup (daily at 03:00) is older than 26h, so healthmonitor
-    # alerts on a missing backup, not only on a failed one (#259). Also unhealthy before the first backup.
+    # alerts on a missing backup, not only on a failed one (raspberry#259). Also unhealthy before the first backup.
     # Also unhealthy when the last monthly restore drill (restic-restore drill, host cron) failed or its last
-    # success is older than 35 days (#288); healthy before the first drill.
+    # success is older than 35 days (raspberry#288); healthy before the first drill.
     healthcheck:
       test:
         - CMD-SHELL
@@ -171,7 +171,8 @@ services:
       - '-c'
       - |
         # No backups before every stack's clean-slate restore is done or skipped, or a fresh host's empty or
-        # half-restored state would become the latest snapshot (#287). restic-restore clean-slate writes the markers.
+        # half-restored state would become the latest snapshot (raspberry#287). restic-restore clean-slate writes the
+        # markers.
         for stack in {{ stack_backup_stacks | join(' ') }}; do
           [ -f /restore-state/$$stack.done ] ||
             echo "Waiting for /var/lib/restic-restore/$$stack.done to schedule backups"

@@ -25,7 +25,7 @@
       tags: always
 
 # The Pi-hole is only talked to through its API, so everything runs on the control node: nothing connects to
-# the Pi itself (#234).
+# the Pi itself (raspberry#234).
 - name: Configure the Pi-hole instances via their REST API
   hosts: all
   gather_facts: false

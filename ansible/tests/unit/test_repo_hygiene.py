@@ -47,7 +47,7 @@ def test_pre_commit_is_installed_with_the_tooling():
 
 
 def test_workflows_use_no_repository_secrets():
-    """The repo is meant to go public (#38): workflows get by with GITHUB_TOKEN and hold no other secrets."""
+    """The repo is meant to go public (raspberry#38): workflows get by with GITHUB_TOKEN and hold no other secrets."""
     workflows = sorted((ROOT / ".github" / "workflows").glob("*.y*ml"))
     offenders = [
         f"{workflow.name}: {secret}"

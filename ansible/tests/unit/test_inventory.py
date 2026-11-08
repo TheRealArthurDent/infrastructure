@@ -1,4 +1,4 @@
-"""The inventory keeps shared values in group_vars and per-host values in host_vars (#239).
+"""The inventory keeps shared values in group_vars and per-host values in host_vars (#5).
 
 hosts.yaml only says how to reach a host. The refactor must not change what a host ends up with, so the resolved
 variables are pinned here.

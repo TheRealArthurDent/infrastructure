@@ -33,7 +33,7 @@
 
 # Left behind by earlier versions of this role. The key in trusted.gpg.d is
 # trusted for every repository, and docker.list next to docker.sources makes
-# apt fail with conflicting Signed-By values (#231).
+# apt fail with conflicting Signed-By values (raspberry#231).
 - name: Ensure the old Docker key and repository files are absent
   ansible.builtin.file:
     path: "{{ item }}"
@@ -87,7 +87,7 @@
     group: root
     mode: '0755'
 
-# Moved here from the secrets role: it isn't a secret, and a change needs a daemon restart (#237).
+# Moved here from the secrets role: it isn't a secret, and a change needs a daemon restart (raspberry#237).
 - name: Ensure the Docker daemon config is present
   ansible.builtin.template:
     src: etc/docker/daemon.json.j2

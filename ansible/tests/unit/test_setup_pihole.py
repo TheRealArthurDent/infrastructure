@@ -1,9 +1,9 @@
-"""setup-pihole.yaml against a fake Pi-hole API on localhost (#234).
+"""setup-pihole.yaml against a fake Pi-hole API on localhost (raspberry#234).
 
 The fake speaks just enough of the Pi-hole v6 REST API for the playbook: auth, DNS hosts and CNAME records,
 block lists, the gravity action, groups, clients and domains. It runs over HTTPS with a certificate from a throwaway CA, and the
 playbook gets that CA's certificate from a throwaway KeePass database, like it does from the real one.
-The playbook configures several Pi-hole instances (the main one and outbound, #293), each with its own password.
+The playbook configures several Pi-hole instances (the main one and outbound, raspberry#293), each with its own password.
 """
 import datetime
 import json
@@ -673,7 +673,7 @@ def test_configured_instances_are_the_main_pihole_and_outbound():
 
 
 def test_outbound_only_resolves_allowed_domains():
-    """outbound is the egress filter for the smart-home containers: everything not allowed is denied (#293)."""
+    """outbound is the egress filter for the smart-home containers: everything not allowed is denied (raspberry#293)."""
     outbound = next(instance for instance in configured_instances() if instance["name"] == "outbound")
     domains = {(d["type"], d["kind"], d["domain"]) for d in outbound["domains"]}
 

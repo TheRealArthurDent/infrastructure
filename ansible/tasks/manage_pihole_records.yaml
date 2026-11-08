@@ -76,7 +76,7 @@
     msg: "{{ record_type | capitalize }} to add: {{ records_to_add }}"
   when: records_to_add | length > 0
 
-# The record is a path segment, so everything in it is encoded, including '/' (#234).
+# The record is a path segment, so everything in it is encoded, including '/' (raspberry#234).
 - name: Delete old records for {{ record_type }}
   ansible.builtin.uri:
     url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ encoded_item }}"

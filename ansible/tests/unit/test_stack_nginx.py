@@ -1,4 +1,4 @@
-"""nginx config of the stack role: redirects and dead config (#238)."""
+"""nginx config of the stack role: redirects and dead config (raspberry#238)."""
 import re
 
 import pytest

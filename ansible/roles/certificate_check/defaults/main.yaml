@@ -25,7 +25,7 @@ certificate_check_subdomains:
 certificate_check_root_ca_cert_path: /etc/ssl/certs/rootCA.pem
 
 # Root CA as PEM strings on the control node, set by the playbook. The private key only ever lives
-# in memory on the control node; the leaf certificate is signed there and never on the host (#229).
+# in memory on the control node; the leaf certificate is signed there and never on the host (raspberry#229).
 certificate_check_root_ca_cert: ""
 certificate_check_root_ca_key: ""
 certificate_check_root_ca_passphrase: ""

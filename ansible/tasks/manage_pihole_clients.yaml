@@ -1,5 +1,5 @@
 ---
-# Sync Pi-hole clients with pihole_clients (#234). Groups are given by name and mapped to their ids.
+# Sync Pi-hole clients with pihole_clients (raspberry#234). Groups are given by name and mapped to their ids.
 # Expects pihole_host, pihole_port, pihole_session, pihole_ca_file and pihole_group_ids from setup-pihole.yaml.
 
 - name: Get existing clients from API

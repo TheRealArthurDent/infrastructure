@@ -1,10 +1,11 @@
-# raspberry
+# infrastructure
 
-[![Spell Check](https://github.com/TheRealArthurDent/raspberry/actions/workflows/spell-check.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/spell-check.yaml)
-[![CI](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheRealArthurDent/raspberry/actions/workflows/ci.yaml)
+[![Spell Check](https://github.com/TheRealArthurDent/infrastructure/actions/workflows/spell-check.yaml/badge.svg)](https://github.com/TheRealArthurDent/infrastructure/actions/workflows/spell-check.yaml)
+[![CI](https://github.com/TheRealArthurDent/infrastructure/actions/workflows/ci.yaml/badge.svg)](https://github.com/TheRealArthurDent/infrastructure/actions/workflows/ci.yaml)
 
-Basic setup of the pi-4. Everything, from the host to the Docker stack, is deployed with Ansible; see
-[ansible/README.md](ansible/README.md).
+Infrastructure of the smart home hosts (the Raspberry Pi 4 `raspi`, later `dungeon`).
+Moved from the private `raspberry` repo on 2026-11-08; older issues and PRs (`raspberry#…`) live there.
+Everything, from the host to the Docker stack, is deployed with Ansible; see [ansible/README.md](ansible/README.md).
 
 ## Testing
 

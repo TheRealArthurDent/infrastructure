@@ -24,7 +24,7 @@
     size: "{{ dhparameter_bits }}"
 
 # Package upgrades are update.yaml's job: here they'd change something on every run once Debian has published
-# updates (#237). The cache is only refreshed when it's older than a day.
+# updates (raspberry#237). The cache is only refreshed when it's older than a day.
 - name: Install base packages
   ansible.builtin.apt:
     name:
@@ -35,7 +35,7 @@
 
 - name: Provision config files
   block:
-    # Writes the setting and applies it right away, not only after the next reboot (#237).
+    # Writes the setting and applies it right away, not only after the next reboot (raspberry#237).
     - name: Ensure redis may overcommit memory
       ansible.posix.sysctl:
         name: vm.overcommit_memory
@@ -44,7 +44,7 @@
         reload: "{{ base_sysctl_reload }}"
 
     # A broken sudoers file locks out sudo, so it's checked before it's
-    # put in place (#231).
+    # put in place (raspberry#231).
     - name: Ensure sudoers entry for deploy user
       ansible.builtin.template:
         src: etc/sudoers.d/user.j2
@@ -62,7 +62,7 @@
         group: root
         mode: '0644'
 
-    # weekly runs before daily so the two never overlap on Sundays (rsnapshot shares one lockfile, #232)
+    # weekly runs before daily so the two never overlap on Sundays (rsnapshot shares one lockfile, raspberry#232)
     - name: Ensure cron job "rsnapshot daily" exists
       ansible.builtin.cron:
         name: "rsnapshot daily"

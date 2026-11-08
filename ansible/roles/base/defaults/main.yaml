@@ -16,8 +16,8 @@ base_dns_options:
 # container.
 base_networkmanager_reload: true
 
-# Kernel parameters the base role makes sure are on the kernel command line (#313). The memory cgroup lets Docker
-# apply the containers' mem_limit. A host without the file (no Raspberry Pi) is left alone.
+# Kernel parameters the base role makes sure are on the kernel command line (raspberry#313). The memory cgroup lets
+# Docker apply the containers' mem_limit. A host without the file (no Raspberry Pi) is left alone.
 base_kernel_cmdline_file: /boot/firmware/cmdline.txt
 base_kernel_cmdline_params:
   - cgroup_enable=cpuset

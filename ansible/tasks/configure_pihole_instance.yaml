@@ -1,5 +1,5 @@
 ---
-# Configure one Pi-hole instance through its REST API (#234, #293), from the control node.
+# Configure one Pi-hole instance through its REST API (raspberry#234, raspberry#293), from the control node.
 # Expects pihole_instance (an entry of pihole_instances in configs/pihole.yaml), pihole_ca_file and the KeePass
 # credentials from setup-pihole.yaml.
 
@@ -15,7 +15,7 @@
     pihole_host: "{{ pihole_instance.host | default(pihole_instance.name ~ '.' ~ inventory_hostname) }}"
     pihole_port: "{{ pihole_instance.port | default(443) }}"
     # Groups, clients and domains are only synced when they're configured (missing or null), so a missing
-    # list never wipes what was set up in the web interface (#234).
+    # list never wipes what was set up in the web interface (raspberry#234).
     pihole_groups: "{{ pihole_instance.groups | default(none) }}"
     pihole_clients: "{{ pihole_instance.clients | default(none) }}"
     pihole_domains: "{{ pihole_instance.domains | default(none) }}"

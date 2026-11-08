@@ -65,7 +65,7 @@
     msg: "Lists to add: {{ records_to_add }}"
   when: records_to_add | length > 0
 
-# The list URL is a path segment, so everything in it is encoded, including '/' (#234).
+# The list URL is a path segment, so everything in it is encoded, including '/' (raspberry#234).
 - name: Delete old lists of type {{ list_type }}
   ansible.builtin.uri:
     url: "https://{{ pihole_host }}:{{ pihole_port }}{{ api_endpoint }}/{{ encoded_item }}?type={{ list_type }}"
@@ -108,7 +108,7 @@
   retries: "{{ pihole_api_retries }}"
   delay: "{{ pihole_api_delay }}"
 
-# New or removed lists only take effect once gravity has been rebuilt (#234).
+# New or removed lists only take effect once gravity has been rebuilt (raspberry#234).
 - name: Update gravity after list changes
   ansible.builtin.uri:
     url: "https://{{ pihole_host }}:{{ pihole_port }}/api/action/gravity"

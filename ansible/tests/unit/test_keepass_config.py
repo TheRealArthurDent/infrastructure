@@ -1,4 +1,4 @@
-"""Where the playbooks find the KeePass database (#267), and how often they open it (#235)."""
+"""Where the playbooks find the KeePass database (raspberry#267), and how often they open it (raspberry#235)."""
 import subprocess
 from pathlib import Path
 
@@ -36,7 +36,7 @@ def test_playbooks_do_not_hard_code_keepass_paths(playbook):
 
 
 def test_no_keepass_path_is_committed():
-    # Paths depend on the user's file system, so they live in an ignored local file (#267).
+    # Paths depend on the user's file system, so they live in an ignored local file (raspberry#267).
     tracked = subprocess.run(
         ["git", "ls-files", "inventory"], cwd=ANSIBLE_DIR, capture_output=True, text=True, check=True
     ).stdout.split()

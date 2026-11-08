@@ -6,7 +6,7 @@ the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itsel
 | Playbook | What it does |
 | --- | --- |
 | `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `stack`: SSH port and key-only login, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
-| `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (#237) |
+| `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (raspberry#237) |
 | `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days, restarts nginx |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
 
@@ -299,7 +299,7 @@ What the role decides:
 
 - Marker present: nothing to do. Every later run is a no-op, so a deliberate second restore of the whole stack
   goes through the targeted restore, not by deleting the marker.
-- No marker, but an item folder already holds files (a host that existed before #287, like raspi): it only
+- No marker, but an item folder already holds files (a host that existed before raspberry#287, like raspi): it only
   writes the marker, with the folder named in it.
 - No marker, item folders empty or missing: it restores. A run that dies halfway left
   `infrastructure.done.restoring` and restores again on the next run.

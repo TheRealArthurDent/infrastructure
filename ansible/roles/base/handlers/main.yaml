@@ -6,7 +6,7 @@
     state: reloaded
   when: base_networkmanager_reload
 
-# The role doesn't reboot: a reboot of raspi stops the smart home (#313).
+# The role doesn't reboot: a reboot of raspi stops the smart home (raspberry#313).
 - name: Report that the kernel command line takes effect after a reboot
   ansible.builtin.debug:
     msg: >-

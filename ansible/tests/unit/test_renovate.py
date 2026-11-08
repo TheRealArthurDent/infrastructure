@@ -1,4 +1,4 @@
-"""Renovate keeps the stack's pinned images up to date (#238).
+"""Renovate keeps the stack's pinned images up to date (raspberry#238).
 
 The compose file only exists as the stack role's Jinja template, which Renovate's docker-compose manager does not
 pick up by default.

@@ -1,7 +1,7 @@
 ---
-# Clean-slate restore (#287): on a fresh host, this stack's restore_items come back from the latest snapshot before
-# the stack starts. resticprofile backs up the whole host, so the helper is a host service: other stacks put their
-# own items into /etc/restic-restore/stacks/ and call it themselves. The helper decides and works
+# Clean-slate restore (raspberry#287): on a fresh host, this stack's restore_items come back from the latest snapshot
+# before the stack starts. resticprofile backs up the whole host, so the helper is a host service: other stacks put
+# their own items into /etc/restic-restore/stacks/ and call it themselves. The helper decides and works
 # (ansible/tests/unit/test_restic_restore.py); a marker makes every later run a no-op. A host that already has
 # data (raspi, testbed) only gets the marker.
 
@@ -56,7 +56,7 @@
     mode: '0644'
   register: stack_restore_items_file
 
-# Monthly restore drill (#288): its result goes to the resticprofile healthcheck, so healthmonitor alerts on a
+# Monthly restore drill (raspberry#288): its result goes to the resticprofile healthcheck, so healthmonitor alerts on a
 # failed or missed drill. The log goes to the journal (journalctl -t restic-restore-drill).
 - name: Ensure cron job "restore drill" is {{ stack_restore_drill_enabled | bool | ternary('present', 'absent') }}
   ansible.builtin.cron:

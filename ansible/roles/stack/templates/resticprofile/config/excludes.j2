@@ -8,7 +8,7 @@
 /source/etc/docker/**/*secret*
 # Exclude the pihole FTL database as it's not small and bearable
 /source/etc/docker/infrastructure/pihole/pihole/pihole-FTL.db*
-# Docker volumes that are only a cache: Ansible provisions their content (#293)
+# Docker volumes that are only a cache: Ansible provisions their content (raspberry#293)
 /source/docker-volumes/outbound_pihole
 # Exclude iobroker's npm cache
 /source/docker-volumes/smart-home_iobroker-storage/_data/.npm
@@ -26,5 +26,5 @@
 /source/docker-volumes/nextcloud_storage/**/appdata_*/preview
 # Caches
 /source/home/*/.cache
-# Exclude the SSH key for the backup host: the Ansible secrets role recreates it (#233)
+# Exclude the SSH key for the backup host: the Ansible secrets role recreates it (raspberry#233)
 /source/etc/docker/infrastructure/resticprofile/.ssh

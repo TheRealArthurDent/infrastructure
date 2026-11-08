@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs a command with KEEPASS_PASSWORD set from Windows Credential Manager, so playbooks don't prompt (#267).
+# Runs a command with KEEPASS_PASSWORD set from Windows Credential Manager, so playbooks don't prompt (raspberry#267).
 # Meant for WSL: it reaches Windows through powershell.exe.
 #
 # Usage:
