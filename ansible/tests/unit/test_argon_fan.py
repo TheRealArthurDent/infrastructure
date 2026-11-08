@@ -149,3 +149,10 @@ def test_check_mode_doesnt_start_a_service_whose_unit_isnt_written_yet():
     assert unit.get("register"), "the unit file task isn't registered"
     condition = str(start.get("when", ""))
     assert "ansible_check_mode" in condition and f"{unit['register']} is changed" in condition
+
+
+def test_check_mode_doesnt_restart_a_service_whose_unit_isnt_written_yet():
+    handlers = yaml.safe_load((ANSIBLE_DIR / "roles" / "argon_fan" / "handlers" / "main.yaml").read_text())
+    restart = next(h for h in handlers if (h.get("ansible.builtin.systemd_service") or {}).get("name") == "argon-fan")
+    condition = str(restart.get("when", ""))
+    assert "ansible_check_mode" in condition and "argon_fan_unit is changed" in condition

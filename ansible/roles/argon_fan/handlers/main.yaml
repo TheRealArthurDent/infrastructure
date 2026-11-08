@@ -4,7 +4,8 @@
     name: argon-fan
     state: restarted
     daemon_reload: true
-  when: argon_fan_manage_service | bool
+  # Like the start task: in check mode a new unit isn't written, so there's no service to restart yet
+  when: argon_fan_manage_service | bool and not (ansible_check_mode and argon_fan_unit is changed)
 
 # The role doesn't reboot: a reboot of raspi stops the smart home.
 - name: Report that I2C is enabled after a reboot
