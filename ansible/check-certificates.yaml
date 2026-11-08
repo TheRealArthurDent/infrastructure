@@ -33,7 +33,7 @@
     - name: Get the KeePass credentials
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
 
-    # Resolved once into memory on the control node; nothing is exported to disk (#229).
+    # Resolved once into memory on the control node; nothing is exported to disk (raspberry#229).
     - name: Read root CA from KeePass
       ansible.builtin.set_fact:
         certificate_check_root_ca_passphrase: >-

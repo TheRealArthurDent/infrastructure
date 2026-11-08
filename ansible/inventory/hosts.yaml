@@ -1,4 +1,4 @@
-# How to reach each host. Shared settings are in group_vars/all/, per-host values in host_vars/<host>.yaml (#239).
+# How to reach each host. Shared settings are in group_vars/all/, per-host values in host_vars/<host>.yaml (#5).
 all:
   hosts:
     raspi:

@@ -1,5 +1,5 @@
 ---
-# Deploys the infrastructure stack (nginx, Pi-hole x2, unbound, portainer, resticprofile, healthmonitor), #238.
+# Deploys the infrastructure stack (nginx, Pi-hole x2, unbound, portainer, resticprofile, healthmonitor), raspberry#238.
 # Needs the files the secrets role writes (.env files, secrets/restic_passphrase), the DH params from the base
 # role and the certificate from check-certificates.yaml.
 

@@ -84,7 +84,7 @@
   ansible.builtin.ping:
 
 # sshd -t only checks the drop-in on its own, but that catches typos before
-# they can lock us out (#231).
+# they can lock us out (raspberry#231).
 - name: Ensure sshd listens on the configured port
   ansible.builtin.copy:
     content: "Port {{ ssh_configured_port }}\n"

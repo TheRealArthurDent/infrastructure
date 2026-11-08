@@ -55,7 +55,7 @@
         - /etc/apt/sources.list.d/docker.list
         - /etc/apt/sources.list.d/docker.sources
 
-    - name: Check Docker key is only in its own keyring, not trusted for every repo (#231)
+    - name: Check Docker key is only in its own keyring, not trusted for every repo (raspberry#231)
       vars:
         stats: "{{ docker_apt_files.results | items2dict(key_name='item', value_name='stat') }}"
       ansible.builtin.assert:
@@ -84,7 +84,7 @@
       ansible.builtin.setup:
         gather_subset: [distribution, network]
 
-    # Molecule passes no distribution vars, so these come from facts (#237).
+    # Molecule passes no distribution vars, so these come from facts (raspberry#237).
     - name: Check Docker repository matches the host's release and architecture
       vars:
         sources: "{{ docker_sources.content | b64decode }}"
@@ -129,7 +129,7 @@
         src: /etc/docker/daemon.json
       register: docker_daemon_config
 
-    # The containers resolve through this host's own Pi-hole, not a hard-coded raspi address (#237).
+    # The containers resolve through this host's own Pi-hole, not a hard-coded raspi address (raspberry#237).
     - name: Check Docker daemon uses this host as DNS server
       vars:
         config: "{{ docker_daemon_config.content | b64decode | from_json }}"
@@ -156,7 +156,8 @@
       register: crontab
       changed_when: false
 
-    # weekly must run before daily, otherwise both start at once on Sundays and one fails on the lockfile (#232)
+    # weekly must run before daily, otherwise both start at once on Sundays and one fails on the lockfile
+    # (raspberry#232)
     - name: Check rsnapshot cron jobs run weekly before daily
       ansible.builtin.assert:
         that:
@@ -201,7 +202,7 @@
         src: /boot/firmware/cmdline.txt
       register: cmdline
 
-    # prepare.yaml planted it with cgroup_enable=cpuset already present (#313)
+    # prepare.yaml planted it with cgroup_enable=cpuset already present (raspberry#313)
     - name: Check the memory cgroup is enabled once each and the rest of the line is kept
       ansible.builtin.assert:
         that:
@@ -222,7 +223,7 @@
         src: /boot/firmware/config.txt
       register: boot_config
 
-    - name: Check I2C is enabled once and the rest of the boot config is kept (#325)
+    - name: Check I2C is enabled once and the rest of the boot config is kept (raspberry#325)
       ansible.builtin.assert:
         that:
           - boot_lines | select('match', '^#?\\s*dtparam=i2c_arm=') | list == ['dtparam=i2c_arm=on']
@@ -294,7 +295,7 @@
     - name: Check root CA private key is not on the host
       ansible.builtin.assert:
         that: not root_ca_key.stat.exists
-        fail_msg: /etc/ssl/private/rootCA.key must not exist on the host (#229)
+        fail_msg: /etc/ssl/private/rootCA.key must not exist on the host (raspberry#229)
 
     - name: Stat host certificate files
       ansible.builtin.stat:
@@ -359,7 +360,7 @@
       ansible.builtin.assert:
         that: chain_count.stdout == '2'
 
-    # stack role (#238)
+    # stack role (raspberry#238)
     - name: Stat stack config files
       ansible.builtin.stat:
         path: "/etc/docker/infrastructure/{{ item }}"
@@ -421,7 +422,7 @@
           - "'server_name         pihole.' ~ inventory_hostname ~ ' pihole.' ~ inventory_hostname ~ '.*;' in nginx_conf"
           - "'ssl_certificate     /etc/nginx/' ~ inventory_hostname ~ '.pem;' in ssl_conf"
           - "'restic@dungeon:/media/backup/restic/' ~ inventory_hostname in profiles"
-          # dungeon_ssh_port from converge.yaml (KeePass in production), no longer hard-coded (#233)
+          # dungeon_ssh_port from converge.yaml (KeePass in production), no longer hard-coded (raspberry#233)
           - "'Port 2222' in ssh_config.splitlines()"
           # Resolved through the etc_hosts entry in molecule.yml
           - compose.services.resticprofile.extra_hosts.dungeon == '192.0.2.10'
@@ -457,7 +458,7 @@
         - pihole/pihole/gravity.db
       register: restored
 
-    - name: Check the clean-slate restore brought the data back with owner and mode (#287)
+    - name: Check the clean-slate restore brought the data back with owner and mode (raspberry#287)
       ansible.builtin.assert:
         that:
           - item.stat.isreg
@@ -520,7 +521,7 @@
           - restore_helper.stat.isreg
           - restore_helper.stat.mode == '0755'
 
-    # Targeted restore on a running host (#286): break the Portainer data, then bring it back with the helper.
+    # Targeted restore on a running host (raspberry#286): break the Portainer data, then bring it back with the helper.
     # No Docker daemon runs here, so apply finds no running container to stop.
     - name: Change and add Portainer data, as if it went wrong
       ansible.builtin.copy:
@@ -596,7 +597,7 @@
           - targeted_staging.matched == 0
           - helper_stage.stdout in helper_clean.stdout
 
-    # Restore drill (#288): monthly from root's crontab, result for the resticprofile healthcheck
+    # Restore drill (raspberry#288): monthly from root's crontab, result for the resticprofile healthcheck
     # Without --read-data-subset: this month's part, from the parts in the host config
     - name: Run the restore drill
       ansible.builtin.command: restic-restore drill

@@ -25,7 +25,7 @@
       tags: always
 
 
-# Package upgrades, run on purpose rather than with every bootstrap run (#237). An upgrade of docker-ce or
+# Package upgrades, run on purpose rather than with every bootstrap run (raspberry#237). An upgrade of docker-ce or
 # containerd restarts the Docker daemon and with it the containers. A new kernel needs a reboot, which this
 # playbook only reports.
 - name: Upgrade packages

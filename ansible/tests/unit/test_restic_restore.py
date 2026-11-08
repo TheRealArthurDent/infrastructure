@@ -1,4 +1,4 @@
-"""The restic-restore helper restores a stack's items from a restic snapshot (#287, core of #286).
+"""The restic-restore helper restores a stack's items from a restic snapshot (raspberry#287, core of raspberry#286).
 
 resticprofile backs up the whole host, so the helper is a host service: every stack on the host lists its items
 in /etc/restic-restore/stacks/<stack>.json and gets its own clean-slate marker.
@@ -535,7 +535,7 @@ def test_clean_slate_takes_the_given_snapshot(env):
     assert env.marker.read_text().strip() == old
 
 
-# snapshots (#286)
+# snapshots (raspberry#286)
 
 
 def test_snapshots_lists_every_snapshot_with_host_paths(env):
@@ -581,7 +581,7 @@ def test_snapshots_from_rsnapshot_lists_the_newest_first(env):
     assert [line.split()[-1] for line in out.strip().splitlines()] == ["daily.0", "daily.1", "weekly.0"]
 
 
-# ls and find (#286)
+# ls and find (raspberry#286)
 
 
 def test_ls_lists_a_host_path_in_the_snapshot(env):
@@ -647,7 +647,7 @@ def test_find_searches_the_latest_snapshot_by_default(env):
     assert given.strip() == str(env.host / "portainer" / "data" / "old.db")
 
 
-# stage from rsnapshot and of a host path (#286)
+# stage from rsnapshot and of a host path (raspberry#286)
 
 
 def test_stage_from_rsnapshot_takes_the_newest_local_copy(env):
@@ -748,7 +748,7 @@ def test_apply_refuses_a_staged_host_path(env):
     assert not (env.host / "portainer").exists()
 
 
-# diff (#286)
+# diff (raspberry#286)
 
 
 def test_diff_shows_what_apply_would_change_and_changes_nothing(env):
@@ -809,7 +809,7 @@ def test_diff_of_a_missing_live_path_shows_everything_as_new(env):
     assert not (env.host / "portainer").exists()
 
 
-# clean (#286)
+# clean (raspberry#286)
 
 
 def make_staging_dir(env, name, age_days):
@@ -876,7 +876,7 @@ def test_default_rsnapshot_config_matches_rsnapshot_conf():
         assert backups[f"{host}/"] == f"{rsnapshot['host']}/"
 
 
-# drill (#288): a periodic check that the backup restores, reported through the resticprofile healthcheck
+# drill (raspberry#288): a periodic check that the backup restores, reported through the resticprofile healthcheck
 
 
 def drill_metrics(env):

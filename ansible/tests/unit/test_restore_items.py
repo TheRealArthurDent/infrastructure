@@ -1,4 +1,4 @@
-"""Every restore_items path is in the backup, and the files a restore must keep are known (#285).
+"""Every restore_items path is in the backup, and the files a restore must keep are known (raspberry#285).
 
 restore_items lists the state that doesn't come from IaC and gets restored from the resticprofile backup. A
 path the backup doesn't cover (no /source mount, or matched by an exclude pattern) can't be restored, and a
@@ -92,7 +92,7 @@ def test_restore_items_are_defined():
 
 
 def test_outbound_is_not_restored():
-    """setup-pihole.yaml provisions outbound, so its state comes from Ansible, not the backup (#293)."""
+    """setup-pihole.yaml provisions outbound, so its state comes from Ansible, not the backup (raspberry#293)."""
     assert "pihole_outbound" not in ITEMS
 
 
@@ -104,7 +104,7 @@ def test_outbound_keeps_its_runtime_data_in_a_named_volume():
 
 
 def test_cache_volumes_are_not_backed_up():
-    """A volume that is only a cache would just bloat the backup; losing it costs one Ansible run (#293)."""
+    """A volume that is only a cache would just bloat the backup; losing it costs one Ansible run (raspberry#293)."""
     assert excluded(to_source("/var/lib/docker/volumes/outbound_pihole/_data/gravity.db"))
 
 

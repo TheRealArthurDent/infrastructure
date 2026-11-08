@@ -1,4 +1,4 @@
-"""bin/with-keepass: runs a command with the KeePass master password from Windows Credential Manager (#267)."""
+"""bin/with-keepass: runs a command with the KeePass master password from Windows Credential Manager (raspberry#267)."""
 import base64
 import json
 import os

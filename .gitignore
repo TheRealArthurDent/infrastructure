@@ -34,7 +34,7 @@ molecule/*/inventory.yml
 .LSOverride
 test-results/
 
-# Local KeePass paths (#267); the pattern also covers the pre-#239 location bootstrap/
+# Local KeePass paths (raspberry#267); the pattern also covers the location before raspberry#239, bootstrap/
 **/inventory/group_vars/all/local.yaml
 
 # Secrets: .env files are rendered on the host by the secrets role, never committed

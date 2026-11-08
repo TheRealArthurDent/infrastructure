@@ -39,7 +39,7 @@
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
       tags: always
 
-    # Resolved once per host. As play vars, every use would re-run the lookup (#235).
+    # Resolved once per host. As play vars, every use would re-run the lookup (raspberry#235).
     - name: Read secrets from KeePass
       ansible.builtin.set_fact:
         pihole_password: >-
@@ -98,7 +98,7 @@
     - base
     - docker
     - secrets
-    # Only hosts in the Argon ONE V2 case (#325)
+    # Only hosts in the Argon ONE V2 case (raspberry#325)
     - role: argon_fan
       when: argon_fan_enabled | default(false) | bool
     - role: stack

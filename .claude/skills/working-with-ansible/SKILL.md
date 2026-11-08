@@ -20,7 +20,7 @@ First find out where you run: a cloud container (claude.ai/code) or a local sess
 | Check | Cloud container | Local session (WSL) | CI |
 |---|---|---|---|
 | pytest (`ansible/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
-| `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes | yes (lint `--strict`, #240) |
+| `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes | yes (lint `--strict`, raspberry#240) |
 | Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, if Docker runs | yes, on every PR and on pushes to `main` touching `ansible/**` |
 | Anything against testbed | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | **only after asking**, every time, `--check --diff` first | no |
 | Anything against raspi | no | **no**: hand the user the commands | no |
@@ -67,8 +67,8 @@ something, hand the user the command instead of looking for another way to run i
 - **`no_log` hides diffs**: for `.env` files you only learn *that* they change. That is intended.
 - **Docker on raspi is Debian `docker.io` 26.1.5** until the docker role is rolled out there; don't drop
   compatibility settings that depend on it (e.g. `DOCKER_API_VERSION`).
-- The stack is deployed by the `stack` role (#238); the bash scripts (`deploy.sh`, `run.sh`, `setup/`) are gone.
-  If someone still has them in an old checkout, don't use them: they would overwrite the config with stale copies.
+- The stack is deployed by the `stack` role (raspberry#238); the bash scripts (`deploy.sh`, `run.sh`, `setup/`) are
+  gone. If someone still has them in an old checkout, don't use them: they would overwrite the config with stale copies.
 - **The compose project must stay `infrastructure`** (`stack_project_name`). The running containers belong to it;
   another name would start a second stack whose fixed container names collide.
 - **Stack config changes don't restart containers** except nginx (reload after `nginx -t`). resticprofile reads

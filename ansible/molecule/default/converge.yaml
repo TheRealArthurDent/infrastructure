@@ -3,7 +3,7 @@
   gather_facts: true
   vars:
     # Dummy secrets instead of KeePass lookups. Every value containing LEAKCANARY is a secret;
-    # verify.yaml fails if one of them shows up in the Ansible log (#230).
+    # verify.yaml fails if one of them shows up in the Ansible log (raspberry#230).
     pihole_password: LEAKCANARY-pihole
     outbound_password: LEAKCANARY-outbound
     containermonitor_notification_url: discord://LEAKCANARY-webhook-token@id

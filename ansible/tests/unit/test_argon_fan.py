@@ -1,4 +1,4 @@
-"""The fan daemon of the argon_fan role (#325): Argon ONE V2 case fan, driven over I²C like Argon's own argononed."""
+"""The fan daemon of the argon_fan role (raspberry#325): Argon ONE V2 case fan, driven over I²C like Argon's own argononed."""
 
 import importlib.machinery
 import importlib.util

@@ -5,7 +5,7 @@
     "enabled": true
   },
   "docker-compose": {
-    "description": "The stack's compose file only exists as the stack role's Jinja template (#238).",
+    "description": "The stack's compose file only exists as the stack role's Jinja template (raspberry#238).",
     "managerFilePatterns": ["/(^|/)docker-compose\\.yaml\\.j2$/"]
   },
   "packageRules": [

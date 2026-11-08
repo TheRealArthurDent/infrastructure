@@ -1,6 +1,6 @@
 ---
-# State that doesn't come from IaC and gets restored from the resticprofile backup (#284, #285). The targeted
-# restore helper (#286) and the clean-slate restore (#287) both work from this list.
+# State that doesn't come from IaC and gets restored from the resticprofile backup (raspberry#284, raspberry#285). The
+# targeted restore helper (raspberry#286) and the clean-slate restore (raspberry#287) both work from this list.
 #
 # Scope is this repo's stack. Other repos (smart-home, Nextcloud, ...) restore their own state, and nothing
 # else under /etc or /home is needed: Ansible renders the configs, certificates and .env files, the restic SSH

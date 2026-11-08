@@ -14,7 +14,7 @@ stack_nginx_container: nginx
 # Networks, compose up and the nginx reload need a running Docker daemon (false in Molecule).
 stack_manage_containers: true
 
-# Clean-slate restore of restore_items before the stack starts on a fresh host (#287): tasks/restore.yaml.
+# Clean-slate restore of restore_items before the stack starts on a fresh host (raspberry#287): tasks/restore.yaml.
 # resticprofile backs up the whole host, so the restore helper is a host service and every stack restores its own
 # items with it. -e skip_infrastructure_restore=true (a new host with nothing to restore) only writes this stack's
 # marker; -e infrastructure_restore_snapshot=<id> restores another snapshot than the latest.
@@ -39,8 +39,8 @@ stack_restore_staging:
 stack_restore_rsnapshot:
   root: /var/cache/backup
   host: localhost
-# Monthly restore drill (#288): restic check reads one of `parts` parts of the data (all of it over `parts` months),
-# then every item of every stack is staged and removed again. The result goes to the resticprofile container's
+# Monthly restore drill (raspberry#288): restic check reads one of `parts` parts of the data (all of it over `parts`
+# months), then every item of every stack is staged and removed again. The result goes to the resticprofile container's
 # metrics dir, where its healthcheck reads it. Runs from root's crontab on the host, away from the 03:00 backup.
 # false removes the cron job and the last result, e.g. on a host that is often switched off
 stack_restore_drill_enabled: true

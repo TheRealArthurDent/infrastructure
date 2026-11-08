@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Restore the data of the stacks on this host from the resticprofile backup (#284).
+"""Restore the data of the stacks on this host from the resticprofile backup (raspberry#284).
 
 resticprofile backs up the whole host, so this is a host service shared by all stacks. Deployed by the stack role
-of the raspberry repo, which also writes the host config /etc/restic-restore/config.json. Every stack lists the
+of the infrastructure repo, which also writes the host config /etc/restic-restore/config.json. Every stack lists the
 state it restores in /etc/restic-restore/stacks/<stack>.json ({"items": {name: {paths, containers, preserve}}}).
 
   restic-restore snapshots [--from rsnapshot]      list the snapshots
@@ -14,8 +14,8 @@ state it restores in /etc/restic-restore/stacks/<stack>.json ({"items": {name: {
   restic-restore apply STAGING [--no-containers]   put a staged item in place (stops its containers meanwhile)
   restic-restore clean [--older-than DAYS | --all] remove staging dirs (default: older than 7 days)
   restic-restore --runner oneoff clean-slate STACK [--skip] [--snapshot ID] [--dry-run]
-                                                   restore all items of STACK on a fresh host, once (#287)
-  restic-restore drill [--read-data-subset N/T]   check the repository and stage every item of every stack (#288)
+                                                   restore all items of STACK on a fresh host, once (raspberry#287)
+  restic-restore drill [--read-data-subset N/T]   check the repository and stage every item of every stack (raspberry#288)
 
 apply only puts items in place: their containers and preserved files are known. A staged host path is for copying
 by hand. --from rsnapshot takes the local rsnapshot copy (fast, no network); its snapshots are named like daily.0.

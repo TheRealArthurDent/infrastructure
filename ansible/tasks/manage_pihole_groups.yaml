@@ -1,5 +1,5 @@
 ---
-# Sync Pi-hole groups with pihole_groups (#234). The Default group (id 0) can't be deleted, so it's left alone.
+# Sync Pi-hole groups with pihole_groups (raspberry#234). The Default group (id 0) can't be deleted, so it's left alone.
 # Expects pihole_host, pihole_port, pihole_session and pihole_ca_file from setup-pihole.yaml.
 
 - name: Get existing groups from API

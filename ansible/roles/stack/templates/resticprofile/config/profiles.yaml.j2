@@ -10,7 +10,7 @@ global:
 
 default:
   password-file: /run/secrets/restic_passphrase
-  # Remove restic locks older than restic-stale-lock-age (left by an interrupted run) and retry (#250)
+  # Remove restic locks older than restic-stale-lock-age (left by an interrupted run) and retry (raspberry#250)
   force-inactive-lock: true
   # No overlapping resticprofile runs inside the container
   lock: /tmp/resticprofile-default.lock
@@ -33,7 +33,8 @@ default:
       - rm -f /metrics/backup.prom
     run-after:
       # Runs after backup and retention succeeded. Survives a failed run (backup.prom is deleted by
-      # run-before), so an alert can fire on its age (#250). The retention section has no run-after (#233).
+      # run-before), so an alert can fire on its age (raspberry#250). The retention section has no run-after
+      # (raspberry#233).
       - >-
         echo "resticprofile_backup_last_success_timestamp_seconds{profile=\"default\"} $(date +%s)"
         > /metrics/backup_last_success.prom.tmp

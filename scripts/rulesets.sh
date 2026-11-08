@@ -13,7 +13,7 @@
 # Needs gh, logged in as a repository admin, and jq.
 set -euo pipefail
 
-REPO="${REPO:-TheRealArthurDent/raspberry}"
+REPO="${REPO:-TheRealArthurDent/infrastructure}"
 DIR="$(git rev-parse --show-toplevel)/.github/rulesets"
 
 # The fields GitHub accepts when creating or updating a ruleset.

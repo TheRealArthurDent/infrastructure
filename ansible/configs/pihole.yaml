@@ -122,7 +122,7 @@ pihole_instances:
         groups: ["Rennknecht"]
 
   # Egress filter for the containers on the outbound network (smart-home, nextcloud, healthmonitor): it denies
-  # everything and allows only what they need (#293). The containers use it as their DNS server.
+  # everything and allows only what they need (raspberry#293). The containers use it as their DNS server.
   - name: "outbound"
     a_records: []
     cname_records: []

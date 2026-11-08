@@ -1,4 +1,4 @@
-"""Shared tasks that check the KeePass configuration and get the master password (#267)."""
+"""Shared tasks that check the KeePass configuration and get the master password (raspberry#267)."""
 import os
 import subprocess
 from pathlib import Path

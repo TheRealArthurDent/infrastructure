@@ -1,6 +1,7 @@
 ---
-# Fan control for the Argon ONE V2 case (#325): replaces Argon's install script (unpinned downloads, not idempotent)
-# with a small daemon of our own that speaks the same I2C protocol. Fan only; the case's power button isn't used.
+# Fan control for the Argon ONE V2 case (raspberry#325): replaces Argon's install script (unpinned downloads, not
+# idempotent) with a small daemon of our own that speaks the same I2C protocol. Fan only; the case's power button
+# isn't used.
 
 - name: Ensure I2C is enabled at boot
   ansible.builtin.lineinfile:

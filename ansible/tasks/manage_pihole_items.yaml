@@ -1,5 +1,5 @@
 ---
-# Modular task to sync Pi-hole items that the API manages one by one (groups, clients, domains, #234)
+# Modular task to sync Pi-hole items that the API manages one by one (groups, clients, domains, raspberry#234)
 # Parameters:
 #   - item_type: Label for task names ("groups", "clients", "domains")
 #   - pihole_existing: Dict key -> {path, body} of the items on the Pi-hole

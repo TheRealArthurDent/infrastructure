@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Fan control for the Argon ONE V2 case (#325), installed by the argon_fan role of the raspberry repo.
+"""Fan control for the Argon ONE V2 case (raspberry#325), installed by the argon_fan role of the infrastructure repo.
 
 Replaces Argon's own argononed (fan part only; the power button isn't used). Every interval it reads the CPU
 temperature and sets the fan to the speed of the highest threshold reached, over I2C to the case's controller at

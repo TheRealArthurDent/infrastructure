@@ -1,4 +1,4 @@
-"""Templates of the stack role, which deploys the infrastructure stack (#238)."""
+"""Templates of the stack role, which deploys the infrastructure stack (raspberry#238)."""
 import re
 import subprocess
 from pathlib import Path

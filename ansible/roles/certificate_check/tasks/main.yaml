@@ -1,6 +1,6 @@
 # Issues the nginx certificate for inventory_hostname from the root CA. The CA private key never leaves
 # the control node: the host creates its own key and CSR, the control node signs the CSR in memory, and
-# only the leaf certificate and the full chain are copied back (#229).
+# only the leaf certificate and the full chain are copied back (raspberry#229).
 
 - name: Check root CA variables are set
   ansible.builtin.assert:
