@@ -31,6 +31,20 @@
         group: root
         mode: '0755'
 
+    # Raspberry Pi OS ships I2C commented out; verify checks the argon_fan role enables it once (#325)
+    - name: Plant a boot config like a fresh Raspberry Pi OS install
+      ansible.builtin.copy:
+        content: |
+          # Uncomment some or all of these to enable the optional hardware interfaces
+          #dtparam=i2c_arm=on
+          #dtparam=i2s=on
+          #dtparam=spi=on
+          dtparam=audio=on
+        dest: /boot/firmware/config.txt
+        owner: root
+        group: root
+        mode: '0755'
+
     # Simulates a host set up before #229, so verify can check the role removes the CA key.
     - name: Plant a root CA private key like the old certificate_check role left behind
       ansible.builtin.copy:

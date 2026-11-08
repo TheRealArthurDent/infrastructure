@@ -2,3 +2,5 @@
 # Production. Pi-hole host, Docker DNS and the dungeon IP need no entry here: they default to the host's name,
 # its own IP and a lookup on the host (#237, #271).
 dhparameter_bits: 4096
+# In the Argon ONE V2 case: the argon_fan role controls its fan (#325)
+argon_fan_enabled: true

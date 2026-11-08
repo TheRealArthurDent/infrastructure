@@ -1,0 +1,18 @@
+---
+# Fan control for the Argon ONE V2 case (#325). Only hosts in that case run the role (bootstrap.yaml, when
+# argon_fan_enabled). Minimum CPU temperature (°C) -> fan speed (%): raspi's former /etc/argononed.conf, which are
+# Argon's defaults. Below the lowest threshold the fan is off.
+argon_fan_enabled: false
+argon_fan_thresholds:
+  55: 10
+  60: 55
+  65: 100
+# Seconds between two temperature checks
+argon_fan_interval: 30
+argon_fan_temperature_file: /sys/class/thermal/thermal_zone0/temp
+argon_fan_i2c_bus: 1
+# The fan controller sits on I2C, which Raspberry Pi OS enables in config.txt. The change takes effect after a
+# reboot, which the role leaves to the user.
+argon_fan_boot_config: /boot/firmware/config.txt
+# Start the service and stop Argon's own argononed (false in Molecule: no systemd, no I2C in the container)
+argon_fan_manage_service: true

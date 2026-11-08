@@ -1,0 +1,82 @@
+---
+# Fan control for the Argon ONE V2 case (#325): replaces Argon's install script (unpinned downloads, not idempotent)
+# with a small daemon of our own that speaks the same I2C protocol. Fan only; the case's power button isn't used.
+
+- name: Ensure I2C is enabled at boot
+  ansible.builtin.lineinfile:
+    path: "{{ argon_fan_boot_config }}"
+    regexp: '^#?\s*dtparam=i2c_arm='
+    line: dtparam=i2c_arm=on
+  notify: Report that I2C is enabled after a reboot
+
+- name: Ensure the I2C device module is loaded at boot
+  ansible.builtin.copy:
+    content: "i2c-dev\n"
+    dest: /etc/modules-load.d/i2c-dev.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure the I2C library for Python is installed
+  ansible.builtin.apt:
+    name: python3-smbus
+    state: present
+    update_cache: true
+    cache_valid_time: 86400
+
+- name: Ensure the fan daemon is present
+  ansible.builtin.copy:
+    src: argon-fan
+    dest: /usr/local/bin/argon-fan
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Restart argon-fan
+
+- name: Ensure the fan config is present
+  ansible.builtin.copy:
+    content: "{{ argon_fan_config | to_nice_json }}\n"
+    dest: /etc/argon-fan.json
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    argon_fan_config:
+      thresholds: "{{ argon_fan_thresholds }}"
+      interval: "{{ argon_fan_interval | int }}"
+      temperature_file: "{{ argon_fan_temperature_file }}"
+      bus: "{{ argon_fan_i2c_bus | int }}"
+  notify: Restart argon-fan
+
+- name: Ensure the fan service unit is present
+  ansible.builtin.template:
+    src: argon-fan.service.j2
+    dest: /etc/systemd/system/argon-fan.service
+    owner: root
+    group: root
+    mode: '0644'
+  register: argon_fan_unit
+  notify: Restart argon-fan
+
+- name: Manage the services
+  when: argon_fan_manage_service | bool
+  block:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    # Both would drive the same fan. Its files stay; argonone-uninstall removes them.
+    - name: Ensure Argon's own argononed is stopped and disabled
+      ansible.builtin.systemd_service:
+        name: argononed
+        state: stopped
+        enabled: false
+      when: "'argononed.service' in ansible_facts.services"
+
+    # In check mode the unit file above isn't written: on a host without it, systemd can't find the service yet.
+    - name: Ensure the fan service is enabled and running
+      ansible.builtin.systemd_service:
+        name: argon-fan
+        state: started
+        enabled: true
+        daemon_reload: true
+      when: not (ansible_check_mode and argon_fan_unit is changed)
