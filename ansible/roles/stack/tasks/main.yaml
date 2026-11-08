@@ -1,8 +1,7 @@
 ---
-# Deploys the infrastructure stack (nginx, Pi-hole x2, unbound, portainer, resticprofile, healthmonitor).
-# Replaces deploy.sh -> setup/setup.sh -> run.sh (#238). Needs the files the secrets role writes
-# (.env files, secrets/restic_passphrase), the DH params from the base role and the certificate from
-# check-certificates.yaml.
+# Deploys the infrastructure stack (nginx, Pi-hole x2, unbound, portainer, resticprofile, healthmonitor), #238.
+# Needs the files the secrets role writes (.env files, secrets/restic_passphrase), the DH params from the base
+# role and the certificate from check-certificates.yaml.
 
 # requests for the community.docker modules, yaml for docker_compose_v2 with definition
 - name: Ensure Python libraries for the Docker modules are installed
@@ -30,7 +29,7 @@
         fail_msg: "{{ stack_dungeon_host }} does not resolve on {{ inventory_hostname }}; resticprofile needs its IP."
         quiet: true
 
-    # Same pick as run.sh: the first address of a STREAM line
+    # The first address of a STREAM line
     - name: Remember the IP of the backup host
       ansible.builtin.set_fact:
         stack_dungeon_ip: >-
@@ -72,7 +71,7 @@
     label: "{{ item | basename }}"
   notify: Reload stack nginx
 
-# resticprofile reads these on every scheduled run; like deploy.sh, a change doesn't restart the container.
+# resticprofile reads these on every scheduled run; a change doesn't restart the container.
 - name: Ensure resticprofile config is present
   ansible.builtin.template:
     src: resticprofile/{{ item }}.j2
@@ -116,7 +115,7 @@
           {{ stack_dir }}/nginx/{{ inventory_hostname }}.pem/.key missing. Run check-certificates.yaml first.
         quiet: true
 
-    # Same settings as run.sh created them with. Both are external in the compose file.
+    # Both are external in the compose file.
     - name: Ensure the internal network siz exists
       community.docker.docker_network:
         name: siz

@@ -5,24 +5,20 @@ container health monitoring) for a Raspberry Pi running Debian/Raspberry Pi OS t
 
 ## State of the repo
 
-The deployment is being migrated from bash scripts to Ansible, and the migration is only half done:
+Everything is deployed with Ansible (`ansible/`); the former bash scripts (`deploy.sh` → `setup/setup.sh` →
+`run.sh`) are gone (#238).
 
 - **Ansible** (`ansible/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
   (`.env` files from KeePass), certificates, and Pi-hole DNS records, lists, groups, clients and domains through its
   REST API.
 - The **`stack` role** deploys the Docker stack itself (nginx/restic config as Jinja templates, docker networks,
   `docker compose up`), in `bootstrap.yaml` under the tag `stack` (#238).
-- **Bash** (`deploy.sh` → `setup/setup.sh` → `run.sh`) still exists as a fallback until Ansible has proven itself
-  on raspi; then it gets deleted (#238). Until then `setup/` + `docker-compose.yaml` and the role's templates must
-  stay in sync: `ansible/tests/unit/test_stack_templates.py` fails otherwise, so change both.
-  Don't extend the bash scripts; put new deployment logic into Ansible.
 
 Review findings from the migration are GitHub issues. Still open are #238 (migration) and #239
 (refactor). Check the open issues before changing an affected area, and reference them in commits.
 
 ## Layout
 
-- `docker-compose.yaml`, `setup/` – the stack and its config for `deploy.sh` (fallback, copies of `ansible/roles/stack/templates/`)
 - `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`,
   `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`,
   `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
@@ -76,7 +72,8 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
 
 - Commit messages: conventional style (`feat:`, `fix:`, `test:`, `chore:`), referencing issues (`Refs #238`).
 - Never commit or push to `main`. Branch off `main` and open a PR into `main`; the user merges.
-- Container images in `docker-compose.yaml` are pinned and updated by Renovate; keep them pinned.
+- Container images in `ansible/roles/stack/templates/docker-compose.yaml.j2` are pinned and updated by Renovate
+  (`renovate.json` points its docker-compose manager at the template); keep them pinned.
 - Work test-driven, unless something speaks against it (then say why). Write the test first and watch it fail
   for the right reason before changing the code: pytest for Python, `verify.yaml` checks for Ansible roles,
   run against the old role. Since a Molecule run takes minutes, one red/green cycle may cover a group of

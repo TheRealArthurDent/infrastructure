@@ -1,6 +1,6 @@
 ---
 name: ansible-role
-description: Conventions and checklist for writing, changing or reviewing Ansible roles, tasks and playbooks in this repo's ansible/ directory, including how to cover them with Molecule tests. Use this whenever you add or modify anything under ansible/ (roles, tasks, handlers, templates, playbooks, inventory), migrate a bash step from deploy.sh/setup.sh/run.sh into Ansible, fix an idempotency or ansible-lint problem, or add or extend a Molecule scenario or verify.yaml, even if the user only says something like "add X to the pi setup" or "automate this step".
+description: Conventions and checklist for writing, changing or reviewing Ansible roles, tasks and playbooks in this repo's ansible/ directory, including how to cover them with Molecule tests. Use this whenever you add or modify anything under ansible/ (roles, tasks, handlers, templates, playbooks, inventory), fix an idempotency or ansible-lint problem, or add or extend a Molecule scenario or verify.yaml, even if the user only says something like "add X to the pi setup" or "automate this step".
 ---
 
 # Ansible roles in this repo
@@ -140,17 +140,6 @@ from bash continues.
 If Docker isn't available, say so and still do the static parts (syntax check with
 `ANSIBLE_ROLES_PATH=roles ansible-playbook -i localhost, --syntax-check molecule/default/converge.yaml`, lint),
 instead of claiming the tests passed.
-
-## Migrating a step from the bash scripts
-
-When moving something from `deploy.sh`/`setup/setup.sh`/`run.sh` into Ansible:
-
-- Replace `%HOSTNAME%` sed substitution with Jinja templates using `{{ inventory_hostname }}`.
-- Replace `docker network create` with `community.docker.docker_network`, and `docker compose pull/up` with
-  `community.docker.docker_compose_v2` (`pull: policy`).
-- Replace "create if missing" shell checks (`if [ ! -f ... ]`) with the module that manages the resource
-  (`community.crypto.openssl_dhparam`, `openssl_privatekey`, `file: state=directory`).
-- Note in the commit or PR which bash lines are now obsolete; the scripts get deleted once everything has moved (#238).
 
 ## Before you finish
 

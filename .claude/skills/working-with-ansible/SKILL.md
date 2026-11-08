@@ -1,6 +1,6 @@
 ---
 name: working-with-ansible
-description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (stack role, deploy.sh fallback), on testbed or raspi, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
+description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (stack role), on testbed or raspi, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
 ---
 
 # Working with Ansible in this repo
@@ -59,8 +59,7 @@ something, hand the user the command instead of looking for another way to run i
 - **The Pi-hole sync deletes** every record or list not in `configs/pihole.yaml`. Ask whether raspi has
   hand-made entries before a first sync.
 - **A new subdomain needs three places**: the CNAME in `configs/pihole.yaml`, nginx `server_name` in
-  `ansible/roles/stack/templates/nginx/nginx.conf.j2` (and `setup/nginx/nginx.conf` while deploy.sh exists, the
-  template test keeps them in sync), and the SAN in `certificate_check_subdomains`. DNS alone lands on nginx's default
+  `ansible/roles/stack/templates/nginx/nginx.conf.j2`, and the SAN in `certificate_check_subdomains`. DNS alone lands on nginx's default
   server with a certificate error.
 - **`--check` isn't fully side-effect free**: tasks with `check_mode: false` (e.g. `python3-debian` in the docker
   role) really run.
@@ -68,9 +67,9 @@ something, hand the user the command instead of looking for another way to run i
 - **`no_log` hides diffs**: for `.env` files you only learn *that* they change. That is intended.
 - **Docker on raspi is Debian `docker.io` 26.1.5** until the docker role is rolled out there; don't drop
   compatibility settings that depend on it (e.g. `DOCKER_API_VERSION`).
-- The stack is deployed by the `stack` role (#238); `deploy.sh` is only a fallback until it is deleted. New
-  deployment logic goes into Ansible, never into the scripts.
-- **The compose project must stay `infrastructure`** (`stack_project_name`). deploy.sh's containers belong to it;
+- The stack is deployed by the `stack` role (#238); the bash scripts (`deploy.sh`, `run.sh`, `setup/`) are gone.
+  If someone still has them in an old checkout, don't use them: they would overwrite the config with stale copies.
+- **The compose project must stay `infrastructure`** (`stack_project_name`). The running containers belong to it;
   another name would start a second stack whose fixed container names collide.
 - **Stack config changes don't restart containers** except nginx (reload after `nginx -t`). resticprofile reads
   its config per run, but a changed schedule needs `docker restart resticprofile`.

@@ -44,7 +44,5 @@ def test_base_is_the_first_role_after_ssh_in_bootstrap():
 # container has no IPv6 network, so ssh failed with "Network unreachable" and the restore with "unexpected EOF".
 def test_backup_host_is_looked_up_as_ipv4_only():
     stack_tasks = (ANSIBLE_DIR / "roles" / "stack" / "tasks" / "main.yaml").read_text()
-    run_sh = (ANSIBLE_DIR.parent / "run.sh").read_text()
 
     assert "getent ahostsv4 {{ stack_dungeon_host }}" in stack_tasks
-    assert "getent ahostsv4 dungeon" in run_sh
