@@ -3,8 +3,8 @@
 
 Replaces Argon's own argononed (fan part only; the power button isn't used). Every interval it reads the CPU
 temperature and sets the fan to the speed of the highest threshold reached, over I2C to the case's controller at
-0x1a: its duty cycle register 0x80 where the firmware has it, a plain byte on older firmware (the same protocol as
-Argon's argonregister.py). A higher speed applies at once, a lower one only when the next check still asks for it.
+0x1a: its duty cycle register 0x80 where the firmware has it, a plain byte on older firmware (the protocol the
+case's controller speaks). A higher speed applies at once, a lower one only when the next check still asks for it.
 
   argon-fan [--config /etc/argon-fan.json]
 """
@@ -45,12 +45,13 @@ class FanController:
         self.registers = self._has_registers()
 
     def _has_registers(self):
-        # Like argonregister.py: newer firmware keeps a value written to the duty cycle register, older ignores it
+        # Newer firmware keeps a value written to the duty cycle register, older firmware ignores the write. The
+        # probe is a speed within 0..100 other than the current one; the daemon sets the real one right after.
         try:
-            old = self.bus.read_byte_data(ADDRESS, DUTY_CYCLE)
-            probe = 98 if old + 1 >= 100 else old + 1
+            current = self.bus.read_byte_data(ADDRESS, DUTY_CYCLE)
+            probe = (current + 50) % 100
             self.bus.write_byte_data(ADDRESS, DUTY_CYCLE, probe)
-            return self.bus.read_byte_data(ADDRESS, DUTY_CYCLE) != old
+            return self.bus.read_byte_data(ADDRESS, DUTY_CYCLE) == probe
         except OSError:
             return False
 

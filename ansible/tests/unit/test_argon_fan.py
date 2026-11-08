@@ -138,3 +138,14 @@ def test_reads_thresholds_from_the_config(fan, tmp_path):
 def test_role_defaults_keep_raspis_thresholds():
     defaults = yaml.safe_load(DEFAULTS.read_text())
     assert {int(k): v for k, v in defaults["argon_fan_thresholds"].items()} == RASPI_THRESHOLDS
+
+
+def test_check_mode_doesnt_start_a_service_whose_unit_isnt_written_yet():
+    # In check mode the unit file isn't written, so on a host without it systemd can't find the service (raspi did)
+    tasks = yaml.safe_load((ANSIBLE_DIR / "roles" / "argon_fan" / "tasks" / "main.yaml").read_text())
+    unit = next(t for t in tasks if "argon-fan.service" in str(t.get("ansible.builtin.template", {}).get("dest")))
+    block = next(t for t in tasks if "block" in t)
+    start = next(t for t in block["block"] if (t.get("ansible.builtin.systemd_service") or {}).get("name") == "argon-fan")
+    assert unit.get("register"), "the unit file task isn't registered"
+    condition = str(start.get("when", ""))
+    assert "ansible_check_mode" in condition and f"{unit['register']} is changed" in condition
