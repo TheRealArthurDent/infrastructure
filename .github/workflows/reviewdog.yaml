@@ -10,6 +10,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# reviewdog posts its findings as PR review comments. Set explicitly: a repo created after 2023 gives the
+# GITHUB_TOKEN read-only access by default, and the comments then fail with 403.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   reviewdog:
     runs-on: ubuntu-latest
