@@ -334,7 +334,6 @@
         - {path: /etc/argon-fan.json, mode: '0644'}
         - {path: /etc/systemd/system/argon-fan.service, mode: '0644'}
         - {path: /etc/modules-load.d/i2c-dev.conf, mode: '0644'}
-      when: not is_dungeon
 
     - name: Check the fan control files exist, owned by root
       ansible.builtin.assert:
