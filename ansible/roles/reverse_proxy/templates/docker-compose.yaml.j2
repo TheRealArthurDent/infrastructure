@@ -19,6 +19,3 @@ services:
       - siz
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
-networks:
-  nginx:
-    name: nginx

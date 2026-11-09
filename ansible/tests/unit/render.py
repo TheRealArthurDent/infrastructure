@@ -6,6 +6,7 @@ so host_vars and group_vars apply; the roles' defaults load at role-default prec
 expressions for the compose file and the JSON files are copies of the ones in roles/stack/tasks/main.yaml and
 roles/resticprofile/tasks/restore.yaml.
 """
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -79,8 +80,11 @@ def component_templates():
     ]
 
 
-def rendered_tree(tmp_path, host):
-    """Relative destination path -> content of every file the stack role renders for the host."""
+def rendered_tree(tmp_path, host, extra_vars=None):
+    """Relative destination path -> content of every file the stack role renders for the host.
+
+    extra_vars (a dict, e.g. {"stack_components": [...]}) is passed as -e @file and overrides everything else.
+    """
     out = tmp_path / "out"
     templates = component_templates()
     # Roles holding only the defaults: they must rank below group_vars and host_vars, which vars_files would not do
@@ -118,8 +122,13 @@ def rendered_tree(tmp_path, host):
             },
         ] + role_tasks(out),
     }]))
+    extra_args = []
+    if extra_vars:
+        extra_file = tmp_path / "extra_vars.json"
+        extra_file.write_text(json.dumps(extra_vars))
+        extra_args = ["-e", f"@{extra_file}"]
     result = subprocess.run(
-        ["ansible-playbook", "-i", "inventory/", "--limit", host, str(playbook)],
+        ["ansible-playbook", "-i", "inventory/", "--limit", host, *extra_args, str(playbook)],
         cwd=ANSIBLE_DIR,
         stdin=subprocess.DEVNULL,
         capture_output=True,

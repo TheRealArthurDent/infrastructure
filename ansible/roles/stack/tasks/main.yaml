@@ -12,6 +12,9 @@
       - python3-yaml
     state: present
 
+- name: Check the components of this host
+  ansible.builtin.import_tasks: components.yaml
+
 # Static imports, so the stack tag from bootstrap.yaml reaches the components' tasks.
 - name: Set up the reverse proxy
   ansible.builtin.import_role:

@@ -155,6 +155,7 @@ http {
         include             snippets/nextcloud.conf;
     }
 
+{% if 'pihole' in stack_components %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -165,7 +166,9 @@ http {
 
         include             snippets/pihole.conf;
     }
+{% endif %}
 
+{% if 'outbound' in stack_components %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -176,4 +179,5 @@ http {
 
         include             snippets/pihole_outbound.conf;
     }
+{% endif %}
 }

@@ -22,9 +22,12 @@ stack_components:
   - resticprofile
   - healthmonitor
 
-# The stack's own part of the compose file: the networks it creates in tasks/main.yaml, external for Compose.
+# The stack's own part of the compose file: the networks it creates in tasks/main.yaml, external for Compose, and
+# nginx, which unbound and resticprofile attach to even on a host without the reverse proxy component.
 stack_compose_networks:
   networks:
+    nginx:
+      name: nginx
     siz:
       name: siz
       external: true
