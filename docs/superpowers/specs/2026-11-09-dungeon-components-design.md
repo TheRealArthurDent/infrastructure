@@ -167,8 +167,9 @@ A host-level component `backup_target`, on for dungeon: everything a fresh dunge
   root disk. `authorized_keys` from `backup_target_clients` in `host_vars/dungeon.yaml` (client name -> public
   key, e.g. raspi's `resticprofile` key), each with `restrict`. Public keys only, so they can live in the repo.
 - `/media/backup/restic` owned by `restic`, 0700, created only below the marker check.
-- `init-restic.sh` on raspi (ssh-copy-id, needs a password login that the ssh role turns off) is replaced: the
-  raspi run prints the public key to put into `backup_target_clients` when dungeon doesn't accept it yet.
+- `init-restic.sh` on raspi (ssh-copy-id, needs a password login that the ssh role turns off) is replaced.
+  Open (Mika): either raspi's restic key pair comes from KeePass (stable across a rebuild, so dungeon never needs a
+  change), or the raspi run prints a new public key to put into `backup_target_clients` and run dungeon again.
 
 ### Takeover of dungeon (PR 2, by Mika)
 
@@ -176,6 +177,29 @@ Run `check-certificates.yaml --limit dungeon` first (CA-signed certificate repla
 `bootstrap.yaml --limit dungeon --check --diff`, the real run, and a second run with `changed=0`. Images move to
 the pinned versions (nginx 1.29 → 1.31, portainer 2.35 → 2.45). Leftovers of the fork (`~/dev/infrastructure`,
 `/etc/docker/infrastructure/borgmatic`, `/home/borg`) stay untouched; Mika removes them by hand.
+
+### Setting up dungeon from scratch (README, PR 2)
+
+`ansible/README.md` → "Set up a host" covers dungeon as well, with its differences marked per step (Mika,
+2026-11-09). The SSD is the point that needs care:
+
+1. **Flash** the NVMe with the backup SSD **unplugged**, so it can't be picked as the target in Raspberry Pi Imager.
+   Device Raspberry Pi 5, hostname `dungeon`, user `dragon`, key login only.
+2. **First boot** without the SSD (Pi 5 boots from NVMe; the SSD has no boot partition, but there's no reason to
+   risk it). Remove old host keys as for raspi.
+3. **Plug in the SSD**, then run the bootstrap (`--skip-tags stack`). `backup_target` is a host role, not part of
+   the stack tag, so it runs here: fstab entry by UUID (`nofail`), mount, `mountpoint -q` check, the `restic` user
+   with UID/GID 1002 (so the files on the SSD keep their owner), `authorized_keys`, the marker. Without the SSD the
+   role stops with "plug in the backup SSD (UUID ...) and run again"; nothing gets written below the empty mount
+   point. From here raspi's nightly backup works again.
+4. **Backup access**: nothing to do on dungeon (local repository).
+5. **Certificate and stack**: as for raspi. The clean-slate restore reads dungeon's repository on the SSD
+   (portainer). The dry run names the snapshot; the marker check stops it if the SSD is gone.
+6. **Pi-hole**: skipped (no Pi-hole on dungeon).
+7. **Apps**: OpenCloud etc. from their own repo, later.
+
+A lost SSD loses dungeon's and raspi's backups; restoring dungeon then needs the off-site copy, which isn't part of
+this work.
 
 ### Delivery
 
