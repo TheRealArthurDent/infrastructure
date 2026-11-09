@@ -161,8 +161,8 @@ lives only in raspi's database.
   every stored one: Windows credential `<name>-keepass` (`raspberry-keepass` as today). `--store`/`--forget` take
   the database name (`bin/with-keepass --store dungeon`), default `raspberry`. No `--limit` parsing needed.
 - dungeon's database uses the same group/title names as raspi's. It needs: `Backup/Resticprofile` (field
-  `passphrase`), `Discord/Docker Webhook` (fields `id`, `token`) and `smart-home/outbound` (password). testbed's own webhook is a new entry in raspi's
-  database (`Discord/Docker Webhook testbed`), selected by a host variable.
+  `passphrase`), `Discord/Docker Webhook` (fields `id`, `token`) and `smart-home/outbound` (password). testbed's
+  own webhook is a new entry in raspi's database (`Discord/Docker Webhook testbed`), selected by a host variable.
 - `check-certificates.yaml` reads the root CA from `keepass_ca_database` only, never from the host's database.
   Moving the root CA into a database of its own (#10) then only changes `keepass_ca_database`.
 

@@ -1,8 +1,10 @@
 # Stack components Implementation Plan (#14)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Split the `stack` role into one role per component, switched per host with `stack_components`, while raspi and testbed render exactly what they render today.
+**Goal:** Split the `stack` role into one role per component, switched per host with `stack_components`, while raspi and
+testbed render exactly what they render today.
 
 **Architecture:** Each component role owns its templates (laid out like their destination below `stack_dir`), its
 tasks, handlers, defaults and a `docker-compose.yaml.j2` fragment. `stack` imports the enabled component roles
@@ -81,11 +83,13 @@ generated from `main` pin the output for raspi and testbed.
 ### Task 1: Golden files of today's output
 
 **Files:**
+
 - Create: `ansible/tests/unit/render.py` (shared render helper), `ansible/tests/unit/test_stack_golden.py`,
   `ansible/tests/unit/golden/{raspi,testbed}/…`
 - Modify: `ansible/tests/unit/test_stack_templates.py` (use `render.py`)
 
 **Interfaces:**
+
 - Produces: `render.rendered_tree(tmp_path, host) -> dict[str, str]` (relative dest path → content), rendered
   through the real inventory (`-i inventory/`, `--limit host`) with `resticprofile`'s dummy
   `backup host ip = 192.0.2.10`, `dungeon_ssh_port = 1359`; includes `docker-compose.yaml`,
@@ -105,9 +109,11 @@ generated from `main` pin the output for raspi and testbed.
 ### Task 2: `compose_merge` filter
 
 **Files:**
+
 - Create: `ansible/filter_plugins/compose_merge.py`, `ansible/tests/unit/test_compose_merge.py`
 
 **Interfaces:**
+
 - Produces: filter `compose_merge(fragments: list[dict]) -> dict`. Merges the top-level keys `services`, `volumes`,
   `networks`, `secrets` of all fragments in order; any other top-level key, or the same name under one of those
   keys in two fragments, raises `AnsibleFilterError` naming the key and both fragment indexes.
@@ -123,6 +129,7 @@ generated from `main` pin the output for raspi and testbed.
 ### Task 3: Component roles, `stack` assembles (all components on)
 
 **Files:**
+
 - Create: `ansible/roles/{reverse_proxy,portainer,unbound,pihole,outbound,resticprofile,healthmonitor}/` with
   `tasks/main.yaml`, `defaults/main.yaml`, `templates/docker-compose.yaml.j2`, plus per the component map
   (`handlers/main.yaml` for reverse_proxy; `tasks/restore.yaml`, `files/restic-restore` for resticprofile)
@@ -134,6 +141,7 @@ generated from `main` pin the output for raspi and testbed.
 - Delete: `ansible/roles/stack/templates/`, `ansible/roles/stack/files/`, `ansible/roles/stack/tasks/restore.yaml`
 
 **Interfaces:**
+
 - Consumes: `compose_merge` (Task 2); `render.rendered_tree` (Task 1).
 - Produces: `stack_components: list[str]` (default all seven, order as in the component map);
   `stack_restore_items: dict` (merged `<component>_restore_items` of enabled components); `stack_compose_definition`
@@ -160,6 +168,7 @@ generated from `main` pin the output for raspi and testbed.
 ### Task 4: Per-host switching
 
 **Files:**
+
 - Modify: `ansible/roles/stack/tasks/main.yaml` (assert), `ansible/roles/reverse_proxy/templates/nginx/nginx.conf.j2`
   (`{% if 'pihole' in stack_components %}` / `outbound` around their server blocks),
   `ansible/roles/secrets/tasks/main.yaml` (`.env` only with `pihole`, `.outbound.env` with `outbound`,
@@ -169,6 +178,7 @@ generated from `main` pin the output for raspi and testbed.
 - Test: `ansible/tests/unit/test_stack_components.py`, `ansible/molecule/default/verify.yaml` (unchanged set)
 
 **Interfaces:**
+
 - Consumes: `render.rendered_tree(tmp_path, host, extra_vars=None)` — add the `extra_vars` parameter (passed as
   `-e @file`), used to override `stack_components`.
 
@@ -188,6 +198,7 @@ generated from `main` pin the output for raspi and testbed.
 ### Task 5: Docs and PR
 
 **Files:**
+
 - Modify: `ansible/README.md` (role list, variable names in the restore sections, `stack_components`),
   `CLAUDE.md` (layout: component roles), `.claude/skills/working-with-ansible/SKILL.md` (references to the stack
   role's files/vars), `docs/superpowers/specs/…` only if a decision above contradicts it.
