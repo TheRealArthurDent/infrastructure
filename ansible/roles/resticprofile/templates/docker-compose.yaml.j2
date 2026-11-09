@@ -1,0 +1,80 @@
+services:
+  # Backup - resticprofile
+  resticprofile:
+    hostname: resticprofile
+    container_name: resticprofile
+    image: creativeprojects/resticprofile:0.33.1
+    # On stop, let a running backup shut down cleanly so restic removes its repository lock (raspberry#250)
+    init: true
+    stop_grace_period: 2m
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+    secrets:
+      - restic_passphrase
+    environment:
+      TZ: 'Europe/Berlin'
+    volumes:
+      - /etc/docker/infrastructure/resticprofile/.ssh:/root/.ssh # TODO ansible
+      - /etc/docker/infrastructure/resticprofile/ssh_config:/etc/ssh/ssh_config:ro
+      - /etc/docker/infrastructure/resticprofile/config:/etc/resticprofile:ro
+      - /home:/source/home:ro
+      - /etc:/source/etc:ro
+      - /var/lib/docker/volumes:/source/docker-volumes:ro
+      - /var/restore:/restore-target:rw
+      # The clean-slate restore markers of the stacks (raspberry#287)
+      - /var/lib/restic-restore:/restore-state:ro
+      # Prom metrics for telegraf
+      - /var/lib/resticprofile/metrics:/metrics
+    restart: unless-stopped
+    networks:
+      - nginx
+    extra_hosts:
+      dungeon: "{{ resticprofile_backup_host_ip }}"
+    # Unhealthy when the last successful backup (daily at 03:00) is older than 26h, so healthmonitor
+    # alerts on a missing backup, not only on a failed one (raspberry#259). Also unhealthy before the first backup.
+    # Also unhealthy when the last monthly restore drill (restic-restore drill, host cron) failed or its last
+    # success is older than 35 days (raspberry#288); healthy before the first drill.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          awk -v now=$$(date +%s)
+          '/^resticprofile_backup_last_success_timestamp_seconds/ { ok = now - $$2 < 26 * 3600 } END { exit !ok }'
+          /metrics/backup_last_success.prom
+          && { [ ! -f /metrics/restore_drill.prom ] || awk -v now=$$(date +%s)
+          '$$1 == "restic_restore_drill_success" { ok = $$2 == 1 }
+          $$1 == "restic_restore_drill_last_success_timestamp_seconds" { last = $$2 }
+          END { exit !(ok && now - last < 35 * 86400) }'
+          /metrics/restore_drill.prom; }
+      interval: 10m
+      # Check every 10s during the first minute, so the status is known right after a deploy
+      start_period: 1m
+      start_interval: 10s
+    entrypoint: '/bin/sh'
+    command:
+      - '-c'
+      - |
+        # No backups before every stack's clean-slate restore is done or skipped, or a fresh host's empty or
+        # half-restored state would become the latest snapshot (raspberry#287). restic-restore clean-slate writes the
+        # markers.
+        for stack in {{ resticprofile_backup_stacks | join(' ') }}; do
+          [ -f /restore-state/$$stack.done ] ||
+            echo "Waiting for /var/lib/restic-restore/$$stack.done to schedule backups"
+          while [ ! -f /restore-state/$$stack.done ]; do sleep 60; done
+        done
+        resticprofile schedule --all || exit 1
+        crond -f &
+        crond_pid=$$!
+        # crond doesn't pass SIGTERM on to its jobs: stop the running job (resticprofile) first and wait for it
+        stop_job() {
+          pkill -TERM -P $$crond_pid
+          while pgrep -P $$crond_pid >/dev/null; do sleep 1; done
+          kill $$crond_pid
+        }
+        trap stop_job TERM INT
+        wait $$crond_pid
+secrets:
+  restic_passphrase:
+    file: /etc/docker/infrastructure/secrets/restic_passphrase

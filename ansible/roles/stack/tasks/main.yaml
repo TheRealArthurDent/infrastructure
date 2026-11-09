@@ -1,7 +1,8 @@
 ---
-# Deploys the infrastructure stack (nginx, Pi-hole x2, unbound, portainer, resticprofile, healthmonitor), raspberry#238.
-# Needs the files the secrets role writes (.env files, secrets/restic_passphrase), the DH params from the base
-# role and the certificate from check-certificates.yaml.
+# Deploys the infrastructure stack (raspberry#238) as one Compose project from its components (#14): every role in
+# stack_components brings its compose fragment and the config it needs; this role merges the fragments, restores a
+# fresh host and starts the project. Needs the files the secrets role writes (.env files, secrets/restic_passphrase),
+# the DH params from the base role and the certificate from check-certificates.yaml.
 
 # requests for the community.docker modules, yaml for docker_compose_v2 with definition
 - name: Ensure Python libraries for the Docker modules are installed
@@ -11,110 +12,97 @@
       - python3-yaml
     state: present
 
-- name: Resolve the backup host
-  when: stack_dungeon_ip is not defined
-  block:
-    # IPv4 only: the resticprofile container has no IPv6 network, and the Fritzbox answers with IPv6 first while
-    # Pi-hole isn't up yet.
-    - name: Look up the backup host on the Pi
-      ansible.builtin.command: getent ahostsv4 {{ stack_dungeon_host }}
-      register: stack_dungeon_getent
-      changed_when: false
-      failed_when: false
-      check_mode: false
+- name: Check the components of this host
+  ansible.builtin.import_tasks: components.yaml
 
-    - name: Ensure the backup host resolves
-      ansible.builtin.assert:
-        that: stack_dungeon_getent.rc == 0
-        fail_msg: "{{ stack_dungeon_host }} does not resolve on {{ inventory_hostname }}; resticprofile needs its IP."
-        quiet: true
+# Static imports, so the stack tag from bootstrap.yaml reaches the components' tasks.
+- name: Set up the reverse proxy
+  ansible.builtin.import_role:
+    name: reverse_proxy
+    tasks_from: main
+  when: "'reverse_proxy' in stack_components"
 
-    # The first address of a STREAM line
-    - name: Remember the IP of the backup host
-      ansible.builtin.set_fact:
-        stack_dungeon_ip: >-
-          {{ (stack_dungeon_getent.stdout_lines | select('search', 'STREAM') | first).split() | first }}
+- name: Set up portainer
+  ansible.builtin.import_role:
+    name: portainer
+    tasks_from: main
+  when: "'portainer' in stack_components"
 
-- name: Ensure stack directories exist
+- name: Set up unbound
+  ansible.builtin.import_role:
+    name: unbound
+    tasks_from: main
+  when: "'unbound' in stack_components"
+
+- name: Set up Pi-hole
+  ansible.builtin.import_role:
+    name: pihole
+    tasks_from: main
+  when: "'pihole' in stack_components"
+
+- name: Set up the outbound Pi-hole
+  ansible.builtin.import_role:
+    name: outbound
+    tasks_from: main
+  when: "'outbound' in stack_components"
+
+- name: Set up resticprofile
+  ansible.builtin.import_role:
+    name: resticprofile
+    tasks_from: main
+  when: "'resticprofile' in stack_components"
+
+- name: Set up healthmonitor
+  ansible.builtin.import_role:
+    name: healthmonitor
+    tasks_from: main
+  when: "'healthmonitor' in stack_components"
+
+- name: Ensure the compose directory exists
   ansible.builtin.file:
-    path: "{{ stack_dir }}/{{ item }}"
+    path: "{{ stack_compose_dir }}"
     state: directory
     owner: root
     group: root
     mode: '0755'
-  loop:
-    - nginx
-    - nginx/snippets
-    - portainer/data
-    - resticprofile/config
-    - compose
 
-# setup.sh made every nginx and resticprofile file 0600; the containers read them as root.
-- name: Ensure nginx main config is present
-  ansible.builtin.template:
-    src: nginx/nginx.conf.j2
-    dest: "{{ stack_dir }}/nginx/nginx.conf"
-    owner: root
-    group: root
-    mode: '0600'
-  notify: Reload stack nginx
+# The components' fragments (roles/<component>/templates/docker-compose.yaml.j2) are siblings of this role. Rendered
+# after the components' tasks, which set what the fragments need (resticprofile_backup_host_ip).
+- name: Merge the compose fragments of the components
+  ansible.builtin.set_fact:
+    stack_compose_definition: >-
+      {{ (query('ansible.builtin.template', *stack_compose_fragments) | map('ansible.builtin.from_yaml') | list
+          + [stack_compose_networks])
+         | compose_merge }}
+  vars:
+    stack_compose_fragments: >-
+      {{ stack_components
+         | map('ansible.builtin.regex_replace', '^(.+)$',
+               role_path | dirname ~ '/\1/templates/docker-compose.yaml.j2')
+         | list }}
 
-- name: Ensure nginx snippet is present
-  ansible.builtin.template:
-    src: nginx/snippets/{{ item | basename }}
-    dest: "{{ stack_dir }}/nginx/snippets/{{ item | basename | regex_replace('\\.j2$', '') }}"
-    owner: root
-    group: root
-    mode: '0600'
-  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/nginx/snippets/*.j2') | sort }}"
-  loop_control:
-    label: "{{ item | basename }}"
-  notify: Reload stack nginx
-
-# resticprofile reads these on every scheduled run; a change doesn't restart the container.
-- name: Ensure resticprofile config is present
-  ansible.builtin.template:
-    src: resticprofile/{{ item }}.j2
-    dest: "{{ stack_dir }}/resticprofile/{{ item }}"
-    owner: root
-    group: root
-    mode: '0600'
-  loop:
-    - config/profiles.yaml
-    - config/excludes
-    - ssh_config
-  register: stack_resticprofile_config_files
-
+# Kept for manual docker compose commands and the one-off restore runner. Compose up below uses the definition, so
+# --check can compare it with the running containers even before this file exists: check mode doesn't write it.
 - name: Ensure the compose file is present
-  ansible.builtin.template:
-    src: docker-compose.yaml.j2
+  ansible.builtin.copy:
+    content: |-
+      # Merged by the stack role from the components' compose fragments (#14). Don't edit, run the playbook.
+      {{ stack_compose_definition | ansible.builtin.to_nice_yaml(indent=2) }}
     dest: "{{ stack_compose_dir }}/docker-compose.yaml"
     owner: root
     group: root
     mode: '0644'
   register: stack_compose_file
 
-- name: Restore restore_items on a fresh host
-  ansible.builtin.import_tasks: restore.yaml
+- name: Restore the stack's restore items on a fresh host
+  ansible.builtin.import_role:
+    name: resticprofile
+    tasks_from: restore
+  when: "'resticprofile' in stack_components"
 
 - name: Deploy containers
   when: stack_manage_containers | bool
   block:
-    # nginx mounts the certificate as single files. If they're missing, Docker creates directories in
-    # their place, and check-certificates.yaml can't write the certificate any more.
-    - name: Stat the nginx certificate
-      ansible.builtin.stat:
-        path: "{{ stack_dir }}/nginx/{{ inventory_hostname }}.{{ item }}"
-      loop: [pem, key]
-      register: stack_certificate
-
-    - name: Ensure the nginx certificate exists
-      ansible.builtin.assert:
-        that: stack_certificate.results | map(attribute='stat.isreg', default=false) | min
-        fail_msg: >-
-          {{ stack_dir }}/nginx/{{ inventory_hostname }}.pem/.key missing. Run check-certificates.yaml first.
-        quiet: true
-
     # Both are external in the compose file.
     - name: Ensure the internal network siz exists
       community.docker.docker_network:
@@ -133,14 +121,29 @@
       register: stack_network_outbound
 
     # Images are pinned (Renovate), so the default pull policy "missing" pulls exactly when a version changes.
-    # The definition is rendered from the same template as the file in stack_compose_dir (kept there for manual
-    # docker compose commands), so --check can compare it with the running containers even before that file
-    # exists: check mode doesn't create stack_compose_dir.
     - name: Ensure the stack is up
       community.docker.docker_compose_v2:
-        definition: "{{ lookup('ansible.builtin.template', 'docker-compose.yaml.j2') | from_yaml }}"
+        definition: "{{ stack_compose_definition }}"
         project_name: "{{ stack_project_name }}"
         state: present
         pull: policy
+      register: stack_compose_up
       # In check mode a missing network isn't created, and Compose would fail on the external network.
       when: not (ansible_check_mode and (stack_network_siz is changed or stack_network_outbound is changed))
+      # Compose's --dry-run only pretends to pull a new image tag, then fails to recreate the container with it
+      # ("No such image"). The real run pulls it, so in check mode only that error is tolerated, and only when
+      # every error line is about it.
+      failed_when: >-
+        stack_compose_up is failed
+        and not (ansible_check_mode
+                 and stack_compose_up.msg | default('') | length > 0
+                 and stack_compose_up.msg.splitlines() | reject('search', 'No such image') | list | length == 0)
+
+    - name: Note the image that check mode couldn't pull
+      ansible.builtin.debug:
+        msg: >-
+          Check mode can't pull new image tags, so Compose couldn't simulate recreating the containers that use
+          them. The real run pulls them. Compose said: {{ stack_compose_up.msg }}
+      when:
+        - ansible_check_mode
+        - stack_compose_up.msg | default('') is search('No such image')

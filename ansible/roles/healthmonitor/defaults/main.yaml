@@ -1,0 +1,3 @@
+---
+# healthmonitor has nothing to configure besides its compose fragment.
+{}

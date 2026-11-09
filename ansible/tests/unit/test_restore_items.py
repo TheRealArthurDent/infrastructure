@@ -1,6 +1,7 @@
-"""Every restore_items path is in the backup, and the files a restore must keep are known (raspberry#285).
+"""Every restore item path is in the backup, and the files a restore must keep are known (raspberry#285).
 
-restore_items lists the state that doesn't come from IaC and gets restored from the resticprofile backup. A
+The restore items (<component>_restore_items in the components' defaults, merged into stack_restore_items) list the
+state that doesn't come from IaC and gets restored from the resticprofile backup. A
 path the backup doesn't cover (no /source mount, or matched by an exclude pattern) can't be restored, and a
 file inside an item that the backup excludes would be deleted by a restore that mirrors the snapshot, unless
 the item lists it under preserve.
@@ -12,10 +13,13 @@ import pytest
 import yaml
 
 ANSIBLE_DIR = PurePosixPath(__file__).parents[2]
-RESTORE_ITEMS = ANSIBLE_DIR / "inventory" / "group_vars" / "all" / "restore_items.yaml"
-TEMPLATES = ANSIBLE_DIR / "roles" / "stack" / "templates"
-EXCLUDES = TEMPLATES / "resticprofile" / "config" / "excludes.j2"
-COMPOSE = TEMPLATES / "docker-compose.yaml.j2"
+ROLES_DIR = ANSIBLE_DIR / "roles"
+BACKUP_VARS = ANSIBLE_DIR / "inventory" / "group_vars" / "all" / "backup.yaml"
+EXCLUDES = ROLES_DIR / "resticprofile" / "templates" / "resticprofile" / "config" / "excludes.j2"
+RESTICPROFILE_COMPOSE = ROLES_DIR / "resticprofile" / "templates" / "docker-compose.yaml.j2"
+OUTBOUND_COMPOSE = ROLES_DIR / "outbound" / "templates" / "docker-compose.yaml.j2"
+# Components whose state comes back from the backup
+RESTORED_COMPONENTS = ["portainer", "pihole"]
 
 
 def read(path):
@@ -24,7 +28,11 @@ def read(path):
 
 
 def restore_items():
-    return yaml.safe_load(read(RESTORE_ITEMS))["restore_items"]
+    items = {}
+    for component in RESTORED_COMPONENTS:
+        defaults = yaml.safe_load(read(ROLES_DIR / component / "defaults" / "main.yaml"))
+        items.update(defaults[f"{component}_restore_items"])
+    return items
 
 
 def exclude_patterns():
@@ -34,7 +42,7 @@ def exclude_patterns():
 
 def source_mounts():
     """Host path -> path inside the resticprofile container, for the mounts under /source/."""
-    service = yaml.safe_load(read(COMPOSE))["services"]["resticprofile"]
+    service = yaml.safe_load(read(RESTICPROFILE_COMPOSE))["services"]["resticprofile"]
     mounts = {}
     for volume in service["volumes"]:
         host, container = volume.split(":")[:2]
@@ -97,7 +105,7 @@ def test_outbound_is_not_restored():
 
 
 def test_outbound_keeps_its_runtime_data_in_a_named_volume():
-    compose = yaml.safe_load(read(COMPOSE))
+    compose = yaml.safe_load(read(OUTBOUND_COMPOSE))
 
     assert compose["services"]["outbound"]["volumes"] == ["outbound_pihole:/etc/pihole"]
     assert compose["volumes"]["outbound_pihole"] == {"name": "outbound_pihole"}
@@ -151,18 +159,25 @@ def test_matcher_follows_restic():
 def test_backups_wait_for_the_smart_home_restore_too():
     """smart-home restores its volumes with clean-slate before it starts (smart-home#1), and both hosts run it.
 
-    resticprofile schedules backups only once every stack in stack_backup_stacks has its marker.
+    resticprofile schedules backups only once every stack in resticprofile_backup_stacks has its marker.
     """
-    group_vars = yaml.safe_load(read(RESTORE_ITEMS))
-    assert group_vars["stack_backup_stacks"] == ["{{ stack_project_name }}", "smart-home"]
+    group_vars = yaml.safe_load(read(BACKUP_VARS))
+    assert group_vars == {"resticprofile_backup_stacks": ["{{ stack_project_name }}", "smart-home"]}
+
+
+def test_stack_merges_the_restore_items_of_its_components():
+    defaults = read(ROLES_DIR / "stack" / "defaults" / "main.yaml")
+    assert "stack_restore_items:" in defaults
+    for component in RESTORED_COMPONENTS:
+        assert f"{component}_restore_items:" in read(ROLES_DIR / component / "defaults" / "main.yaml")
 
 
 
 def _stack_tasks():
-    """The tasks of the stack role up to the restore, including the ones nested in blocks."""
+    """The tasks of the stack role and the resticprofile component up to the restore, including nested ones."""
     pending = []
-    for name in ("main.yaml", "restore.yaml"):
-        pending += yaml.safe_load(open(ANSIBLE_DIR / "roles/stack/tasks" / name).read())
+    for name in ("stack/tasks/main.yaml", "resticprofile/tasks/main.yaml", "resticprofile/tasks/restore.yaml"):
+        pending += yaml.safe_load(read(ROLES_DIR / name))
     while pending:
         task = pending.pop(0)
         for key in ("block", "rescue", "always"):
@@ -175,8 +190,10 @@ def test_check_mode_skips_the_dry_run_while_its_files_are_outdated():
     # a host where one of them is due for an update it ran with the old one: the old compose file sent restic to
     # dungeon's IPv6 address and the dry run failed. Every file the one-off runner reads must count.
     tasks = list(_stack_tasks())
-    dry_run_check = next(t for t in tasks if "stack_restore_dry_run_possible" in str(t.get("ansible.builtin.set_fact")))
-    condition = str(dry_run_check["ansible.builtin.set_fact"]["stack_restore_dry_run_possible"])
+    dry_run_check = next(
+        t for t in tasks if "resticprofile_restore_dry_run_possible" in str(t.get("ansible.builtin.set_fact"))
+    )
+    condition = str(dry_run_check["ansible.builtin.set_fact"]["resticprofile_restore_dry_run_possible"])
     read_by_the_runner = ("restic-restore", "resticprofile", "docker-compose.yaml")
     for task in tasks:
         module = task.get("ansible.builtin.template") or task.get("ansible.builtin.copy") or {}

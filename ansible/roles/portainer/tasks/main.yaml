@@ -1,0 +1,9 @@
+---
+# portainer keeps its data in a host directory (restored from the backup, see defaults/main.yaml).
+- name: Ensure the portainer data directory exists
+  ansible.builtin.file:
+    path: "{{ stack_dir }}/portainer/data"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'

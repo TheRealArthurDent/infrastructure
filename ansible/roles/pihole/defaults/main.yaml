@@ -1,0 +1,12 @@
+---
+# Restored from the backup on a fresh host; the format is described at stack_restore_items (stack role defaults).
+pihole_restore_items:
+  pihole:
+    paths:
+      - /etc/docker/infrastructure/pihole/pihole
+    containers: [pihole]
+    preserve:
+      - pihole-FTL.db*
+    note: >-
+      To be removed later: the folder used to be the provisioning path; setup-pihole.yaml now configures the
+      Pi-hole through its API.

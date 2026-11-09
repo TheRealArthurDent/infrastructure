@@ -1,6 +1,6 @@
 ---
 name: working-with-ansible
-description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (stack role), on testbed or raspi, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
+description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on testbed or raspi, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
 ---
 
 # Working with Ansible in this repo
@@ -59,7 +59,7 @@ something, hand the user the command instead of looking for another way to run i
 - **The Pi-hole sync deletes** every record or list not in `configs/pihole.yaml`. Ask whether raspi has
   hand-made entries before a first sync.
 - **A new subdomain needs three places**: the CNAME in `configs/pihole.yaml`, nginx `server_name` in
-  `ansible/roles/stack/templates/nginx/nginx.conf.j2`, and the SAN in `certificate_check_subdomains`. DNS alone lands on nginx's default
+  `ansible/roles/reverse_proxy/templates/nginx/nginx.conf.j2`, and the SAN in `certificate_check_subdomains`. DNS alone lands on nginx's default
   server with a certificate error.
 - **`--check` isn't fully side-effect free**: tasks with `check_mode: false` (e.g. `python3-debian` in the docker
   role) really run.
@@ -67,7 +67,7 @@ something, hand the user the command instead of looking for another way to run i
 - **`no_log` hides diffs**: for `.env` files you only learn *that* they change. That is intended.
 - **Docker on raspi is Debian `docker.io` 26.1.5** until the docker role is rolled out there; don't drop
   compatibility settings that depend on it (e.g. `DOCKER_API_VERSION`).
-- The stack is deployed by the `stack` role (raspberry#238); the bash scripts (`deploy.sh`, `run.sh`, `setup/`) are
+- The stack is deployed by the `stack` role, which assembles the component roles in `stack_components` (raspberry#238, #14); the bash scripts (`deploy.sh`, `run.sh`, `setup/`) are
   gone. If someone still has them in an old checkout, don't use them: they would overwrite the config with stale copies.
 - **The compose project must stay `infrastructure`** (`stack_project_name`). The running containers belong to it;
   another name would start a second stack whose fixed container names collide.

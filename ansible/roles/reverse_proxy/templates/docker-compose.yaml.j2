@@ -1,0 +1,21 @@
+services:
+  # nginx
+  nginx:
+    hostname: raspberry
+    container_name: nginx
+    image: nginx:1.31-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+    volumes:
+      - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
+      - /etc/docker/infrastructure/nginx:/etc/nginx:ro
+      - /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
+      - /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.key:/etc/nginx/{{ inventory_hostname }}.key:ro
+    networks:
+      - nginx
+      - siz
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]

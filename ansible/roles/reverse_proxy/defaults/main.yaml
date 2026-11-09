@@ -1,0 +1,3 @@
+---
+# The nginx container the reload handler talks to
+reverse_proxy_container: nginx

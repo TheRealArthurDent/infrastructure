@@ -1,0 +1,51 @@
+---
+# resticprofile backs up the whole host to the backup host (dungeon). Needs secrets/restic_passphrase from the secrets
+# role. tasks/restore.yaml (imported by the stack role once the compose file is written) restores a fresh host.
+
+- name: Resolve the backup host
+  when: resticprofile_backup_host_ip is not defined
+  block:
+    # IPv4 only: the resticprofile container has no IPv6 network, and the Fritzbox answers with IPv6 first while
+    # Pi-hole isn't up yet.
+    - name: Look up the backup host on the Pi
+      ansible.builtin.command: getent ahostsv4 {{ resticprofile_backup_host }}
+      register: resticprofile_backup_host_getent
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Ensure the backup host resolves
+      ansible.builtin.assert:
+        that: resticprofile_backup_host_getent.rc == 0
+        fail_msg: >-
+          {{ resticprofile_backup_host }} does not resolve on {{ inventory_hostname }}; resticprofile needs its IP.
+        quiet: true
+
+    # The first address of a STREAM line
+    - name: Remember the IP of the backup host
+      ansible.builtin.set_fact:
+        resticprofile_backup_host_ip: >-
+          {{ (resticprofile_backup_host_getent.stdout_lines | select('search', 'STREAM') | first).split() | first }}
+
+- name: Ensure the resticprofile config directory exists
+  ansible.builtin.file:
+    path: "{{ stack_dir }}/resticprofile/config"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# resticprofile reads these on every scheduled run; a change doesn't restart the container. setup.sh made every
+# resticprofile file 0600; the container reads them as root.
+- name: Ensure resticprofile config is present
+  ansible.builtin.template:
+    src: resticprofile/{{ item }}.j2
+    dest: "{{ stack_dir }}/resticprofile/{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop:
+    - config/profiles.yaml
+    - config/excludes
+    - ssh_config
+  register: resticprofile_config_files

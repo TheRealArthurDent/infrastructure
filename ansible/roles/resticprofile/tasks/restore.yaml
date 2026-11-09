@@ -1,0 +1,133 @@
+---
+# Clean-slate restore (raspberry#287): on a fresh host, this stack's restore items (stack_restore_items) come back
+# from the latest snapshot before the stack starts. The stack role imports this file once the compose file is written.
+# resticprofile backs up the whole host, so the helper is a host service: other stacks put
+# their own items into /etc/restic-restore/stacks/ and call it themselves. The helper decides and works
+# (ansible/tests/unit/test_restic_restore.py); a marker makes every later run a no-op. A host that already has
+# data (raspi, testbed) only gets the marker.
+
+- name: Ensure the restore helper is present
+  ansible.builtin.copy:
+    src: restic-restore
+    dest: /usr/local/bin/restic-restore
+    owner: root
+    group: root
+    mode: '0755'
+  register: resticprofile_restore_helper_file
+
+- name: Ensure the restore helper config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/restic-restore
+    - /etc/restic-restore/stacks
+
+# No secrets: restic gets the passphrase from the resticprofile container.
+- name: Ensure the restore helper host config is present
+  ansible.builtin.copy:
+    content: "{{ resticprofile_restore_config | to_nice_json }}\n"
+    dest: /etc/restic-restore/config.json
+    owner: root
+    group: root
+    mode: '0644'
+  vars:
+    resticprofile_restore_config:
+      stacks_dir: /etc/restic-restore/stacks
+      state_dir: "{{ resticprofile_restore_state_dir }}"
+      source_mounts: "{{ resticprofile_restore_source_mounts }}"
+      staging: "{{ resticprofile_restore_staging }}"
+      runners: "{{ resticprofile_restore_runners }}"
+      rsnapshot: "{{ resticprofile_restore_rsnapshot }}"
+      # One expression, so parts stays a number in the JSON
+      drill: >-
+        {{ {'metrics': resticprofile_restore_drill.metrics, 'parts': resticprofile_restore_drill.parts | int,
+            'enabled': resticprofile_restore_drill_enabled | bool} }}
+  register: resticprofile_restore_config_file
+
+- name: Ensure the restore items of this stack are listed for the helper
+  ansible.builtin.copy:
+    content: "{{ {'items': stack_restore_items} | to_nice_json }}\n"
+    dest: /etc/restic-restore/stacks/{{ stack_project_name }}.json
+    owner: root
+    group: root
+    mode: '0644'
+  register: resticprofile_restore_items_file
+
+# Monthly restore drill (raspberry#288): its result goes to the resticprofile healthcheck, so healthmonitor alerts on a
+# failed or missed drill. The log goes to the journal (journalctl -t restic-restore-drill).
+- name: Ensure cron job "restore drill" is {{ resticprofile_restore_drill_state }}
+  ansible.builtin.cron:
+    name: restore drill
+    state: "{{ resticprofile_restore_drill_state }}"
+    user: root
+    day: "{{ resticprofile_restore_drill.day }}"
+    hour: "{{ resticprofile_restore_drill.hour }}"
+    minute: "{{ resticprofile_restore_drill.minute }}"
+    job: /usr/local/bin/restic-restore drill 2>&1 | logger -t restic-restore-drill
+  vars:
+    resticprofile_restore_drill_state: "{{ resticprofile_restore_drill_enabled | bool | ternary('present', 'absent') }}"
+
+# A stale result of a disabled drill would turn the healthcheck red after 35 days
+- name: Ensure no restore drill result is left when the drill is disabled
+  ansible.builtin.file:
+    path: "{{ resticprofile_restore_drill.metrics }}"
+    state: absent
+  when: not resticprofile_restore_drill_enabled | bool
+
+# In check mode the files above, the compose file (stack role) and resticprofile config (main.yaml) aren't written: on a
+# fresh host the helper doesn't exist yet, and where one of them is due for an update, the dry run would run the old
+# helper, config or one-off container (it did on testbed, and on raspi with an old IPv6 address for dungeon).
+- name: Check whether the dry run can use the deployed helper
+  ansible.builtin.set_fact:
+    resticprofile_restore_dry_run_possible: >-
+      {{ not ansible_check_mode
+         or not (resticprofile_restore_helper_file is changed
+                 or resticprofile_restore_config_file is changed
+                 or resticprofile_restore_items_file is changed
+                 or stack_compose_file is changed
+                 or resticprofile_config_files is changed) }}
+
+- name: Ensure the restore items are restored on a fresh host
+  ansible.builtin.command:
+    argv: >-
+      {{ ['/usr/local/bin/restic-restore', '--runner', 'oneoff', 'clean-slate', stack_project_name,
+          '--snapshot', resticprofile_restore_snapshot]
+         + (['--skip'] if resticprofile_restore_skip | bool else [])
+         + (['--dry-run'] if ansible_check_mode else []) }}
+  register: resticprofile_restore
+  changed_when: resticprofile_restore.rc == 0 and (resticprofile_restore.stdout | from_json).changed
+  # Fails in the next task, with the next step for the user
+  failed_when: false
+  # Read-only with --dry-run, so it also reports in check mode what a real run would do
+  check_mode: false
+  when: resticprofile_restore_dry_run_possible | bool
+
+- name: Ensure the restore succeeded
+  ansible.builtin.fail:
+    msg: "{{ resticprofile_restore.stderr }}\n{{ resticprofile_restore_hints[resticprofile_restore.rc] | default('') }}"
+  vars:
+    resticprofile_restore_hints:
+      10: >-
+        Check that the backup host accepts this host's restic SSH key: run sudo {{ stack_dir }}/init-restic.sh
+        on the host, then run the playbook again.
+      11: >-
+        If this is a new host with nothing to restore, run the playbook again with
+        -e skip_infrastructure_restore=true.
+  when: resticprofile_restore is not skipped and resticprofile_restore.rc != 0
+
+- name: Report the restore
+  ansible.builtin.debug:
+    msg: "{{ (resticprofile_restore.stdout | from_json).msg }}"
+  when: resticprofile_restore is not skipped
+
+- name: Report the restore in check mode before the helper is up to date
+  ansible.builtin.debug:
+    msg: >-
+      restic-restore, its config or the compose file isn't installed or up to date yet, so no dry run: a real run
+      restores {{ stack_restore_items | list | join(', ') }} from snapshot {{ resticprofile_restore_snapshot }}
+      unless the marker exists, the host has data already or skip_infrastructure_restore is set.
+  when: resticprofile_restore is skipped

@@ -1,0 +1,54 @@
+---
+# nginx, the reverse proxy in front of the stack's and the other stacks' web UIs (raspberry#238). Needs the DH
+# params from the base role and the certificate from check-certificates.yaml.
+
+- name: Ensure nginx directories exist
+  ansible.builtin.file:
+    path: "{{ stack_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - nginx
+    - nginx/snippets
+
+# setup.sh made every nginx file 0600; the container reads them as root.
+- name: Ensure nginx main config is present
+  ansible.builtin.template:
+    src: nginx/nginx.conf.j2
+    dest: "{{ stack_dir }}/nginx/nginx.conf"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Reload reverse proxy nginx
+
+- name: Ensure nginx snippet is present
+  ansible.builtin.template:
+    src: nginx/snippets/{{ item | basename }}
+    dest: "{{ stack_dir }}/nginx/snippets/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/nginx/snippets/*.j2') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  notify: Reload reverse proxy nginx
+
+# nginx mounts the certificate as single files. If they're missing, Docker creates directories in
+# their place, and check-certificates.yaml can't write the certificate any more.
+- name: Check the nginx certificate
+  when: stack_manage_containers | bool
+  block:
+    - name: Stat the nginx certificate
+      ansible.builtin.stat:
+        path: "{{ stack_dir }}/nginx/{{ inventory_hostname }}.{{ item }}"
+      loop: [pem, key]
+      register: reverse_proxy_certificate
+
+    - name: Ensure the nginx certificate exists
+      ansible.builtin.assert:
+        that: reverse_proxy_certificate.results | map(attribute='stat.isreg', default=false) | min
+        fail_msg: >-
+          {{ stack_dir }}/nginx/{{ inventory_hostname }}.pem/.key missing. Run check-certificates.yaml first.
+        quiet: true

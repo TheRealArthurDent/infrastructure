@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from test_stack_templates import rendered_tree
+from render import rendered_tree
 
 
 @pytest.fixture(scope="module")

@@ -1,0 +1,15 @@
+services:
+  unbound:
+    hostname: unbound
+    container_name: unbound
+    image: klutchell/unbound:v1.26.1
+    restart: unless-stopped
+    networks:
+      siz:
+        ipv4_address: 172.30.2.52
+      nginx: {}
+    dns:
+      - 127.0.0.1
+      - 9.9.9.9
+    healthcheck:
+      test: [ "CMD", "dig", "www.heise.de", "@127.0.0.1" ]

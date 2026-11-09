@@ -1,0 +1,7 @@
+---
+# resticprofile schedules backups only once each of these stacks has its marker (resticprofile role defaults).
+# smart-home runs restic-restore clean-slate before it starts (TheRealArthurDent/smart-home#1), and both hosts run it.
+# The restore items of this repo's stack come from its components' defaults (stack_restore_items, #14).
+resticprofile_backup_stacks:
+  - "{{ stack_project_name }}"
+  - smart-home

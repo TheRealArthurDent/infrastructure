@@ -1,0 +1,45 @@
+{
+    "drill": {
+        "enabled": false,
+        "metrics": "/var/lib/resticprofile/metrics/restore_drill.prom",
+        "parts": 12
+    },
+    "rsnapshot": {
+        "host": "localhost",
+        "root": "/var/cache/backup"
+    },
+    "runners": {
+        "exec": [
+            "docker",
+            "exec",
+            "resticprofile",
+            "resticprofile"
+        ],
+        "oneoff": [
+            "docker",
+            "compose",
+            "--file",
+            "/etc/docker/infrastructure/compose/docker-compose.yaml",
+            "--project-name",
+            "infrastructure",
+            "run",
+            "--rm",
+            "--no-deps",
+            "--no-TTY",
+            "--entrypoint",
+            "resticprofile",
+            "resticprofile"
+        ]
+    },
+    "source_mounts": {
+        "/etc": "/source/etc",
+        "/home": "/source/home",
+        "/var/lib/docker/volumes": "/source/docker-volumes"
+    },
+    "stacks_dir": "/etc/restic-restore/stacks",
+    "staging": {
+        "host": "/var/restore",
+        "restic": "/restore-target"
+    },
+    "state_dir": "/var/lib/restic-restore"
+}

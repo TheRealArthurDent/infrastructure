@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-COMPOSE = Path(__file__).parents[2] / "roles" / "stack" / "templates" / "docker-compose.yaml.j2"
+ROLES_DIR = Path(__file__).parents[2] / "roles"
 
 
 @pytest.mark.parametrize("service", ["pihole", "outbound"])
 def test_pihole_listens_on_all_interfaces(service):
-    compose = yaml.safe_load(COMPOSE.read_text())
+    compose = yaml.safe_load((ROLES_DIR / service / "templates" / "docker-compose.yaml.j2").read_text())
 
     assert compose["services"][service]["environment"].get("FTLCONF_dns_listeningMode") == "ALL"

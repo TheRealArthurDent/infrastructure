@@ -1,0 +1,9 @@
+---
+# Checks of the host's stack_components (#14), imported first by main.yaml so nothing is deployed for a wrong list.
+
+# Both Pi-holes use unbound as their only upstream (FTLCONF_dns_upstreams) and depend on it in their fragments.
+- name: Ensure unbound is a component wherever pihole or outbound is
+  ansible.builtin.assert:
+    that: "'unbound' in stack_components or not (['pihole', 'outbound'] | intersect(stack_components))"
+    fail_msg: "pihole and outbound need unbound: add unbound to stack_components or leave them out too"
+    quiet: true

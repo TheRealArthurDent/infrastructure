@@ -11,6 +11,8 @@ exclude_paths:
   - .molecule
   - .env
   - secrets/
+  # Rendered output pinned by test_stack_golden.py, not Ansible content
+  - tests/unit/golden/
 
 # Warn about deprecated features
 warn_list:
