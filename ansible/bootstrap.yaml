@@ -125,6 +125,9 @@
     - ssh
     - base
     - docker
+    # dungeon: the restic sftp target of raspi and testbed
+    - role: backup_target
+      when: backup_target_enabled | default(false) | bool
     - secrets
     # Only hosts in the Argon ONE V2 case (raspberry#325)
     - role: argon_fan

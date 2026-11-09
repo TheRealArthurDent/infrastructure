@@ -1,0 +1,83 @@
+---
+- name: Require at least one backup client
+  ansible.builtin.assert:
+    that: backup_target_clients | length > 0
+    fail_msg: backup_target_clients is empty; name the backup clients and their ssh public keys
+    quiet: true
+
+- name: Check the backup SSD is plugged in
+  ansible.builtin.stat:
+    path: /dev/disk/by-uuid/{{ backup_target_uuid }}
+  register: backup_target_device
+  when: backup_target_manage_mount | bool
+
+- name: Stop when the backup SSD is not plugged in
+  ansible.builtin.fail:
+    msg: plug in the backup SSD (UUID {{ backup_target_uuid }}) and run again
+  when: backup_target_manage_mount | bool and not backup_target_device.stat.exists
+
+# Replaces the PARTUUID line for the same path.
+- name: Mount the backup SSD
+  ansible.posix.mount:
+    path: "{{ backup_target_mount }}"
+    src: UUID={{ backup_target_uuid }}
+    fstype: "{{ backup_target_fstype }}"
+    opts: "{{ backup_target_options }}"
+    state: "{{ 'mounted' if backup_target_manage_mount | bool else 'present' }}"
+
+- name: Check the backup SSD is mounted
+  ansible.builtin.command: mountpoint -q {{ backup_target_mount }}
+  register: backup_target_mountpoint
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Stop when the backup SSD is not mounted
+  ansible.builtin.fail:
+    msg: >-
+      plug in the backup SSD (UUID {{ backup_target_uuid }}) and run again:
+      {{ backup_target_mount }} is not a mount point
+  when: backup_target_mountpoint.rc != 0
+
+- name: Mark the mount point as the backup SSD
+  ansible.builtin.file:
+    path: "{{ backup_target_marker }}"
+    state: touch
+    owner: root
+    group: root
+    mode: '0644'
+    modification_time: preserve
+    access_time: preserve
+
+- name: Ensure the restic group exists
+  ansible.builtin.group:
+    name: "{{ backup_target_user }}"
+    gid: "{{ backup_target_gid }}"
+
+# No password: created locked ("!"), an existing entry stays. Key login works because Debian's sshd has UsePAM yes.
+- name: Ensure the restic user exists
+  ansible.builtin.user:
+    name: "{{ backup_target_user }}"
+    uid: "{{ backup_target_uid }}"
+    group: "{{ backup_target_user }}"
+    shell: /bin/sh
+    home: /home/{{ backup_target_user }}
+    create_home: true
+
+# exclusive: one task with all keys, a loop would leave only the last one.
+- name: Allow the backup clients to log in
+  ansible.posix.authorized_key:
+    user: "{{ backup_target_user }}"
+    exclusive: true
+    key: |
+      {% for name, key in backup_target_clients.items() | sort %}
+      restrict {{ key }} {{ name }}
+      {% endfor %}
+
+- name: Ensure the restic repositories directory exists
+  ansible.builtin.file:
+    path: "{{ backup_target_mount }}/restic"
+    state: directory
+    owner: "{{ backup_target_user }}"
+    group: "{{ backup_target_user }}"
+    mode: '0700'
