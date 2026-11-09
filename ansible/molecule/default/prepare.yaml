@@ -76,9 +76,9 @@
         group: root
         mode: '0644'
 
-    # A restic repository with a snapshot of the component restore items (stack_restore_items), for the clean-slate restore (raspberry#287). Local
-    # restic stands in for the resticprofile container (converge.yaml overrides the runners); the snapshot holds the
-    # container's paths (/source/etc/...).
+    # A restic repository with a snapshot of the component restore items (stack_restore_items), for the clean-slate
+    # restore (raspberry#287). Local restic stands in for the resticprofile container (converge.yaml overrides the
+    # runners); the snapshot holds the container's paths (/source/etc/...).
     - name: Install restic as a stand-in for the resticprofile container
       ansible.builtin.apt:
         name: restic

@@ -214,7 +214,8 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 ### 7. smart-home (restores its volumes)
 
 Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
-Backups wait for its marker too (`resticprofile_backup_stacks`), so don't skip this. In `ansible/` of the smart-home repo:
+Backups wait for its marker too (`resticprofile_backup_stacks`), so don't skip this. In `ansible/` of the
+smart-home repo:
 
 ```sh
 ansible-playbook deploy.yaml --limit <target> --check --diff
@@ -241,8 +242,8 @@ need one is listed in the `<component>_restore_items` of the component roles' de
 and the Pi-hole folder). The backup excludes `.env` files, `*secret*`, private keys and
 `pihole-FTL.db`, so a restore never brings back stale secrets.
 
-Both scenarios use the helper `/usr/local/bin/restic-restore`, which the `resticprofile` role installs. It runs restic in
-the resticprofile container, so repository, passphrase and SSH key are the ones the backups use, and it takes
+Both scenarios use the helper `/usr/local/bin/restic-restore`, which the `resticprofile` role installs. It runs
+restic in the resticprofile container, so repository, passphrase and SSH key are the ones the backups use, and it takes
 host paths. `sudo restic-restore --help` lists all commands. A restore always goes into a staging directory
 under `/var/restore/` first and only `apply` puts it in place.
 
@@ -302,8 +303,9 @@ sudo restic-restore stage /etc/docker/smart-home/some/file --snapshot <id>
 ### Clean slate restore
 
 What steps 5 and 7 of [Set up a host](#set-up-a-host-new-install-or-after-a-crash) do on their own: before
-`docker compose up`, the `resticprofile` role (`tasks/restore.yaml`, run by `stack`) runs `restic-restore --runner oneoff clean-slate infrastructure` (the
-smart-home role the same for `smart-home`).
+`docker compose up`, the `resticprofile` role (`tasks/restore.yaml`, run by `stack`) runs
+`restic-restore --runner oneoff clean-slate infrastructure` (the smart-home role the same for
+`smart-home`).
 
 What the role decides:
 
@@ -339,9 +341,10 @@ half-restored state as the latest snapshot. `docker logs resticprofile` says whi
 
 resticprofile backs up the whole host, so the helper is shared. Every stack lists its items in
 `/etc/restic-restore/stacks/<stack>.json` (`{"items": {name: {paths, containers, preserve}}}`), runs
-`restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to `resticprofile_backup_stacks` once
-its deployment does. Its items then work with `stage <stack>/<item>` and `apply` like this stack's. The
-smart-home stack does since TheRealArthurDent/smart-home#1, so `inventory/group_vars/all/backup.yaml` adds
+`restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to
+`resticprofile_backup_stacks` once its deployment does. Its items then work with `stage <stack>/<item>` and `apply`
+like this stack's. The smart-home stack does since TheRealArthurDent/smart-home#1, so
+`inventory/group_vars/all/backup.yaml` adds
 it to `resticprofile_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`.
 
 ### Monthly drill (every host)
@@ -358,8 +361,8 @@ sudo restic-restore drill                                  # run it now, e.g. af
 sudo restic-restore drill --read-data-subset 1/1           # read all of the data (slow)
 ```
 
-The schedule and the number of parts are in `resticprofile_restore_drill` (resticprofile role defaults). On a host that is often
-switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbed has it in
+The schedule and the number of parts are in `resticprofile_restore_drill` (resticprofile role defaults). On a host
+that is often switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbed has it in
 `inventory/host_vars/testbed.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
 still works there by hand, without recording a result.
 

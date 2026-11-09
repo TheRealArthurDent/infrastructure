@@ -35,7 +35,7 @@ def test_duplicate_service_names_service_and_indexes():
     with pytest.raises(AnsibleFilterError) as err:
         compose_merge([{"services": {"web": {}}}, {}, {"services": {"web": {}}}])
     message = str(err.value)
-    assert "web" in message and "0" in message and "2" in message
+    assert "web" in message and "fragment 0" in message and "fragment 2" in message
 
 
 def test_duplicate_network_fails():
@@ -46,6 +46,20 @@ def test_duplicate_network_fails():
 def test_unknown_top_level_key_fails():
     with pytest.raises(AnsibleFilterError, match="x-foo.*fragment 1"):
         compose_merge([{"services": {}}, {"x-foo": {}}])
+
+
+def test_none_fragment_is_treated_as_empty():
+    assert compose_merge([None, {"services": {"a": {}}}]) == {"services": {"a": {}}}
+
+
+def test_non_dict_fragment_fails_naming_its_index():
+    with pytest.raises(AnsibleFilterError, match="fragment 1"):
+        compose_merge([{"services": {}}, ["services"]])
+
+
+def test_non_dict_section_fails_naming_section_and_fragment():
+    with pytest.raises(AnsibleFilterError, match="services.*fragment 1"):
+        compose_merge([{}, {"services": ["web"]}])
 
 
 def test_empty_list_gives_empty_dict():

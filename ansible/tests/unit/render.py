@@ -3,8 +3,8 @@ merged compose file and the restic-restore JSON files.
 
 Shared by the template tests and the golden files (test_stack_golden.py). Rendering goes through the real inventory,
 so host_vars and group_vars apply; the roles' defaults load at role-default precedence, as on a real run. The
-expressions for the compose file and the JSON files are copies of the ones in roles/stack/tasks/main.yaml and
-roles/resticprofile/tasks/restore.yaml.
+compose file and the JSON files are rendered by running the tasks of roles/stack/tasks/main.yaml and
+roles/resticprofile/tasks/restore.yaml verbatim.
 """
 import json
 import os
