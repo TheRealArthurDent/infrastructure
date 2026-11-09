@@ -1,8 +1,32 @@
 ---
-# KeePass database with all secrets, read on the control node by lookup_plugins/keepass.py.
+# KeePass databases with the secrets, read on the control node by lookup_plugins/keepass.py. Every host reads
+# its secrets from its own database (host var keepass_database); the root CA stays in keepass_ca_database.
 # The paths depend on your machine, so they aren't in the repo: copy local.example.yaml to local.yaml
-# (ignored by git) and set them there, or set KEEPASS_DB / KEEPASS_KEY, which win over local.yaml (raspberry#267).
-keepass_db: >-
-  {{ (lookup('ansible.builtin.env', 'KEEPASS_DB') or local_keepass_db | default('')) | expanduser }}
-keepass_key: >-
-  {{ (lookup('ansible.builtin.env', 'KEEPASS_KEY') or local_keepass_key | default('')) | expanduser }}
+# (ignored by git) and set them there. For the raspberry database, KEEPASS_DB / KEEPASS_KEY win over local.yaml
+# (raspberry#267).
+#
+# Names match ^[a-z0-9_]+$: the master password of a database other than raspberry comes from
+# KEEPASS_PASSWORD_<NAME in upper case> (tasks/keepass_credentials.yaml).
+keepass_database: raspberry
+keepass_ca_database: raspberry
+
+# name -> {db, key} with expanded paths. For raspberry, KEEPASS_DB / KEEPASS_KEY win over the legacy keys
+# local_keepass_db / local_keepass_key, which win over local_keepass_databases.raspberry.
+keepass_databases: >-
+  {%- set merged = {'raspberry': {}} | combine(local_keepass_databases | default({})) -%}
+  {%- set overrides = {'raspberry': {
+        'db': lookup('ansible.builtin.env', 'KEEPASS_DB') or local_keepass_db | default(''),
+        'key': lookup('ansible.builtin.env', 'KEEPASS_KEY') or local_keepass_key | default('')}} -%}
+  {%- set result = {} -%}
+  {%- for name, paths in merged.items() -%}
+  {%- set override = overrides.get(name, {}) -%}
+  {%- set db = override.get('db') or paths.get('db') or '' -%}
+  {%- set key = override.get('key') or paths.get('key') or '' -%}
+  {%- set _ = result.update({name: {'db': db | expanduser, 'key': key | expanduser}}) -%}
+  {%- endfor -%}
+  {{ result }}
+
+keepass_db: "{{ (keepass_databases[keepass_database] | default({}))['db'] | default('') }}"
+keepass_key: "{{ (keepass_databases[keepass_database] | default({}))['key'] | default('') }}"
+keepass_ca_db: "{{ (keepass_databases[keepass_ca_database] | default({}))['db'] | default('') }}"
+keepass_ca_key: "{{ (keepass_databases[keepass_ca_database] | default({}))['key'] | default('') }}"

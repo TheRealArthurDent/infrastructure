@@ -1,8 +1,17 @@
 ---
 # Copy to local.yaml in this directory and adjust. local.yaml is ignored by git (raspberry#267).
 #
-# Path to the KeePass database. Use a path under /mnt/c, not a Google Drive drive letter such as /mnt/h,
-# whose WSL mount breaks regularly (see README.md, section KeePass).
-local_keepass_db: /mnt/c/Users/<you>/My Drive/KeePass/Raspberry.kdbx
-# Key file of the database; leave empty if it has none.
-local_keepass_key: ~/.keepass/raspberry.key
+# One KeePass database per host, named like the host var keepass_database (^[a-z0-9_]+$). Use paths under /mnt/c,
+# not a Google Drive drive letter such as /mnt/h, whose WSL mount breaks regularly (see README.md, section KeePass).
+# Leave `key` empty if the database has no key file.
+local_keepass_databases:
+  raspberry:
+    db: /mnt/c/Users/<you>/My Drive/KeePass/Raspberry.kdbx
+    key: ~/.keepass/raspberry.key
+  dungeon:
+    db: /mnt/c/Users/<you>/My Drive/KeePass/Dungeon.kdbx
+    key: ~/.keepass/dungeon.key
+
+# The old keys still work and mean the raspberry database (they win over local_keepass_databases.raspberry):
+# local_keepass_db: /mnt/c/Users/<you>/My Drive/KeePass/Raspberry.kdbx
+# local_keepass_key: ~/.keepass/raspberry.key

@@ -403,8 +403,7 @@ def run(tmp_path, keepass, pki):
         extra_vars.write_text(json.dumps({
             "pihole_instances": configured,
             "pihole_api_delay": 0,
-            "keepass_db": keepass["db"],
-            "keepass_key": keepass["key"],
+            "keepass_databases": {"raspberry": {"db": keepass["db"], "key": keepass["key"]}},
         }))
         return subprocess.run(
             # testbed is not reachable from here: if anything tries to connect to it, the run fails.

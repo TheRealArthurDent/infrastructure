@@ -29,6 +29,10 @@
 
   gather_facts: true
 
+  vars:
+    # The root CA stays in its own database, whichever database the host uses.
+    keepass_credentials_databases: ["{{ keepass_ca_database }}"]
+
   pre_tasks:
     - name: Get the KeePass credentials
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
@@ -37,13 +41,13 @@
     - name: Read root CA from KeePass
       ansible.builtin.set_fact:
         certificate_check_root_ca_passphrase: >-
-          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+          {{ lookup('keepass', db=keepass_ca_db, password=keepass_ca_password, key=keepass_ca_key,
                     group='Domain', title='rootCA') }}
         certificate_check_root_ca_cert: >-
-          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+          {{ lookup('keepass', db=keepass_ca_db, password=keepass_ca_password, key=keepass_ca_key,
                     group='Domain', title='rootCA', attachment='rootCA.pem') }}
         certificate_check_root_ca_key: >-
-          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+          {{ lookup('keepass', db=keepass_ca_db, password=keepass_ca_password, key=keepass_ca_key,
                     group='Domain', title='rootCA', attachment='rootCA.key') }}
       no_log: true
 
