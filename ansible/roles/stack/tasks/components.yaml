@@ -7,3 +7,10 @@
     that: "'unbound' in stack_components or not (['pihole', 'outbound'] | intersect(stack_components))"
     fail_msg: "pihole and outbound need unbound: add unbound to stack_components or leave them out too"
     quiet: true
+
+# healthmonitor's fragment sets dns: to the outbound Pi-hole's address.
+- name: Ensure outbound is a component wherever healthmonitor is
+  ansible.builtin.assert:
+    that: "'outbound' in stack_components or 'healthmonitor' not in stack_components"
+    fail_msg: "healthmonitor needs outbound (its dns): add outbound to stack_components or leave healthmonitor out too"
+    quiet: true

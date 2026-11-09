@@ -33,6 +33,7 @@ http {
         # TODO #4 create some sort of landing page
     }
 
+{% if 'iobroker' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -43,7 +44,9 @@ http {
 
         include             snippets/iobroker.conf;
     }
+{% endif %}
 
+{% if 'ui' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -54,7 +57,9 @@ http {
 
         include             snippets/lovelace.conf;
     }
+{% endif %}
 
+{% if 'node-red' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -65,7 +70,9 @@ http {
 
         include             snippets/node-red.conf;
     }
+{% endif %}
 
+{% if 'deconz' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -87,6 +94,8 @@ http {
 
         include             snippets/deconz-websocket.conf;
     }
+{% endif %}
+{% if 'deconz-ui' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -98,7 +107,9 @@ http {
 
         include             snippets/deconz-ui.conf;
     }
+{% endif %}
 
+{% if 'roomba' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -110,7 +121,9 @@ http {
 
         include             snippets/roomba.conf;
     }
+{% endif %}
 
+{% if 'grafana' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -121,7 +134,9 @@ http {
 
         include             snippets/grafana.conf;
     }
+{% endif %}
 
+{% if 'chronograf' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -132,7 +147,9 @@ http {
 
         include             snippets/chronograf.conf;
     }
+{% endif %}
 
+{% if 'portainer' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -143,7 +160,9 @@ http {
 
         include             snippets/portainer.conf;
     }
+{% endif %}
 
+{% if 'nextcloud' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -154,8 +173,9 @@ http {
 
         include             snippets/nextcloud.conf;
     }
+{% endif %}
 
-{% if 'pihole' in stack_components %}
+{% if 'pihole' in reverse_proxy_vhosts and 'pihole' in stack_components %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;
@@ -168,7 +188,7 @@ http {
     }
 {% endif %}
 
-{% if 'outbound' in stack_components %}
+{% if 'outbound' in reverse_proxy_vhosts and 'outbound' in stack_components %}
     server {
         listen              443 ssl;
         listen              [::]:443 ssl;

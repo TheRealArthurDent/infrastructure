@@ -118,7 +118,9 @@ def rendered_tree(tmp_path, host, extra_vars=None):
                     "dest": f"{out}/{{{{ item.path | regex_replace('\\.j2$', '') }}}}",
                 },
                 "loop": templates,
-                "when": "item.component in stack_components",
+                # The resticprofile role deploys ssh_config only for an sftp repository
+                "when": "item.component in stack_components and "
+                        "(item.path != 'resticprofile/ssh_config.j2' or resticprofile_repository_is_sftp | bool)",
             },
         ] + role_tasks(out),
     }]))

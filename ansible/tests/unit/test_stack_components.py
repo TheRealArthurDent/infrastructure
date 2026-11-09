@@ -1,5 +1,6 @@
 """Per-host switching of the stack's components (#14): what leaving a component out does to the rendered stack."""
 import json
+import re
 import shutil
 import subprocess
 
@@ -169,3 +170,31 @@ def test_old_restic_init_script_and_generated_key_are_gone():
     removal = [t for t in tasks if t.get("ansible.builtin.file", {}).get("path") == "/etc/docker/infrastructure/init-restic.sh"]
     assert len(removal) == 1
     assert removal[0]["ansible.builtin.file"]["state"] == "absent"
+
+
+def test_dungeon_renders_only_its_vhosts(tmp_path):
+    tree = rendered_tree(tmp_path, "dungeon")
+    names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
+    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon"}
+    assert "listen              8443" not in tree["nginx/nginx.conf"]
+    assert "location /health" in tree["nginx/nginx.conf"]
+
+
+def test_vhosts_not_in_the_list_are_not_rendered(tmp_path):
+    tree = rendered_tree(tmp_path, "raspi", {"reverse_proxy_vhosts": ["grafana"]})
+    names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
+    assert names == {"raspi", "grafana.raspi"}
+
+
+def test_vhost_needs_its_component_as_well(tmp_path):
+    components = [c for c in WITHOUT_PIHOLE if c != "outbound"]
+    tree = rendered_tree(tmp_path, "raspi", {"stack_components": components})
+    assert "outbound." not in tree["nginx/nginx.conf"]
+
+
+def test_healthmonitor_needs_outbound(tmp_path):
+    # healthmonitor's fragment sets dns: to the outbound Pi-hole's address
+    result = run_components_check(tmp_path, ["healthmonitor"])
+    assert result.returncode != 0
+    assert "healthmonitor needs outbound" in result.stdout + result.stderr
+    assert run_components_check(tmp_path, ["unbound", "outbound", "healthmonitor"]).returncode == 0

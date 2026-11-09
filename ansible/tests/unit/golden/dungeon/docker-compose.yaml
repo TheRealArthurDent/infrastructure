@@ -1,0 +1,176 @@
+# Merged by the stack role from the components' compose fragments (#14). Don't edit, run the playbook.
+networks:
+  nginx:
+    name: nginx
+  outbound:
+    external: true
+    name: outbound
+  siz:
+    external: true
+    name: siz
+secrets:
+  restic_passphrase:
+    file: /etc/docker/infrastructure/secrets/restic_passphrase
+services:
+  healthmonitor:
+    container_name: healthmonitor
+    dns:
+    - 172.30.1.153
+    env_file:
+    - /etc/docker/infrastructure/.healthmonitor.env
+    environment:
+    - CONTAINERMON_CHECK_STOPPED=false
+    - DOCKER_API_VERSION=1.44
+    hostname: healthmonitor
+    image: ghcr.io/rafhaanshah/container-mon:v1.1.1
+    networks:
+    - siz
+    - outbound
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  nginx:
+    container_name: nginx
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8080/health
+    hostname: raspberry
+    image: nginx:1.31-alpine
+    networks:
+    - nginx
+    - siz
+    ports:
+    - 80:80
+    - 443:443
+    - 8443:8443
+    restart: unless-stopped
+    volumes:
+    - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
+    - /etc/docker/infrastructure/nginx:/etc/nginx:ro
+    - /etc/docker/infrastructure/nginx/dungeon.pem:/etc/nginx/dungeon.pem:ro
+    - /etc/docker/infrastructure/nginx/dungeon.key:/etc/nginx/dungeon.key:ro
+  outbound:
+    container_name: outbound
+    depends_on:
+    - unbound
+    dns:
+    - 127.0.0.1
+    - 172.30.2.52
+    - 9.9.9.9
+    env_file:
+    - /etc/docker/infrastructure/.outbound.env
+    environment:
+      FTLCONF_dns_dnssec: 'true'
+      FTLCONF_dns_listeningMode: ALL
+      FTLCONF_dns_upstreams: 172.30.2.52
+      FTLCONF_misc_dnsmasq_lines: edns-packet-max=1232
+      TZ: Europe/Berlin
+    hostname: outbound
+    image: pihole/pihole:2026.10.1
+    networks:
+      outbound:
+        ipv4_address: 172.30.1.153
+      siz: {}
+    restart: unless-stopped
+    volumes:
+    - outbound_pihole:/etc/pihole
+  portainer:
+    container_name: portainer
+    environment:
+    - TRUSTED_ORIGINS=https://portainer.dungeon
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - --no-check-certificate
+      - http://localhost:9000
+    hostname: portainer
+    image: portainer/portainer-ce:2.45.2-alpine
+    networks:
+    - siz
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /etc/docker/infrastructure/portainer/data:/data
+  resticprofile:
+    command:
+    - -c
+    - "# No backups before every stack's clean-slate restore is done or skipped, or
+      a fresh host's empty or\n# half-restored state would become the latest snapshot
+      (raspberry#287). restic-restore clean-slate writes the\n# markers.\nfor stack
+      in infrastructure; do\n  [ -f /restore-state/$$stack.done ] ||\n    echo \"Waiting
+      for /var/lib/restic-restore/$$stack.done to schedule backups\"\n  while [ !
+      -f /restore-state/$$stack.done ]; do sleep 60; done\ndone\nresticprofile schedule
+      --all || exit 1\ncrond -f &\ncrond_pid=$$!\n# crond doesn't pass SIGTERM on
+      to its jobs: stop the running job (resticprofile) first and wait for it\nstop_job()
+      {\n  pkill -TERM -P $$crond_pid\n  while pgrep -P $$crond_pid >/dev/null; do
+      sleep 1; done\n  kill $$crond_pid\n}\ntrap stop_job TERM INT\nwait $$crond_pid\n"
+    container_name: resticprofile
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+    entrypoint: /bin/sh
+    environment:
+      TZ: Europe/Berlin
+    healthcheck:
+      interval: 10m
+      start_interval: 10s
+      start_period: 1m
+      test:
+      - CMD-SHELL
+      - awk -v now=$$(date +%s) '/^resticprofile_backup_last_success_timestamp_seconds/
+        { ok = now - $$2 < 26 * 3600 } END { exit !ok }' /metrics/backup_last_success.prom
+        && { [ ! -f /metrics/restore_drill.prom ] || awk -v now=$$(date +%s) '$$1
+        == "restic_restore_drill_success" { ok = $$2 == 1 } $$1 == "restic_restore_drill_last_success_timestamp_seconds"
+        { last = $$2 } END { exit !(ok && now - last < 35 * 86400) }' /metrics/restore_drill.prom;
+        }
+    hostname: resticprofile
+    image: creativeprojects/resticprofile:0.33.1
+    init: true
+    networks:
+    - nginx
+    restart: unless-stopped
+    secrets:
+    - restic_passphrase
+    stop_grace_period: 2m
+    volumes:
+    - /etc/docker/infrastructure/resticprofile/config:/etc/resticprofile:ro
+    - /home:/source/home:ro
+    - /etc:/source/etc:ro
+    - /var/lib/docker/volumes:/source/docker-volumes:ro
+    - /var/restore:/restore-target:rw
+    - /var/lib/restic-restore:/restore-state:ro
+    - /var/lib/resticprofile/metrics:/metrics
+    - bind:
+        propagation: rslave
+      source: /media/backup
+      target: /backup
+      type: bind
+  unbound:
+    container_name: unbound
+    dns:
+    - 127.0.0.1
+    - 9.9.9.9
+    healthcheck:
+      test:
+      - CMD
+      - dig
+      - www.heise.de
+      - '@127.0.0.1'
+    hostname: unbound
+    image: klutchell/unbound:v1.26.1
+    networks:
+      nginx: {}
+      siz:
+        ipv4_address: 172.30.2.52
+    restart: unless-stopped
+volumes:
+  outbound_pihole:
+    name: outbound_pihole
