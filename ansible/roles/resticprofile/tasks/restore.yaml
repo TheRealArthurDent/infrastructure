@@ -6,6 +6,12 @@
 # (ansible/tests/unit/test_restic_restore.py); a marker makes every later run a no-op. A host that already has
 # data (raspi, testbed) only gets the marker.
 
+# apply and diff run rsync; hosts without rsnapshot (dungeon) don't have it otherwise.
+- name: Ensure rsync is installed for the restore helper
+  ansible.builtin.apt:
+    name: rsync
+    state: present
+
 - name: Ensure the restore helper is present
   ansible.builtin.copy:
     src: restic-restore

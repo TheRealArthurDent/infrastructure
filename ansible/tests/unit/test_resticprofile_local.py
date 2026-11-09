@@ -96,3 +96,9 @@ def test_restore_continues_with_the_ssd_marker(tmp_path):
 def test_restore_ignores_the_marker_with_an_sftp_repository(tmp_path):
     run = run_restore_check(tmp_path, tmp_path / ".backup-ssd", "", False)
     assert run.returncode == 0, run.stdout + run.stderr
+
+
+def test_the_restore_helper_task_file_installs_rsync():
+    """The helper runs rsync (apply, diff). It used to come with the rsnapshot package, which dungeon doesn't install."""
+    task = role_task("resticprofile/tasks/restore.yaml", "Ensure rsync is installed for the restore helper")
+    assert task["ansible.builtin.apt"] == {"name": "rsync", "state": "present"}
