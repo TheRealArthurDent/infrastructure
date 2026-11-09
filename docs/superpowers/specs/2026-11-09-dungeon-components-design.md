@@ -112,7 +112,7 @@ as parsed YAML. The golden files only change in a commit that says why.
 - raspi's sftp backups land on the same SSD (`/media/backup/restic/raspi`), through the `restic` user of the
   `backup_target` component. With the SSD missing, the bare mount point directory is root-owned and empty, so the
   `restic` user can't create a repository there and raspi's backup fails instead of writing to the system disk
-  (builder's call; Mika checks once that nothing lies below the unmounted mount point).
+  (checked on dungeon 2026-11-09: below the mount point there is only root-owned content).
 
 ### healthmonitor
 
