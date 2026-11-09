@@ -1,12 +1,12 @@
 # Ansible
 
-Ansible sets up the Pi host: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
-the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role plus its component
-roles, see [Stack components](#stack-components)).
+Ansible sets up the Pi hosts: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
+the nginx certificate, the Pi-hole DNS configuration, the backup SSD of `dungeon`, and the Docker stack itself (`stack`
+role plus its component roles, see [Stack components](#stack-components)).
 
 | Playbook | What it does |
 | --- | --- |
-| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `stack`: SSH port and key-only login, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
+| `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `backup_target` (dungeon only), `stack`: SSH port and key-only login, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
 | `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (raspberry#237) |
 | `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days, restarts nginx |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
@@ -21,6 +21,7 @@ Defined in `inventory/hosts.yaml`, which only says how to reach each host. Setti
 | --- | --- | --- | --- |
 | `raspi` | 192.168.1.2 | 1357 | `smarthome` (production) |
 | `testbed` | 192.168.1.7 | 4242 | `testuser` |
+| `dungeon` | 192.168.1.5 | 1359 | `dragon` (production: private cloud and backup target) |
 
 > All playbooks target `hosts: all` and refuse to run without `--limit <host>`, so a forgotten `--limit`
 > never reaches `raspi` by accident.
@@ -43,35 +44,83 @@ You also need:
 
 ### KeePass
 
-The paths depend on your machine, so they aren't in the repo. Set them once in a local file that git ignores:
+Every host reads its secrets from its own KeePass database (host variable `keepass_database`: `raspberry` by default,
+`dungeon` for dungeon). raspi and testbed share the `raspberry` database. The root CA for `check-certificates.yaml`
+always comes from `keepass_ca_database` (`raspberry`), so `--limit dungeon` opens raspi's database for it as well. The
+CA stays there until it gets a database of its own (#10); then only `keepass_ca_database` changes.
+
+The paths depend on your machine, so they aren't in the repo. Set them once in a local file that git ignores, one
+entry per database in `local_keepass_databases`:
 
 ```sh
 cp inventory/group_vars/all/local.example.yaml inventory/group_vars/all/local.yaml
-# then edit local_keepass_db and local_keepass_key
+# then edit the db and key paths of raspberry and dungeon in local_keepass_databases
 ```
 
-`KEEPASS_DB` / `KEEPASS_KEY` win over `local.yaml`. A run fails at the start if the files aren't found.
+Database names are lowercase letters, digits and `_` (`my-db` fails with a message). `KEEPASS_DB` / `KEEPASS_KEY` win
+over `local.yaml` for `raspberry`, and the old `local_keepass_db` / `local_keepass_key` still work for it. A run fails
+at the start if the files aren't found.
 
-Keep the database on a path WSL sees without a mount of its own, i.e. under `/mnt/c`. A Google Drive
+Keep the databases on a path WSL sees without a mount of its own, i.e. under `/mnt/c`. A Google Drive
 drive letter (`H:`, `/mnt/h` in WSL) needs its own mount, which breaks regularly. With Google Drive for
 desktop, either mirror My Drive, or stream it into a folder on `C:` and make the KeePass folder
 available offline (right click in Explorer).
 
-The master password is asked for at the start of each run, unless `KEEPASS_PASSWORD` is set. On WSL,
-`bin/with-keepass` sets it from Windows Credential Manager, so runs need no prompt:
+The master password of each database is asked for at the start of each run, unless it is set in the environment:
+`KEEPASS_PASSWORD` for `raspberry`, `KEEPASS_PASSWORD_<NAME>` for the others (`KEEPASS_PASSWORD_DUNGEON`). On WSL,
+`bin/with-keepass` sets them from Windows Credential Manager, so runs need no prompt. Variables that are already set
+stay as they are.
 
 ```sh
-bin/with-keepass --store     # once, and again after changing the master password
+bin/with-keepass --store            # raspberry; once, and again after changing the master password
+bin/with-keepass --store dungeon    # the dungeon database
 bin/with-keepass ansible-playbook bootstrap.yaml --limit testbed --check --diff
-bin/with-keepass --forget    # remove it again
+bin/with-keepass --forget dungeon   # remove one again (default: raspberry)
 ```
 
-The password is stored under "Web Credentials" as `raspberry-keepass` (change with `KEEPASS_CREDENTIAL`) and
-protected by your Windows login. Anyone who can run commands as you can read it, just like the database
-itself. Without a stored password, `with-keepass` still runs the command and the playbook asks.
+Each password is stored under "Web Credentials" as `<name>-keepass` (`raspberry-keepass`, `dungeon-keepass`; user
+`keepass`) and protected by your Windows login. Anyone who can run commands as you can read it, just like the database
+itself. Without a stored password, `with-keepass` still runs the command and the playbook asks, naming the database.
 
 Groups in the lookup are paths (`group='smart-home/ioBroker'`); a group or entry that is missing or matches
 more than once fails the run instead of picking one.
+
+#### Entries each database needs
+
+Group/title, with the fields the roles read:
+
+| Database | Entry | Content |
+| --- | --- | --- |
+| `dungeon` | `Backup/Resticprofile` | field `passphrase` (dungeon's own restic repository) |
+| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (a webhook of its own, so Discord shows which host wrote) |
+| `dungeon` | `smart-home/outbound` | password of dungeon's outbound Pi-hole |
+| `raspberry` | `Backup/Resticprofile SSH` | attachments `id_ed25519` and `id_ed25519.pub`: raspi's restic key pair |
+| `raspberry` | `Backup/Resticprofile SSH testbed` | the same for testbed |
+| `raspberry` | `Discord/Docker Webhook testbed` | fields `id` and `token` of testbed's webhook |
+
+raspi's other entries (`Backup/Resticprofile`, `Discord/Docker Webhook`, `smart-home/...`, `Backup/Dungeon` with the
+field `ssh-port`) are the existing ones. dungeon's database holds nothing of the smart-home stack. The entry titles
+are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`; testbed sets its own in
+`host_vars/testbed.yaml`).
+
+#### Put the restic key pairs into KeePass
+
+The sftp clients (raspi, testbed) back up to dungeon with a key pair from KeePass, which the `secrets` role writes to
+the host. A rebuilt host has the same key, so dungeon's `authorized_keys` (`backup_target_clients` in
+`host_vars/dungeon.yaml`) never changes. Nothing is generated on the host any more (`init-restic.sh` is gone).
+
+- raspi: keep the key that dungeon already accepts. Copy `id_ed25519` and `id_ed25519.pub` from
+  `/etc/docker/infrastructure/resticprofile/.ssh/` on raspi to your machine (they are root-owned, so copy them with
+  `sudo`; the private key is mode 0600), attach both to the entry `Backup/Resticprofile SSH` in the `raspberry`
+  database and delete the copies. Check that the public key equals `backup_target_clients.raspi`.
+- testbed: create a new pair and attach it to `Backup/Resticprofile SSH testbed`:
+
+  ```sh
+  ssh-keygen -t ed25519 -N '' -C resticprofile@testbed -f ./id_ed25519
+  ```
+
+  Its public key is `backup_target_clients.testbed` in `host_vars/dungeon.yaml`; if you create a different one, put
+  that there and run dungeon's playbook. Delete the files after attaching them.
 
 ## Daily business
 
@@ -116,32 +165,46 @@ and config; `stack` merges the fragments, runs the clean-slate restore and `dock
 lists the enabled ones and defaults to all seven. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml`
 (components must be listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts).
 
+| Host | Components |
+| --- | --- |
+| `raspi`, `testbed` | all seven |
+| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole) |
+
+dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
+nginx serves the vhosts `portainer` and `outbound`, and its resticprofile backs up to a local repository on the SSD
+(see [dungeon](#dungeon)).
+
 ## Set up a host (new install or after a crash)
 
 The same steps for a new Pi and for one rebuilt after a crash or reinstall. On a host with a backup, the state that
 isn't IaC comes back from restic by itself in steps 5 and 7, before the stacks start
-([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi` or `testbed`); `<user>`,
-`<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node.
+([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `testbed` or `dungeon`); `<user>`,
+`<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node. Where
+dungeon differs, the step says so; [dungeon](#dungeon) has the details.
 
 ### 1. Flash the SSD
 
 In Raspberry Pi Imager:
 
-1. Device: Raspberry Pi 4. OS: Raspberry Pi OS Lite (64-bit), Debian trixie. Storage: the SSD (USB adapter).
+1. Device: Raspberry Pi 4 (dungeon: Raspberry Pi 5). OS: Raspberry Pi OS Lite (64-bit), Debian trixie. Storage: the
+   SSD (USB adapter); on dungeon the NVMe drive. **dungeon: unplug the backup SSD first**, so it can't be picked as
+   the target.
 2. Edit settings (OS customisation):
-   - Hostname: `raspi` or `testbed`
-   - Username: `smarthome` (raspi) or `testuser` (testbed), with a password
+   - Hostname: `raspi`, `testbed` or `dungeon`
+   - Username: `smarthome` (raspi), `testuser` (testbed) or `dragon` (dungeon), with a password
    - Services: enable SSH, **public-key authentication only**, paste the content of `~/.ssh/id_ed25519.pub`
 3. Write.
 
 Booting from USB needs a bootloader with USB boot enabled. If the Pi does not boot from the SSD, flash
-*Misc utility images → Bootloader → USB Boot* to an SD card once and boot from it.
+*Misc utility images → Bootloader → USB Boot* to an SD card once and boot from it. (The Pi 5 of dungeon boots from
+its NVMe drive.)
 
 ### 2. First boot
 
 Connect the SSD, boot the Pi and make sure it gets the IP from the inventory (e.g. a fixed DHCP lease in the
-router). The new install has a new host key, so remove the old ones for both ports; Ansible accepts keys of
-unknown hosts but refuses changed ones (`StrictHostKeyChecking=accept-new` in `ansible.cfg`):
+router). **dungeon: boot without the backup SSD** (it has no boot partition, but there is no reason to risk it). The new
+install has a new host key, so remove the old ones for both ports; Ansible accepts keys of unknown hosts but refuses
+changed ones (`StrictHostKeyChecking=accept-new` in `ansible.cfg`):
 
 ```sh
 ssh-keygen -R <ip> && ssh-keygen -R '[<ip>]:<port>'
@@ -154,6 +217,12 @@ ssh <user>@<ip>
 ```
 
 ### 3. Bootstrap the host
+
+**dungeon: plug in the backup SSD now.** The `backup_target` role is a host role, so it runs here (not under the
+`stack` tag): it mounts the SSD by UUID (`nofail`), checks `mountpoint -q /media/backup`, creates the `restic` user
+(UID/GID 1002, so the files on the SSD keep their owner), writes its `authorized_keys` and the marker
+`/media/backup/.backup-ssd`. Without the SSD it stops with `plug in the backup SSD (UUID ...) and run again` and writes
+nothing below the empty mount point. Plug it in and run again.
 
 ```sh
 bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --skip-tags stack --ask-become-pass
@@ -172,16 +241,20 @@ ssh -p <port> <user>@<ip> sudo reboot
 
 ### 4. Backup access
 
-The `secrets` role wrote the host's restic key pair from its KeePass entry (`Backup/Resticprofile SSH`, attachments
-`id_ed25519` and `id_ed25519.pub`; `resticprofile_ssh_key_title` names another entry). The backup host `dungeon` must
-accept the public key: it is in `backup_target_clients` in `host_vars/dungeon.yaml`, applied by dungeon's playbook.
+raspi and testbed: the `secrets` role wrote the host's restic key pair from its KeePass entry
+(`Backup/Resticprofile SSH`, attachments `id_ed25519` and `id_ed25519.pub`; `resticprofile_ssh_key_title` names another
+entry, see [KeePass](#put-the-restic-key-pairs-into-keepass)). The backup host `dungeon` must accept the public key: it
+is in `backup_target_clients` in `host_vars/dungeon.yaml`, applied by dungeon's playbook.
 
 The key reaches the host's existing repository: its path is the hostname, the passphrase comes from KeePass.
 
+dungeon: nothing to do, its repository is local on the SSD.
+
 ### 5. Certificate and stack (restores the infrastructure state)
 
-The stack needs the nginx certificate (the `reverse_proxy` role stops with a message if it is missing) and `dungeon` to
-resolve on the Pi (the role looks up its IP at every run).
+The stack needs the nginx certificate (the `reverse_proxy` role stops with a message if it is missing). On raspi and
+testbed it also needs `dungeon` to resolve on the Pi (the role looks up its IP at every run); dungeon resolves
+through raspi's Pi-hole, so raspi must be up.
 
 ```sh
 bin/with-keepass ansible-playbook check-certificates.yaml --limit <target>
@@ -189,10 +262,11 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack -
 bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 ```
 
-The dry run reports `would restore infrastructure: pihole, portainer from snapshot <id>`. Before
-`docker compose up`, the real run restores every item from the latest snapshot in a one-off resticprofile
-container and writes the marker `/var/lib/restic-restore/infrastructure.done`. A new host without any snapshot
-stops here with a hint; skip the restore then:
+The dry run reports `would restore infrastructure: pihole, portainer from snapshot <id>` (dungeon: `portainer`, from
+the repository on its SSD). Before `docker compose up`, the real run restores every item from the latest snapshot in a
+one-off resticprofile container and writes the marker `/var/lib/restic-restore/infrastructure.done`. On dungeon the
+restore asserts the SSD marker first, so a missing SSD stops the run instead of reading as "no snapshot, new host". A
+new host without any snapshot stops here with a hint; skip the restore then:
 
 ```sh
 bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack -e skip_infrastructure_restore=true
@@ -200,7 +274,9 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack -
 
 ### 6. Pi-hole
 
-Puts the Pi-hole configuration from `configs/pihole.yaml` on top of the restored state:
+Puts the Pi-hole configuration from `configs/pihole.yaml` on top of the restored state. dungeon has no LAN Pi-hole;
+this provisions its `outbound` instance (`https://outbound.dungeon`). The CNAME `outbound.dungeon` lives on raspi's
+Pi-hole, so run `setup-pihole.yaml --limit raspi` (the user's job) before dungeon's first run.
 
 ```sh
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit <target>
@@ -213,6 +289,9 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 ```
 
 ### 7. smart-home (restores its volumes)
+
+raspi and testbed only; dungeon has no smart-home stack and no apps in this repo (OpenCloud and the like come from
+their own repo later).
 
 Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
 Backups wait for its marker too (`resticprofile_backup_stacks`), so don't skip this. In `ansible/` of the
@@ -230,14 +309,65 @@ waits for a marker and has scheduled the backups:
 ssh -p <port> <user>@<ip> docker logs resticprofile
 ```
 
+## dungeon
+
+The Pi 5 in the Argon NEO 5 case: private cloud and the backup target of raspi and testbed. It is production like
+raspi: the user runs everything against it, Claude's guard hook blocks it.
+
+- **Backup SSD**: ext4, UUID `eeeb6563-1a18-4941-a7bd-72ec86622fa7`, mounted at `/media/backup`
+  (`defaults,noatime,nofail`), marker `/media/backup/.backup-ssd`. raspi and testbed back up to
+  `/media/backup/restic/<host>` over sftp as the `restic` user (a locked account with a shell for sftp, UID/GID 1002,
+  `/media/backup/restic` is `0700`). dungeon's own repository is `/media/backup/restic/dungeon`, seen from the
+  container as `local:/backup/restic/dungeon` (`/media/backup` is bind-mounted as `/backup` with propagation
+  `rslave`, so a later mount reaches a running container).
+- **SSD missing** never writes to the system disk: `backup_target` stops the bootstrap before it creates anything,
+  resticprofile's `run-before` fails the backup when the marker is missing (healthmonitor reports it), the clean-slate
+  restore stops on the missing marker, and raspi's sftp backup fails because the `restic` user can't create a
+  repository in the empty, root-owned mount point.
+- **Differences from raspi**: DNS through raspi's Pi-hole (`base_dns_servers`, `docker_daemon_dns` are
+  `192.168.1.2`), rsnapshot off (the hand-made one on the SSD stays untouched), no `argon_fan` (the Pi 5 fan header
+  is controlled by the kernel), `dhparameter_bits: 4096`, no smart-home `.env`, `resticprofile_backup_stacks` is only
+  `infrastructure`.
+- **Lost SSD**: dungeon's and raspi's backups are gone with it; restoring dungeon would need an off-site copy, which
+  doesn't exist yet.
+
+### Takeover of dungeon
+
+dungeon runs a Compose project `infrastructure` from the fork `private-cloud-infrastructure` (nginx, portainer,
+healthmonitor, same paths under `/etc/docker/infrastructure`, same container names and the networks `siz` and
+`outbound`), which Ansible adopts. Do this once, from the control node, with the SSD plugged in and the dungeon
+entries in KeePass ([Entries each database needs](#entries-each-database-needs)); `local.yaml` has the `dungeon`
+database and `bin/with-keepass --store dungeon` has stored its master password. Raspi's Pi-hole needs the CNAME
+`outbound.dungeon` first (`setup-pihole.yaml --limit raspi`).
+
+```sh
+# 1. The CA-signed certificate replaces the self-signed one (opens raspi's database for the root CA)
+bin/with-keepass ansible-playbook check-certificates.yaml --limit dungeon
+# 2. Dry run, read the diff
+bin/with-keepass ansible-playbook bootstrap.yaml --limit dungeon --check --diff
+# 3. The real run
+bin/with-keepass ansible-playbook bootstrap.yaml --limit dungeon
+# 4. A second run must end with changed=0
+bin/with-keepass ansible-playbook bootstrap.yaml --limit dungeon
+# 5. Outbound Pi-hole
+bin/with-keepass ansible-playbook setup-pihole.yaml --limit dungeon
+```
+
+What to expect: the images move to the pinned versions (nginx 1.29 to 1.31, portainer 2.35 to 2.45). The first real run
+finds portainer's data in `/etc/docker/infrastructure/portainer/data`, so the clean-slate restore only writes the
+marker `infrastructure.done` and restores nothing; backups start after that. The leftovers of the fork
+(`~/dev/infrastructure`, `/etc/docker/infrastructure/borgmatic`, `/home/borg`) stay untouched, remove them by hand. On
+the SSD, `borg/`, `kopia/` and `rsnapshot/` stay as they are.
+
 ## Restore
 
 resticprofile backs up `/home`, `/etc` and `/var/lib/docker/volumes` every night at 03:00 to the host's own
-repository `sftp:restic@dungeon:/media/backup/restic/<host>`. rsnapshot keeps local copies of the same trees
-under `/var/cache/backup/` (7 daily, 4 weekly), which are gone after a crash.
+repository `sftp:restic@dungeon:/media/backup/restic/<host>` (dungeon: its local repository
+`local:/backup/restic/dungeon` on the backup SSD). rsnapshot keeps local copies of the same trees
+under `/var/cache/backup/` (7 daily, 4 weekly), which are gone after a crash; dungeon has none.
 
 Most of the host doesn't need a restore: Ansible renders the configs, certificates and `.env` files (secrets come
-from KeePass), `setup-pihole.yaml` configures the Pi-hole, and the restic SSH key is created anew. What does
+from KeePass), `setup-pihole.yaml` configures the Pi-hole, and the restic SSH key comes from KeePass. What does
 need one is listed in the `<component>_restore_items` of the component roles' defaults (`portainer_restore_items`,
 `pihole_restore_items`; the `stack` role merges them into `stack_restore_items`; for this stack: the Portainer data
 and the Pi-hole folder). The backup excludes `.env` files, `*secret*`, private keys and
@@ -408,7 +538,7 @@ sudo rm -rf /var/tmp/drill
 ```
 
 The full drill reflashes testbed and follows [Set up a host](#set-up-a-host-new-install-or-after-a-crash); only it
-covers `init-restic.sh` and the one-off container on a host without a running stack.
+covers the restic key pair from KeePass and the one-off container on a host without a running stack.
 
 ## Tests
 
