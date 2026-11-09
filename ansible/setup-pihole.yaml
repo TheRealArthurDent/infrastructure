@@ -38,6 +38,11 @@
     pihole_api_retries: 10
     pihole_api_delay: 3
     # The root CA comes from its database, the instance passwords from the host's.
+    # An instance with hosts: only belongs to those hosts; without it, to every host.
+    pihole_host_instances: >-
+      {{ pihole_instances | rejectattr('hosts', 'defined') | list
+         + pihole_instances | selectattr('hosts', 'defined')
+           | selectattr('hosts', 'contains', inventory_hostname) | list }}
     keepass_credentials_databases: "{{ [keepass_ca_database, keepass_database] | unique | list }}"
 
   tasks:
@@ -77,7 +82,7 @@
 
         - name: Configure each Pi-hole instance
           ansible.builtin.include_tasks: tasks/configure_pihole_instance.yaml
-          loop: "{{ pihole_instances }}"
+          loop: "{{ pihole_host_instances }}"
           loop_control:
             loop_var: pihole_instance
             label: "{{ pihole_instance.name }}"
