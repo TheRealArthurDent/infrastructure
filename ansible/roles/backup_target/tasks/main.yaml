@@ -1,0 +1,104 @@
+---
+- name: Require the backup SSD's UUID and at least one backup client
+  ansible.builtin.assert:
+    that:
+      - backup_target_uuid | length > 0
+      - backup_target_clients | length > 0
+    fail_msg: >-
+      backup_target_uuid and backup_target_clients must be set (the backup SSD's UUID; the backup clients with
+      their ssh public keys)
+    quiet: true
+
+- name: Check the backup SSD is plugged in
+  ansible.builtin.stat:
+    path: /dev/disk/by-uuid/{{ backup_target_uuid }}
+  register: backup_target_device
+  when: backup_target_manage_mount | bool
+
+- name: Stop when the backup SSD is not plugged in
+  ansible.builtin.fail:
+    msg: plug in the backup SSD (UUID {{ backup_target_uuid }}) and run again
+  when: backup_target_manage_mount | bool and not backup_target_device.stat.exists
+
+# Replaces the PARTUUID line for the same path. register: in check mode "changed" means the SSD isn't mounted yet.
+- name: Mount the backup SSD
+  ansible.posix.mount:
+    path: "{{ backup_target_mount }}"
+    src: UUID={{ backup_target_uuid }}
+    fstype: "{{ backup_target_fstype }}"
+    opts: "{{ backup_target_options }}"
+    state: "{{ 'mounted' if backup_target_manage_mount | bool else 'present' }}"
+  register: backup_target_mount_result
+
+- name: Check the backup SSD is mounted
+  ansible.builtin.command: mountpoint -q {{ backup_target_mount }}
+  register: backup_target_mountpoint
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# --check doesn't mount: on a fresh host with the SSD plugged in (the device check above passed) the mount point is
+# empty only because the mount task didn't run. A real run mounts it, or stops below.
+- name: Note that the backup SSD gets mounted by a real run
+  ansible.builtin.set_fact:
+    backup_target_mount_pending: true
+  when: >-
+    ansible_check_mode and backup_target_manage_mount | bool and backup_target_mount_result is changed
+    and backup_target_mountpoint.rc != 0
+
+- name: Report the pending mount of the backup SSD
+  ansible.builtin.debug:
+    msg: >-
+      The backup SSD (UUID {{ backup_target_uuid }}) is plugged in but not mounted at {{ backup_target_mount }} yet:
+      a real run mounts it and creates {{ backup_target_marker }}.
+  when: backup_target_mount_pending | default(false) | bool
+
+- name: Stop when the backup SSD is not mounted
+  ansible.builtin.fail:
+    msg: >-
+      plug in the backup SSD (UUID {{ backup_target_uuid }}) and run again:
+      {{ backup_target_mount }} is not a mount point
+  when: backup_target_mountpoint.rc != 0 and not backup_target_mount_pending | default(false) | bool
+
+- name: Mark the mount point as the backup SSD
+  ansible.builtin.file:
+    path: "{{ backup_target_marker }}"
+    state: touch
+    owner: root
+    group: root
+    mode: '0644'
+    modification_time: preserve
+    access_time: preserve
+
+- name: Ensure the restic group exists
+  ansible.builtin.group:
+    name: "{{ backup_target_user }}"
+    gid: "{{ backup_target_gid }}"
+
+# No password: created locked ("!"), an existing entry stays. Key login works because Debian's sshd has UsePAM yes.
+- name: Ensure the restic user exists
+  ansible.builtin.user:
+    name: "{{ backup_target_user }}"
+    uid: "{{ backup_target_uid }}"
+    group: "{{ backup_target_user }}"
+    shell: /bin/sh
+    home: /home/{{ backup_target_user }}
+    create_home: true
+
+# exclusive: one task with all keys, a loop would leave only the last one.
+- name: Allow the backup clients to log in
+  ansible.posix.authorized_key:
+    user: "{{ backup_target_user }}"
+    exclusive: true
+    key: |
+      {% for name, key in backup_target_clients.items() | sort %}
+      restrict {{ key }} {{ name }}
+      {% endfor %}
+
+- name: Ensure the restic repositories directory exists
+  ansible.builtin.file:
+    path: "{{ backup_target_mount }}/restic"
+    state: directory
+    owner: "{{ backup_target_user }}"
+    group: "{{ backup_target_user }}"
+    mode: '0700'

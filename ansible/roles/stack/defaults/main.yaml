@@ -41,7 +41,7 @@ stack_compose_networks:
 #
 # Scope is this repo's stack. Other repos (smart-home, Nextcloud, ...) restore their own state, and nothing
 # else under /etc or /home is needed: Ansible renders the configs, certificates and .env files, the restic SSH
-# key is created anew and registered with init-restic.sh, and the OS installer sets up users, network and
+# key pair comes from KeePass, and the OS installer sets up users, network and
 # authorized_keys. resticprofile itself must come up without a backup, so it is not listed either.
 #
 # Each item:

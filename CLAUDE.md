@@ -1,7 +1,8 @@
 # infrastructure – smart home infrastructure (Raspberry Pi)
 
 Docker-based smart home stack (nginx reverse proxy, Pi-hole ×2, unbound, portainer, resticprofile backups,
-container health monitoring) for a Raspberry Pi running Debian/Raspberry Pi OS trixie (arm64).
+container health monitoring) for the Raspberry Pis `raspi`, `dungeon` and `testbed`, running Debian/Raspberry Pi OS
+trixie (arm64).
 
 ## State of the repo
 
@@ -9,8 +10,8 @@ Everything is deployed with Ansible (`ansible/`); the former bash scripts (`depl
 `run.sh`) are gone (raspberry#238).
 
 - **Ansible** (`ansible/`) handles host setup: ssh port, base packages, sysctl, sudoers, rsnapshot, Docker, secrets
-  (`.env` files from KeePass), certificates, and Pi-hole DNS records, lists, groups, clients and domains through its
-  REST API.
+  (`.env` files and the restic key pair from KeePass), certificates, the backup SSD of `dungeon` (`backup_target`),
+  and Pi-hole DNS records, lists, groups, clients and domains through its REST API.
 - The **`stack` role** assembles the Docker stack from the component roles (networks, merged compose file, restore,
   `docker compose up`); the component roles carry the templates. It runs in
   `bootstrap.yaml` under the tag `stack` (raspberry#238).
@@ -19,7 +20,9 @@ The repo was created on 2026-11-08 from the private `TheRealArthurDent/raspberry
 (no private e-mail addresses, no `.env` files). Issues and PRs from before that live there; references in old
 commits and in the code point there (`raspberry#238`). Still open, moved here: #5 (refactor), #1–#4 (nginx and
 landing page ideas). Check the open issues before changing an affected area, and reference them in commits.
-Never push from a clone of raspberry: it would bring back the old history. The host `dungeon` will join this repo.
+Never push from a clone of raspberry: it would bring back the old history. `dungeon` (Pi 5, private cloud and backup
+target) is in the inventory since #15; the fork `private-cloud-infrastructure` it was deployed from is obsolete.
+Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for raspi.
 
 ## Layout
 
@@ -29,7 +32,9 @@ Never push from a clone of raspberry: it would bring back the old history. The h
 - `ansible/roles/` – besides host roles (`ssh`, `base`, `docker`, `secrets`, `argon_fan`, `certificate_check`), the
   stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile` and
   `healthmonitor`, each with its compose fragment (`templates/docker-compose.yaml.j2`); `stack` merges them, restores
-  and runs `docker compose up`. `stack_components` (default: all seven) switches them per host in `host_vars`.
+  and runs `docker compose up`. `stack_components` (default: all seven) switches them per host in `host_vars`:
+  raspi and testbed run all seven, dungeon all but `pihole`. The host role `backup_target` (dungeon only) mounts the
+  backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,
   repo hygiene)
@@ -41,21 +46,26 @@ Never push from a clone of raspberry: it would bring back the old history. The h
 | Host | Purpose |
 | --- | --- |
 | `raspi` (192.168.1.2) | **Production** smart home. Only the user runs anything against it; hand them the commands. |
+| `dungeon` (192.168.1.5, ssh port 1359, user `dragon`) | **Production** private cloud and backup target (the SSD at `/media/backup` holds the restic repositories of raspi, dungeon and testbed). Only the user runs anything against it; hand them the commands. |
 | `testbed` (192.168.1.7) | Test Pi for real integration runs, done by the user from the home network: propose the commands (`--check --diff`, real run, second run with `changed=0`). |
 
 Always pass `--limit <host>`. Before a real run, do `--check --diff` first.
 
 A `PreToolUse` hook (`.claude/hooks/guard.py`, tests in `ansible/tests/unit/test_guard_hook.py`) blocks the risky
-actions for Claude: anything against raspi, playbooks without `--limit` or with `all`, pushes to `main`, force pushes,
+actions for Claude: anything against raspi (dungeon is production too, but the hook only learns it once the user
+applies the pending patch from #15), playbooks without `--limit` or with `all`, pushes to `main`, force pushes,
 PR merges, storing or forgetting the KeePass master password, printing `KEEPASS_PASSWORD`, `git add -f`, and edits to
 the hook and settings themselves. Don't work around a block; give the user the command or the proposed change instead.
 
 ## Secrets
 
-Secrets come from a KeePass database through the custom `keepass` lookup plugin (pykeepass). Its paths are in the
-user's git-ignored `ansible/inventory/group_vars/all/local.yaml`; the master password comes from `KEEPASS_PASSWORD`
-(`ansible/bin/with-keepass` sets it from Windows Credential Manager) or a prompt. There is no ansible-vault
-(raspberry#241 was dropped). Never run `with-keepass --store` or read the stored password yourself. Never commit
+Secrets come from KeePass databases through the custom `keepass` lookup plugin (pykeepass). There is one database per
+host, named by the host variable `keepass_database` (`raspberry` by default, `dungeon` on dungeon); the root CA always
+comes from `keepass_ca_database` (`raspberry`, until #10 moves it). The paths are in `local_keepass_databases` in the
+user's git-ignored `ansible/inventory/group_vars/all/local.yaml`; the master passwords come from `KEEPASS_PASSWORD`
+(`raspberry`) and `KEEPASS_PASSWORD_<NAME>` (e.g. `KEEPASS_PASSWORD_DUNGEON`), which `ansible/bin/with-keepass` sets
+from Windows Credential Manager, or a prompt. The entries each database needs are in `ansible/README.md`. There is no ansible-vault
+(raspberry#241 was dropped). Never run `with-keepass --store`/`--forget` or read a stored password yourself. Never commit
 secrets, and never print them: every task that handles secret values needs `no_log: true`.
 
 ## Commands

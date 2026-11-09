@@ -1,0 +1,14 @@
+{
+    "items": {
+        "portainer": {
+            "containers": [
+                "portainer"
+            ],
+            "note": "To be removed later: the data belongs in a docker volume (TODO in docker-compose.yaml), and its content is probably not important.",
+            "paths": [
+                "/etc/docker/infrastructure/portainer/data"
+            ],
+            "preserve": []
+        }
+    }
+}

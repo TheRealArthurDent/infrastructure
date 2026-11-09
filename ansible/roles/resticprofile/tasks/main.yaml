@@ -1,9 +1,10 @@
 ---
-# resticprofile backs up the whole host to the backup host (dungeon). Needs secrets/restic_passphrase from the secrets
-# role. tasks/restore.yaml (imported by the stack role once the compose file is written) restores a fresh host.
+# resticprofile backs up the whole host to resticprofile_repository (default: the backup host dungeon, over sftp).
+# Needs secrets/restic_passphrase from the secrets role.
+# tasks/restore.yaml (imported by the stack role once the compose file is written) restores a fresh host.
 
 - name: Resolve the backup host
-  when: resticprofile_backup_host_ip is not defined
+  when: resticprofile_repository_is_sftp | bool and resticprofile_backup_host_ip is not defined
   block:
     # IPv4 only: the resticprofile container has no IPv6 network, and the Fritzbox answers with IPv6 first while
     # Pi-hole isn't up yet.
@@ -44,8 +45,7 @@
     owner: root
     group: root
     mode: '0600'
-  loop:
-    - config/profiles.yaml
-    - config/excludes
-    - ssh_config
+  loop: >-
+    {{ ['config/profiles.yaml', 'config/excludes']
+       + (['ssh_config'] if resticprofile_repository_is_sftp | bool else []) }}
   register: resticprofile_config_files

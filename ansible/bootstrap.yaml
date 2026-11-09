@@ -39,57 +39,85 @@
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
       tags: always
 
-    # Resolved once per host. As play vars, every use would re-run the lookup (raspberry#235).
+    # Resolved once per host. As play vars, every use would re-run the lookup (raspberry#235). A lookup runs only
+    # for a part the host runs (stack_components, secrets_smart_home_env): the host's database needn't hold the rest.
     - name: Read secrets from KeePass
       ansible.builtin.set_fact:
         pihole_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home', title='pihole') }}
+                    group='smart-home', title='pihole')
+             if 'pihole' in stack_components else '' }}
         outbound_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home', title='outbound') }}
+                    group='smart-home', title='outbound')
+             if 'outbound' in stack_components else '' }}
         discord_docker_webhook_id: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Discord', title='Docker Webhook', field='id') }}
+                    group='Discord', title=discord_docker_webhook_title, field='id')
+             if 'healthmonitor' in stack_components else '' }}
         discord_docker_webhook_token: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Discord', title='Docker Webhook', field='token') }}
+                    group='Discord', title=discord_docker_webhook_title, field='token')
+             if 'healthmonitor' in stack_components else '' }}
         restic_passphrase: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Backup', title='Resticprofile', field='passphrase') }}
+                    group='Backup', title='Resticprofile', field='passphrase')
+             if 'resticprofile' in stack_components else '' }}
+        resticprofile_ssh_private_key: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_ssh_key_title, attachment='id_ed25519')
+             if 'resticprofile' in stack_components and resticprofile_repository_is_sftp
+             else '' }}
+        resticprofile_ssh_public_key: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_ssh_key_title, attachment='id_ed25519.pub')
+             if 'resticprofile' in stack_components and resticprofile_repository_is_sftp
+             else '' }}
         dungeon_ssh_port: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Backup', title='Dungeon', field='ssh-port') }}
+                    group='Backup', title='Dungeon', field='ssh-port')
+             if 'resticprofile' in stack_components and resticprofile_repository_is_sftp
+             else '' }}
         iobroker_states_redis_port: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home/ioBroker', title='States Redis', field='port') }}
+                    group='smart-home/ioBroker', title='States Redis', field='port')
+             if secrets_smart_home_env | bool else '' }}
         iobroker_objects_redis_port: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home/ioBroker', title='Objects Redis', field='port') }}
+                    group='smart-home/ioBroker', title='Objects Redis', field='port')
+             if secrets_smart_home_env | bool else '' }}
         influxdb_admin_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home/Influx DB', title='Influx admin') }}
+                    group='smart-home/Influx DB', title='Influx admin')
+             if secrets_smart_home_env | bool else '' }}
         influxdb_read_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home/Influx DB', title='Influx read') }}
+                    group='smart-home/Influx DB', title='Influx read')
+             if secrets_smart_home_env | bool else '' }}
         influxdb_write_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home/Influx DB', title='Influx write') }}
+                    group='smart-home/Influx DB', title='Influx write')
+             if secrets_smart_home_env | bool else '' }}
         grafana_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home', title='Grafana') }}
+                    group='smart-home', title='Grafana')
+             if secrets_smart_home_env | bool else '' }}
         mosquitto_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home', title='mosquitto') }}
+                    group='smart-home', title='mosquitto')
+             if secrets_smart_home_env | bool else '' }}
         deconz_vnc_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home/deconz - Phoscon-GW', title='Deconz VNC') }}
+                    group='smart-home/deconz - Phoscon-GW', title='Deconz VNC')
+             if secrets_smart_home_env | bool else '' }}
         nodered_github_user: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='GitHub', title='NodeRed', field='username') }}
+                    group='GitHub', title='NodeRed', field='username')
+             if secrets_smart_home_env | bool else '' }}
         nodered_github_email: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='GitHub', title='NodeRed', field='email') }}
+                    group='GitHub', title='NodeRed', field='email')
+             if secrets_smart_home_env | bool else '' }}
       no_log: true
       tags: always
 
@@ -97,6 +125,9 @@
     - ssh
     - base
     - docker
+    # dungeon: the restic sftp target of raspi and testbed
+    - role: backup_target
+      when: backup_target_enabled | default(false) | bool
     - secrets
     # Only hosts in the Argon ONE V2 case (raspberry#325)
     - role: argon_fan

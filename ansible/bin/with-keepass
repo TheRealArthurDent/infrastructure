@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# Runs a command with KEEPASS_PASSWORD set from Windows Credential Manager, so playbooks don't prompt (raspberry#267).
-# Meant for WSL: it reaches Windows through powershell.exe.
+# Runs a command with the KeePass master passwords set from Windows Credential Manager, so playbooks don't prompt
+# (raspberry#267). Meant for WSL: it reaches Windows through powershell.exe.
 #
 # Usage:
-#   bin/with-keepass --store     save the master password (asks for it; replaces a stored one)
-#   bin/with-keepass --forget    remove the stored master password
-#   bin/with-keepass <command>   run <command>, e.g. ansible-playbook bootstrap.yaml --limit testbed
+#   bin/with-keepass --store [name]    save the master password of a database (asks for it; replaces a stored one)
+#   bin/with-keepass --forget [name]   remove the stored master password of a database
+#   bin/with-keepass <command>         run <command>, e.g. ansible-playbook bootstrap.yaml --limit testbed
 #
+# The name of a database is lowercase letters, digits and '_' (default: raspberry); the password is stored as the
+# Windows credential '<name>-keepass' (user 'keepass'). <command> gets KEEPASS_PASSWORD for 'raspberry' and
+# KEEPASS_PASSWORD_<NAME> for every other stored database; variables that are already set stay as they are.
 # Without a stored password the command runs anyway and the playbook asks for the password itself.
-# KEEPASS_CREDENTIAL changes the name of the stored credential (default: raspberry-keepass).
 set -euo pipefail
 
 powershell="${KEEPASS_POWERSHELL:-powershell.exe}"
-name="${KEEPASS_CREDENTIAL:-raspberry-keepass}"
 
 usage() {
   sed -n '/^# Usage:/,/^$/s/^# \{0,1\}//p' "$0" >&2
@@ -20,19 +21,26 @@ usage() {
 }
 
 # The name goes into the PowerShell script, so it must not be able to end the string.
-if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
-  echo "with-keepass: KEEPASS_CREDENTIAL may only contain letters, digits, '.', '_' and '-'." >&2
-  exit 2
-fi
+database_name() {
+  local database="${1:-raspberry}"
+  if [[ ! "$database" =~ ^[a-z0-9_]+$ ]]; then
+    echo "with-keepass: invalid database name '$database': use lowercase letters, digits and '_'." >&2
+    exit 2
+  fi
+  printf '%s' "$database"
+}
 
 # Credentials live in the Windows "Web Credentials" vault, under resource $name and user "keepass".
-# Passwords cross the pipe as raw UTF-8 bytes, independent of the console code page.
+# Passwords cross the pipe as UTF-8 bytes, independent of the console code page: into PowerShell raw on stdin,
+# out of it as Base64 lines "<resource> <password>", so quotes, newlines and non-ASCII survive.
 vault_script() {
+  local set_name=()
+  [[ -z "${2:-}" ]] || set_name=("\$name = '$2'")
   # shellcheck disable=SC2016  # PowerShell code, expanded by PowerShell
   printf '%s\n' \
     "\$ProgressPreference = 'SilentlyContinue'" \
     "\$ErrorActionPreference = 'Stop'" \
-    "\$name = '$name'" \
+    "${set_name[@]}" \
     '$null = [Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]' \
     '$vault = New-Object Windows.Security.Credentials.PasswordVault' \
     "$1"
@@ -43,16 +51,16 @@ vault_script() {
 # and -OutputFormat Text keep stderr readable.
 vault() {
   "$powershell" -NoProfile -NonInteractive -OutputFormat Text -EncodedCommand \
-    "$(vault_script "$1" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0)"
+    "$(vault_script "$1" "${2:-}" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0)"
 }
 
-read_password=$(cat <<'PS'
-try { $credential = $vault.Retrieve($name, 'keepass') } catch { exit 3 }
-$credential.RetrievePassword()
-$bytes = [Text.Encoding]::UTF8.GetBytes($credential.Password)
-$stdout = [Console]::OpenStandardOutput()
-$stdout.Write($bytes, 0, $bytes.Length)
-$stdout.Flush()
+list_passwords=$(cat <<'PS'
+try { $credentials = $vault.FindAllByUserName('keepass') } catch { exit 3 }
+foreach ($credential in $credentials) {
+  $credential.RetrievePassword()
+  $bytes = [Text.Encoding]::UTF8.GetBytes($credential.Password)
+  Write-Output ($credential.Resource + ' ' + [Convert]::ToBase64String($bytes))
+}
 PS
 )
 
@@ -75,8 +83,9 @@ case "${1:-}" in
     usage
     ;;
   --store)
+    database=$(database_name "${2:-}")
     if [[ -t 0 ]]; then
-      read -rsp "KeePass master password: " password && echo >&2
+      read -rsp "KeePass master password of '$database': " password && echo >&2
       read -rsp "Repeat: " repeated && echo >&2
       if [[ "$password" != "$repeated" ]]; then
         echo "with-keepass: the passwords don't match." >&2
@@ -90,24 +99,33 @@ case "${1:-}" in
       exit 1
     fi
     # Through stdin, so the password never shows up in a process list.
-    printf '%s' "$password" | vault "$store_password"
-    echo "with-keepass: stored as '$name' in Windows Credential Manager." >&2
+    printf '%s' "$password" | vault "$store_password" "$database-keepass"
+    echo "with-keepass: stored as '$database-keepass' in Windows Credential Manager." >&2
     exit 0
     ;;
   --forget)
-    vault "$forget_password"
+    database=$(database_name "${2:-}")
+    vault "$forget_password" "$database-keepass"
     exit 0
     ;;
 esac
 
-if [[ -z "${KEEPASS_PASSWORD:-}" ]]; then
-  if ! command -v "$powershell" >/dev/null 2>&1; then
-    echo "with-keepass: $powershell not found, can't read Windows Credential Manager; the playbook will ask." >&2
-  elif password=$(vault "$read_password"); then
-    export KEEPASS_PASSWORD="${password%$'\r'}"
-  else
-    echo "with-keepass: no password stored as '$name'; the playbook will ask. Store it with: $0 --store" >&2
-  fi
+if ! command -v "$powershell" >/dev/null 2>&1; then
+  echo "with-keepass: $powershell not found, can't read Windows Credential Manager; the playbook will ask." >&2
+elif ! listing=$(vault "$list_passwords"); then
+  echo "with-keepass: no password stored; the playbook will ask. Store one with: $0 --store [name]" >&2
+else
+  while IFS=' ' read -r resource encoded; do
+    encoded="${encoded%$'\r'}"
+    [[ "$resource" =~ ^([a-z0-9_]+)-keepass$ && -n "$encoded" ]] || continue
+    database="${BASH_REMATCH[1]}"
+    variable=KEEPASS_PASSWORD
+    [[ "$database" == raspberry ]] || variable="KEEPASS_PASSWORD_${database^^}"
+    [[ -z "${!variable:-}" ]] || continue
+    # The trailing x keeps command substitution from dropping a password's trailing newlines.
+    password=$(printf '%s' "$encoded" | base64 -d && printf x)
+    export "$variable=${password%x}"
+  done <<<"$listing"
 fi
 
 exec "$@"

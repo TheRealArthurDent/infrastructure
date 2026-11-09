@@ -390,7 +390,7 @@ def serve(pihole, cert):
 def run(tmp_path, keepass, pki):
     servers = []
 
-    def _run(pihole, cert="trusted", desired=None, instances=None, args=()):
+    def _run(pihole, cert="trusted", desired=None, instances=None, args=(), limit="testbed"):
         """Run against one fake Pi-hole, or against several given as instances: [(name, fake, desired)]."""
         if instances is None:
             instances = [("pihole", pihole, DESIRED if desired is None else desired)]
@@ -403,14 +403,15 @@ def run(tmp_path, keepass, pki):
         extra_vars.write_text(json.dumps({
             "pihole_instances": configured,
             "pihole_api_delay": 0,
-            "keepass_db": keepass["db"],
-            "keepass_key": keepass["key"],
+            "keepass_databases": {name: {"db": keepass["db"], "key": keepass["key"]}
+                                  for name in ("raspberry", "dungeon")},
         }))
         return subprocess.run(
-            # testbed is not reachable from here: if anything tries to connect to it, the run fails.
-            ["ansible-playbook", "setup-pihole.yaml", "--limit", "testbed", "-e", f"@{extra_vars}", *args],
+            # The hosts are not reachable from here: if anything tries to connect to one, the run fails.
+            ["ansible-playbook", "setup-pihole.yaml", "--limit", limit, "-e", f"@{extra_vars}", *args],
             cwd=ANSIBLE_DIR,
-            env={**os.environ, "KEEPASS_PASSWORD": KEEPASS_PASSWORD, "ANSIBLE_TIMEOUT": "3"},
+            env={**os.environ, "KEEPASS_PASSWORD": KEEPASS_PASSWORD, "KEEPASS_PASSWORD_DUNGEON": KEEPASS_PASSWORD,
+                 "ANSIBLE_TIMEOUT": "3"},
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -668,8 +669,66 @@ def test_logs_out_of_every_instance_when_a_later_one_fails(run):
     assert main.sessions == set() and outbound.sessions == set(), output(result)
 
 
-def test_configured_instances_are_the_main_pihole_and_outbound():
-    assert [instance["name"] for instance in configured_instances()] == ["pihole", "outbound"]
+def instances_of(host):
+    """The instances a host configures: those listing it in hosts, or every one without hosts."""
+    return [instance["name"] for instance in configured_instances() if host in instance.get("hosts", [host])]
+
+
+def test_configured_instances_are_the_main_pihole_and_outbound_per_host():
+    assert [(i["name"], i["hosts"]) for i in configured_instances()] == [
+        ("pihole", ["raspi", "testbed"]),
+        ("outbound", ["raspi", "testbed"]),
+        ("outbound", ["dungeon"]),
+    ]
+
+
+def test_each_host_configures_only_its_instances():
+    assert instances_of("raspi") == instances_of("testbed") == ["pihole", "outbound"]
+    assert instances_of("dungeon") == ["outbound"]
+
+
+def test_dungeons_outbound_allows_what_healthmonitor_needs():
+    """healthmonitor on dungeon resolves through outbound and only talks to discord.com."""
+    outbound = next(i for i in configured_instances() if i["name"] == "outbound" and i["hosts"] == ["dungeon"])
+
+    assert {(d["type"], d["kind"], d["domain"]) for d in outbound["domains"]} == {
+        ("deny", "regex", ".*"),
+        ("allow", "regex", r".*\.172\.in-addr\.arpa"),
+        ("allow", "exact", "1.0.0.127.in-addr.arpa"),
+        ("allow", "exact", "discord.com"),
+    }
+    assert outbound["block_lists"] == []
+
+
+def test_the_lan_pihole_resolves_the_outbound_vhost_of_dungeon():
+    main = next(i for i in configured_instances() if i["name"] == "pihole")
+
+    assert {"domain": "outbound.dungeon", "target": "dungeon"} in main["cname_records"]
+
+
+def test_a_run_configures_only_the_instances_of_its_host(run):
+    raspi_pihole, raspi_outbound, dungeon_outbound = FakePihole(), FakePihole(password=OUTBOUND_PASSWORD), \
+        FakePihole(password=OUTBOUND_PASSWORD)
+    instances = [
+        ("pihole", raspi_pihole, {**DESIRED, "hosts": ["raspi", "testbed"]}),
+        ("outbound", raspi_outbound, {**OUTBOUND_DESIRED, "hosts": ["raspi", "testbed"]}),
+        ("outbound", dungeon_outbound, {**OUTBOUND_DESIRED, "hosts": ["dungeon"]}),
+    ]
+
+    on_dungeon = run(None, instances=instances, limit="dungeon")
+
+    assert on_dungeon.returncode == 0, output(on_dungeon)
+    assert len(dungeon_outbound.domains) == 2
+    assert raspi_pihole.requests == [] and raspi_outbound.requests == []
+
+    dungeon_outbound.requests.clear()
+
+    on_testbed = run(None, instances=instances)
+
+    assert on_testbed.returncode == 0, output(on_testbed)
+    assert sorted(raspi_pihole.lists) == sorted(DESIRED["block_lists"])
+    assert len(raspi_outbound.domains) == 2
+    assert dungeon_outbound.changing_requests() == []
 
 
 def test_outbound_only_resolves_allowed_domains():

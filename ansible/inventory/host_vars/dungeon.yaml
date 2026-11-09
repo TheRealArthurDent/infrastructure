@@ -1,0 +1,34 @@
+---
+# Second Pi, runs the stack components without Pi-hole. It resolves through raspi's Pi-hole; no rsnapshot, no
+# Argon case (argon_fan_enabled stays off).
+dhparameter_bits: 4096
+keepass_database: dungeon
+base_dns_servers:
+  - 192.168.1.2
+docker_daemon_dns:
+  - 192.168.1.2
+base_rsnapshot_enabled: false
+# No smart-home stack on this host: no smart-home .env, no lookups of its secrets
+secrets_smart_home_env: false
+# Restic sftp target for raspi and testbed (sftp:restic@dungeon:/media/backup/restic/<host>)
+backup_target_enabled: true
+backup_target_mount: /media/backup
+backup_target_uuid: eeeb6563-1a18-4941-a7bd-72ec86622fa7
+backup_target_clients:
+  raspi: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICc/eKct+1gtT9eqDeH8IBIi8XMjArF5mpxWommghE55
+  testbed: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bcoVarIiZLnsDk
+
+# Stack: the components without Pi-hole (raspi's Pi-hole resolves for dungeon); the restic repository is on the
+# local backup SSD
+stack_components:
+  - reverse_proxy
+  - portainer
+  - unbound
+  - outbound
+  - resticprofile
+  - healthmonitor
+resticprofile_repository: local:/backup/restic/dungeon
+resticprofile_backup_mount: /media/backup
+resticprofile_backup_stacks: ["{{ stack_project_name }}"]
+reverse_proxy_vhosts: [portainer, outbound]
+certificate_check_subdomains: [portainer, outbound]

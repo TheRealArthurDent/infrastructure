@@ -7,10 +7,13 @@
 # groups, clients, domains: synced only when the list is defined. Leave a list out (or set it to null) to leave
 #   that part to the web interface. The Default group always exists and is not managed here. Groups are
 #   referenced by name; clients and domains without groups are in Default.
+# hosts: the inventory hosts that run the instance (without it: every host). setup-pihole.yaml configures only the
+#   instances of the host it is limited to. Two entries may share a name when their hosts differ.
 # domains: type allow or deny, kind exact or regex.
 
 pihole_instances:
   - name: "pihole"
+    hosts: ["raspi", "testbed"]
     a_records:
       - domain: "fritz.box"
         address: "192.168.1.1"
@@ -48,6 +51,8 @@ pihole_instances:
         target: "raspi"
       - domain: "portainer.raspi"
         target: "raspi"
+      - domain: "outbound.dungeon"
+        target: "dungeon"
       - domain: "nextcloud.dungeon"
         target: "dungeon"
       - domain: "portainer.dungeon"
@@ -124,6 +129,7 @@ pihole_instances:
   # Egress filter for the containers on the outbound network (smart-home, nextcloud, healthmonitor): it denies
   # everything and allows only what they need (raspberry#293). The containers use it as their DNS server.
   - name: "outbound"
+    hosts: ["raspi", "testbed"]
     a_records: []
     cname_records: []
     # '.*' already blocks everything; a block list would only cost a gravity download.
@@ -209,5 +215,29 @@ pihole_instances:
         type: "allow"
         kind: "exact"
       - domain: "telemetry.nodered.org"
+        type: "allow"
+        kind: "exact"
+
+  # dungeon's egress filter: only healthmonitor uses it there, and it only needs discord.com (#15).
+  - name: "outbound"
+    hosts: ["dungeon"]
+    a_records: []
+    cname_records: []
+    block_lists: []
+    groups: []
+    clients: []
+    domains:
+      - domain: ".*"
+        type: "deny"
+        kind: "regex"
+        comment: "Deny everything that isn't allowed below"
+      - domain: '.*\.172\.in-addr\.arpa'
+        type: "allow"
+        kind: "regex"
+        comment: "Reverse lookups of the Docker networks"
+      - domain: "1.0.0.127.in-addr.arpa"
+        type: "allow"
+        kind: "exact"
+      - domain: "discord.com"
         type: "allow"
         kind: "exact"

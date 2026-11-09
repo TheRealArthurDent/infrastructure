@@ -5,6 +5,10 @@ all:
       ansible_host: 192.168.1.2
       ansible_port: 1357
       ansible_user: smarthome
+    dungeon:
+      ansible_host: 192.168.1.5
+      ansible_port: 1359
+      ansible_user: dragon
     testbed:
       ansible_host: 192.168.1.7
       ansible_port: 4242

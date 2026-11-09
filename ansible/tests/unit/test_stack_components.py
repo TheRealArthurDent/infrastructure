@@ -1,5 +1,6 @@
 """Per-host switching of the stack's components (#14): what leaving a component out does to the rendered stack."""
 import json
+import re
 import shutil
 import subprocess
 
@@ -131,7 +132,9 @@ def secrets_tasks():
         yield task
 
 
-# The files the secrets role writes for a component -> the component whose host needs them
+# The files the secrets role writes for a component -> the component whose host needs them (the ssh key pair only
+# with an sftp repository)
+SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
 SECRET_FILES = {
     "/etc/docker/infrastructure/.env": "pihole",
     "/etc/docker/infrastructure/.outbound.env": "outbound",
@@ -139,20 +142,59 @@ SECRET_FILES = {
     "/etc/docker/infrastructure/secrets": "resticprofile",
     "/etc/docker/infrastructure/secrets/restic_passphrase": "resticprofile",
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": "resticprofile",
-    "/etc/docker/infrastructure/init-restic.sh": "resticprofile",
+    "/etc/docker/infrastructure/resticprofile/.ssh": SFTP,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": SFTP,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub": SFTP,
 }
 
 
 def test_secrets_are_written_only_for_enabled_components():
     found = {}
     for task in secrets_tasks():
-        for module in ("ansible.builtin.copy", "ansible.builtin.file", "community.crypto.openssh_keypair"):
+        for module in ("ansible.builtin.copy", "ansible.builtin.file"):
             if module in task:
                 target = task[module].get("dest") or task[module]["path"]
                 if target in SECRET_FILES:
                     found[target] = task
     assert sorted(found) == sorted(SECRET_FILES)
     for target, component in SECRET_FILES.items():
-        assert found[target].get("when") == f"'{component}' in stack_components", target
+        condition = component if component == SFTP else f"'{component}' in stack_components"
+        assert found[target].get("when") == condition, target
+
+
+def test_old_restic_init_script_and_generated_key_are_gone():
+    # The key pair comes from KeePass and dungeon authorises it (backup_target_clients), so nothing is generated or
+    # copied to the backup host any more. A script left from an earlier run is removed on every host.
+    tasks = list(secrets_tasks())
+    assert not [t for t in tasks if "community.crypto.openssh_keypair" in t]
+    removal = [t for t in tasks if t.get("ansible.builtin.file", {}).get("path") == "/etc/docker/infrastructure/init-restic.sh"]
+    assert len(removal) == 1
+    assert removal[0]["ansible.builtin.file"]["state"] == "absent"
+
+
+def test_dungeon_renders_only_its_vhosts(tmp_path):
+    tree = rendered_tree(tmp_path, "dungeon")
+    names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
+    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon"}
+    assert "listen              8443" not in tree["nginx/nginx.conf"]
+    assert "location /health" in tree["nginx/nginx.conf"]
+
+
+def test_vhosts_not_in_the_list_are_not_rendered(tmp_path):
+    tree = rendered_tree(tmp_path, "raspi", {"reverse_proxy_vhosts": ["grafana"]})
+    names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
+    assert names == {"raspi", "grafana.raspi"}
+
+
+def test_vhost_needs_its_component_as_well(tmp_path):
+    components = [c for c in WITHOUT_PIHOLE if c != "outbound"]
+    tree = rendered_tree(tmp_path, "raspi", {"stack_components": components})
+    assert "outbound." not in tree["nginx/nginx.conf"]
+
+
+def test_healthmonitor_needs_outbound(tmp_path):
+    # healthmonitor's fragment sets dns: to the outbound Pi-hole's address
+    result = run_components_check(tmp_path, ["healthmonitor"])
+    assert result.returncode != 0
+    assert "healthmonitor needs outbound" in result.stdout + result.stderr
+    assert run_components_check(tmp_path, ["unbound", "outbound", "healthmonitor"]).returncode == 0

@@ -19,8 +19,16 @@ store = os.environ["FAKE_VAULT"]
 with open(os.environ["FAKE_CALLS"], "a") as log:
     log.write(json.dumps(sys.argv[1:]) + "\n")
 script = base64.b64decode(sys.argv[sys.argv.index("-EncodedCommand") + 1]).decode("utf-16-le")
-name = re.search(r"\$name = '([^']*)'", script).group(1)
+match = re.search(r"\$name = '([^']*)'", script)
+name = match.group(1) if match else None
 vault = json.load(open(store)) if os.path.exists(store) else {}
+if "FindAllByUserName('keepass')" in script:
+    if not vault:
+        sys.exit(3)
+    for resource, password in vault.items():
+        wire = base64.b64encode(password.encode("utf-8")).decode()
+        sys.stdout.buffer.write(f"{resource} {wire}\r\n".encode())
+    sys.exit(0)
 if "RetrievePassword" in script:
     if name not in vault:
         sys.exit(3)
@@ -43,7 +51,7 @@ def fake(tmp_path):
         vault = tmp_path / "vault.json"
         calls = tmp_path / "calls.jsonl"
         env = {
-            **{k: v for k, v in os.environ.items() if k != "KEEPASS_PASSWORD"},
+            **{k: v for k, v in os.environ.items() if not k.startswith("KEEPASS_")},
             "KEEPASS_POWERSHELL": str(exe),
             "FAKE_VAULT": str(tmp_path / "vault.json"),
             "FAKE_CALLS": str(tmp_path / "calls.jsonl"),
@@ -99,10 +107,16 @@ def test_runs_the_command_with_the_stored_password(fake):
     assert result.stdout.decode("utf-8") == PASSWORD
 
 
-def test_strips_a_carriage_return_from_powershell_output(fake):
-    fake.vault.write_text(json.dumps({"raspberry-keepass": "secret\r\n"}))
+def test_accepts_windows_line_endings_from_powershell(fake):
+    fake.vault.write_text(json.dumps({"raspberry-keepass": "secret"}))
     result = run(fake, *PRINT_PASSWORD)
     assert result.stdout == b"secret"
+
+
+def test_keeps_trailing_whitespace_of_a_password(fake):
+    fake.vault.write_text(json.dumps({"raspberry-keepass": "secret \n\n"}))
+    result = run(fake, *PRINT_PASSWORD)
+    assert result.stdout == b"secret \n\n"
 
 
 def test_passes_the_exit_code_through(fake):
@@ -137,14 +151,64 @@ def test_forget_removes_the_stored_password(fake):
     assert fake.stored() == {}
 
 
-def test_credential_name_can_be_changed(fake):
-    run(fake, "--store", stdin="secret\n", KEEPASS_CREDENTIAL="other-db")
-    assert fake.stored() == {"other-db": "secret"}
+PRINT_ALL = ["sh", "-c", 'printf "%s|%s|%s" "${KEEPASS_PASSWORD-unset}" "${KEEPASS_PASSWORD_DUNGEON-unset}" "${KEEPASS_PASSWORD_MY_DB-unset}"']
 
 
-def test_rejects_a_credential_name_that_would_break_the_powershell_script(fake):
-    result = run(fake, "--store", stdin="secret\n", KEEPASS_CREDENTIAL="x'; Remove-Item C:\\")
-    assert result.returncode != 0
+def test_store_takes_a_database_name(fake):
+    result = run(fake, "--store", "dungeon", stdin=PASSWORD + "\n")
+    assert result.returncode == 0, result.stderr
+    assert fake.stored() == {"dungeon-keepass": PASSWORD}
+
+
+def test_store_of_a_named_database_never_passes_the_password_as_an_argument(fake):
+    run(fake, "--store", "dungeon", stdin=PASSWORD + "\n")
+    commands = [json.loads(line) for line in fake.argv_log().splitlines()]
+    assert commands
+    for argv in commands:
+        assert "LEAKCANARY" not in " ".join(argv)
+        script = base64.b64decode(argv[argv.index("-EncodedCommand") + 1]).decode("utf-16-le")
+        assert "LEAKCANARY" not in script
+
+
+def test_forget_takes_a_database_name(fake):
+    fake.vault.write_text(json.dumps({"raspberry-keepass": "a", "dungeon-keepass": "b"}))
+    result = run(fake, "--forget", "dungeon")
+    assert result.returncode == 0, result.stderr
+    assert fake.stored() == {"raspberry-keepass": "a"}
+
+
+def test_exports_every_stored_password(fake):
+    run(fake, "--store", stdin=PASSWORD + "\n")
+    run(fake, "--store", "dungeon", stdin=PASSWORD + "2\n")
+    result = run(fake, *PRINT_ALL)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.decode("utf-8") == f"{PASSWORD}|{PASSWORD}2|unset"
+
+
+def test_exports_a_name_with_digits_and_underscores(fake):
+    fake.vault.write_text(json.dumps({"my_db-keepass": "x"}))
+    assert run(fake, *PRINT_ALL).stdout == b"unset|unset|x"
+
+
+def test_keeps_every_password_already_set(fake):
+    fake.vault.write_text(json.dumps({"raspberry-keepass": "a", "dungeon-keepass": "b"}))
+    result = run(fake, *PRINT_ALL, KEEPASS_PASSWORD_DUNGEON="preset")
+    assert result.stdout == b"a|preset|unset"
+
+
+def test_ignores_stored_credentials_that_are_not_keepass_databases(fake):
+    fake.vault.write_text(json.dumps({"other": "a", "My-DB-keepass": "b", "my db-keepass": "c"}))
+    result = run(fake, *PRINT_ALL)
+    assert result.stdout == b"unset|unset|unset"
+
+
+@pytest.mark.parametrize("bad", ["my-db", "Dungeon", "a b", "x'; Remove-Item C:\\"])
+def test_rejects_an_invalid_database_name(fake, bad):
+    for option in ("--store", "--forget"):
+        result = run(fake, option, bad, stdin="secret\n")
+        assert result.returncode == 2
+        assert b"database name" in result.stderr
+    assert fake.stored() == {}
     assert fake.argv_log() == ""
 
 

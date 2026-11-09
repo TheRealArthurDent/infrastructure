@@ -45,6 +45,8 @@ def source_mounts():
     service = yaml.safe_load(read(RESTICPROFILE_COMPOSE))["services"]["resticprofile"]
     mounts = {}
     for volume in service["volumes"]:
+        if not isinstance(volume, str):  # the long syntax of the backup SSD
+            continue
         host, container = volume.split(":")[:2]
         if container.startswith("/source/"):
             mounts[host] = container

@@ -59,3 +59,25 @@ def test_update_playbook_upgrades_and_reports_reboot():
     assert any(
         (task.get("ansible.builtin.stat") or {}).get("path") == "/var/run/reboot-required" for task in update_tasks
     )
+
+
+def test_the_apt_cache_is_refreshed_on_every_host():
+    # dungeon has no rsnapshot, so base's cache refresh must not hang on it: the first apt installs of the docker,
+    # stack and restore roles need a fresh cache on a new image. Molecule's prepare refreshes it and can't see this.
+    base = {t["name"]: t for t in tasks(ANSIBLE_DIR / "roles/base/tasks/main.yaml")}
+    refresh = base["Ensure the apt cache is fresh"]
+    assert refresh["ansible.builtin.apt"] == {"update_cache": True, "cache_valid_time": 86400}
+    assert "when" not in refresh
+    install = base["Install rsnapshot"]
+    assert install["ansible.builtin.apt"]["name"] == ["rsnapshot"]
+    assert install["when"] == "base_rsnapshot_enabled | bool"
+
+
+def test_check_certificates_refreshes_the_apt_cache():
+    # check-certificates.yaml is the first playbook of a takeover, before base has run
+    install = next(
+        t for t in tasks(ANSIBLE_DIR / "roles/certificate_check/tasks/main.yaml")
+        if t["name"] == "Ensure Python libraries for the crypto and Docker modules are installed"
+    )
+    assert install["ansible.builtin.apt"]["update_cache"] is True
+    assert install["ansible.builtin.apt"]["cache_valid_time"] == 86400

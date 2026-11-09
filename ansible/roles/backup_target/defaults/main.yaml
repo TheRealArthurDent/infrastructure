@@ -1,0 +1,15 @@
+---
+# Dungeon is the restic sftp target of raspi and testbed (clients connect as
+# sftp:restic@dungeon:/media/backup/restic/<host>).
+backup_target_mount: /media/backup
+backup_target_uuid: ""
+backup_target_fstype: ext4
+backup_target_options: defaults,noatime,nofail
+# false (Molecule): fstab entry only, no device check, no mount; the mount point must already be a mount.
+backup_target_manage_mount: true
+backup_target_user: restic
+backup_target_uid: 1002
+backup_target_gid: 1002
+backup_target_marker: "{{ backup_target_mount }}/.backup-ssd"
+# Client name -> ssh public key (type and base64 part); required non-empty when the role runs.
+backup_target_clients: {}

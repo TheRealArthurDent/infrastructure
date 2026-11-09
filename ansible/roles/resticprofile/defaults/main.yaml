@@ -3,6 +3,19 @@
 # Set resticprofile_backup_host_ip to skip the lookup.
 resticprofile_backup_host: dungeon
 
+# The restic repository. An sftp one needs the backup host (resolved above), the restic ssh key pair and ssh_config;
+# a local one lives on a disk of this host that is bind-mounted into the container (dungeon: its backup SSD, where
+# resticprofile_repository is local:/backup/restic/dungeon, see resticprofile_backup_mount).
+resticprofile_repository: sftp:restic@{{ resticprofile_backup_host }}:/media/backup/restic/{{ inventory_hostname }}
+# Derived. bootstrap.yaml and the secrets role use it to look up and write the ssh key pair only when it is needed.
+resticprofile_repository_is_sftp: "{{ resticprofile_repository is match('sftp:') }}"
+# The host path mounted at /backup in the container ('' mounts nothing). A bind mount is always a mount point inside
+# the container, so the backup SSD's presence is checked by its marker file, which the backup_target component creates
+# only while the SSD is mounted: the backup fails and the restore stops without it, instead of using the empty
+# directory of the system disk.
+resticprofile_backup_mount: ''
+resticprofile_backup_marker: "{{ resticprofile_backup_mount }}/.backup-ssd"
+
 # resticprofile schedules backups only once each of these stacks has its marker, so a fresh host never backs up a
 # half-restored state as the latest snapshot. Add a stack here once its deployment runs restic-restore clean-slate.
 resticprofile_backup_stacks:

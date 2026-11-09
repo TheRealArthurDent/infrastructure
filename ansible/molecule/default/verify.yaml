@@ -2,6 +2,10 @@
   hosts: all
   become: true
   gather_facts: false
+  vars:
+    # dungeon-trixie runs the backup target and no Pi-hole, rsnapshot, fan or smart-home .env; raspi-trixie runs the
+    # defaults (bootstrap.yaml's raspi). Checks of the other kind are gated, not removed.
+    is_dungeon: "{{ backup_target_enabled | default(false) | bool }}"
   tasks:
     - name: Check no secret was printed (-v and --diff, see molecule.yml)
       vars:
@@ -23,10 +27,13 @@
       ansible.builtin.assert:
         that: item in ansible_facts.packages
         fail_msg: "{{ item }} is not installed"
-      loop:
-        - rsnapshot
-        - docker-ce
-        - docker-compose-plugin
+      loop: "{{ ['docker-ce', 'docker-compose-plugin'] + ([] if is_dungeon else ['rsnapshot']) }}"
+
+    - name: Check dungeon has no rsnapshot
+      ansible.builtin.assert:
+        that: "'rsnapshot' not in ansible_facts.packages"
+        fail_msg: rsnapshot is installed although base_rsnapshot_enabled is false
+      when: is_dungeon
 
     - name: Validate the deployed sudoers file
       ansible.builtin.command: visudo -cf /etc/sudoers.d/smarthome
@@ -164,18 +171,26 @@
           - "'30 1 * * 0 rsnapshot weekly' in crontab.stdout_lines"
           - "'0 2 * * * rsnapshot daily' in crontab.stdout_lines"
         fail_msg: "rsnapshot cron schedule is wrong: {{ crontab.stdout_lines | select('search', 'rsnapshot') | list }}"
+      when: not is_dungeon
+
+    - name: Check dungeon has no rsnapshot cron jobs
+      ansible.builtin.assert:
+        that: crontab.stdout_lines | select('search', 'rsnapshot') | list | length == 0
+        fail_msg: "rsnapshot cron jobs on dungeon: {{ crontab.stdout_lines | select('search', 'rsnapshot') | list }}"
+      when: is_dungeon
 
     - name: Stat secret files
       ansible.builtin.stat:
         path: "{{ item }}"
       register: secret_files
-      loop:
-        - /etc/docker/infrastructure/.env
-        - /etc/docker/infrastructure/.outbound.env
-        - /etc/docker/infrastructure/.healthmonitor.env
-        - /etc/docker/infrastructure/secrets/restic_passphrase
-        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
-        - /etc/docker/smart-home/.env
+      loop: >-
+        {{ ['/etc/docker/infrastructure/.outbound.env',
+            '/etc/docker/infrastructure/.healthmonitor.env',
+            '/etc/docker/infrastructure/secrets/restic_passphrase']
+           + ([] if is_dungeon else
+              ['/etc/docker/infrastructure/.env',
+               '/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519',
+               '/etc/docker/smart-home/.env']) }}
 
     - name: Check secret files exist, are owned by root and are not world-readable
       ansible.builtin.assert:
@@ -188,14 +203,79 @@
       loop_control:
         label: "{{ item.item }}"
 
+    - name: Read the restic SSH key pair
+      ansible.builtin.slurp:
+        src: "/etc/docker/infrastructure/resticprofile/.ssh/{{ item }}"
+      register: restic_key_pair
+      loop:
+        - id_ed25519
+        - id_ed25519.pub
+      when: not is_dungeon
+      no_log: true
+
+    - name: Stat the restic SSH public key and the old init script
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: restic_key_stats
+      loop:
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub
+        - /etc/docker/infrastructure/init-restic.sh
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
+        - /etc/docker/infrastructure/resticprofile/.ssh
+
+    - name: Check the restic key pair is the one from KeePass, and the init script is gone
+      ansible.builtin.assert:
+        that:
+          - restic_key_pair.results[0].content | b64decode == 'LEAKCANARY-ssh-key\n'
+          - restic_key_pair.results[1].content | b64decode == 'ssh-ed25519 LEAKCANARY-ssh-key-pub molecule@test\n'
+          - restic_key_stats.results[0].stat.pw_name == 'root'
+          - restic_key_stats.results[0].stat.mode == '0644'
+          - not restic_key_stats.results[1].stat.exists
+          - restic_key_stats.results[2].stat.isreg
+          - restic_key_stats.results[2].stat.pw_name == 'root'
+          - restic_key_stats.results[2].stat.gr_name == 'root'
+          - restic_key_stats.results[2].stat.mode == '0600'
+          - restic_key_stats.results[3].stat.isdir
+          - restic_key_stats.results[3].stat.mode == '0700'
+        fail_msg: The restic key pair doesn't match the KeePass values, or init-restic.sh still exists
+      when: not is_dungeon
+      no_log: true
+
+    # A local repository needs no key pair and no .ssh directory (the sftp client side is raspi's and testbed's)
+    - name: Stat the files dungeon doesn't get
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dungeon_absent_files
+      loop:
+        - /etc/docker/infrastructure/.env
+        - /etc/docker/infrastructure/resticprofile/.ssh
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub
+        - /etc/docker/infrastructure/resticprofile/ssh_config
+        - /etc/docker/smart-home/.env
+        - /etc/docker/smart-home
+        - /etc/docker/infrastructure/pihole
+      when: is_dungeon
+
+    - name: Check dungeon has no pihole .env, no restic key pair, no ssh_config and no smart-home .env
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        fail_msg: "{{ item.item }} exists on dungeon"
+      loop: "{{ dungeon_absent_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: is_dungeon
+
     - name: Read infrastructure .env
       ansible.builtin.slurp:
         src: /etc/docker/infrastructure/.env
       register: infra_env
+      when: not is_dungeon
 
     - name: Check pihole password is rendered
       ansible.builtin.assert:
         that: "'FTLCONF_webserver_api_password=LEAKCANARY-pihole' in (infra_env.content | b64decode)"
+      when: not is_dungeon
 
     - name: Read the kernel command line
       ansible.builtin.slurp:
@@ -232,6 +312,18 @@
         fail_msg: "Unexpected boot config: {{ boot_lines }}"
       vars:
         boot_lines: "{{ (boot_config.content | b64decode).splitlines() }}"
+      when: not is_dungeon
+
+    # Without the Argon case nothing enables I2C: prepare.yaml's boot config stays as planted
+    - name: Check dungeon's boot config is untouched, I2C stays off
+      ansible.builtin.assert:
+        that:
+          - "'#dtparam=i2c_arm=on' in boot_lines"
+          - boot_lines | select('match', '^dtparam=i2c_arm=') | list | length == 0
+        fail_msg: "dungeon's boot config changed: {{ boot_lines }}"
+      vars:
+        boot_lines: "{{ (boot_config.content | b64decode).splitlines() }}"
+      when: is_dungeon
 
     - name: Stat the fan control files
       ansible.builtin.stat:
@@ -253,11 +345,23 @@
       loop: "{{ argon_fan_files.results }}"
       loop_control:
         label: "{{ item.item.path }}"
+      when: not is_dungeon
+
+    # argon_fan_enabled is off on dungeon: none of the role's files
+    - name: Check dungeon has no fan control files
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        fail_msg: "{{ item.item.path }} exists on dungeon, which isn't in the Argon case"
+      loop: "{{ argon_fan_files.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+      when: is_dungeon
 
     - name: Read the fan config
       ansible.builtin.slurp:
         src: /etc/argon-fan.json
       register: argon_fan_config
+      when: not is_dungeon
 
     - name: Check the fan config has raspi's thresholds
       ansible.builtin.assert:
@@ -267,6 +371,7 @@
           - fan_config.bus == 1
       vars:
         fan_config: "{{ argon_fan_config.content | b64decode | from_json }}"
+      when: not is_dungeon
 
     # Loads its config and the I2C library on the target, short of opening the bus
     - name: Check the fan daemon runs with the deployed Python and its config
@@ -277,6 +382,7 @@
       register: argon_fan_run
       changed_when: false
       failed_when: "argon_fan_run.stdout != '[(55.0, 10), (60.0, 55), (65.0, 100)]'"
+      when: not is_dungeon
 
     - name: Stat DH parameters
       ansible.builtin.stat:
@@ -349,7 +455,18 @@
       ansible.builtin.assert:
         that:
           - "'DNS:' ~ inventory_hostname in cert_san.stdout"
-          - "'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
+          - "is_dungeon or 'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
+
+    # certificate_check_subdomains of the platform: just the vhosts dungeon runs
+    - name: Check dungeon's certificate covers portainer and outbound only
+      ansible.builtin.assert:
+        that:
+          - "'DNS:portainer.' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:outbound.' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:pihole.' ~ inventory_hostname not in cert_san.stdout"
+          - "'DNS:grafana.' ~ inventory_hostname not in cert_san.stdout"
+        fail_msg: "Unexpected SANs: {{ cert_san.stdout }}"
+      when: is_dungeon
 
     - name: Count certificates in the nginx full chain
       ansible.builtin.command: grep -c 'BEGIN CERTIFICATE' /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem
@@ -370,8 +487,20 @@
         - nginx/snippets/ssl-certificates.conf
         - resticprofile/config/profiles.yaml
         - resticprofile/config/excludes
-        - resticprofile/ssh_config
       register: stack_files
+
+    # Only an sftp repository needs the ssh client config
+    - name: Stat the ssh client config of resticprofile
+      ansible.builtin.stat:
+        path: /etc/docker/infrastructure/resticprofile/ssh_config
+      register: ssh_config_file
+
+    - name: Check the ssh client config exists with the sftp repository and not with the local one
+      ansible.builtin.assert:
+        that:
+          - ssh_config_file.stat.exists != is_dungeon
+          - is_dungeon or ssh_config_file.stat.mode == '0600'
+          - is_dungeon or ssh_config_file.stat.pw_name == 'root'
 
     - name: Check stack config files exist, are owned by root and only readable by root
       ansible.builtin.assert:
@@ -403,9 +532,14 @@
         - nginx/nginx.conf
         - nginx/snippets/ssl-certificates.conf
         - resticprofile/config/profiles.yaml
-        - resticprofile/ssh_config
         - compose/docker-compose.yaml
       register: stack_rendered
+
+    - name: Read the ssh client config of resticprofile
+      ansible.builtin.slurp:
+        src: /etc/docker/infrastructure/resticprofile/ssh_config
+      register: ssh_config_rendered
+      when: not is_dungeon
 
     - name: Check the stack config is rendered for this host
       vars:
@@ -413,7 +547,7 @@
         nginx_conf: "{{ rendered['nginx/nginx.conf'] | b64decode }}"
         ssl_conf: "{{ rendered['nginx/snippets/ssl-certificates.conf'] | b64decode }}"
         profiles: "{{ rendered['resticprofile/config/profiles.yaml'] | b64decode }}"
-        ssh_config: "{{ rendered['resticprofile/ssh_config'] | b64decode }}"
+        ssh_config: "{{ ssh_config_rendered.content | b64decode }}"
         compose: "{{ rendered['compose/docker-compose.yaml'] | b64decode | from_yaml }}"
         nginx_cert_mount: >-
           /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
@@ -427,6 +561,43 @@
           # Resolved through the etc_hosts entry in molecule.yml
           - compose.services.resticprofile.extra_hosts.dungeon == '192.0.2.10'
           - "nginx_cert_mount in compose.services.nginx.volumes"
+      when: not is_dungeon
+
+    # dungeon: portainer and outbound vhosts only, the six components and a local repository on the backup SSD
+    - name: Check the stack config is rendered for dungeon
+      vars:
+        rendered: "{{ stack_rendered.results | items2dict(key_name='item', value_name='content') }}"
+        nginx_conf: "{{ rendered['nginx/nginx.conf'] | b64decode }}"
+        ssl_conf: "{{ rendered['nginx/snippets/ssl-certificates.conf'] | b64decode }}"
+        profiles: "{{ rendered['resticprofile/config/profiles.yaml'] | b64decode }}"
+        compose: "{{ rendered['compose/docker-compose.yaml'] | b64decode | from_yaml }}"
+        nginx_cert_mount: >-
+          /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
+        portainer_names: "portainer.{{ inventory_hostname }} portainer.{{ inventory_hostname }}.*;"
+        outbound_names: "outbound.{{ inventory_hostname }} outbound.{{ inventory_hostname }}.*;"
+        dungeon_services: [healthmonitor, nginx, outbound, portainer, resticprofile, unbound]
+        resticprofile_volumes: "{{ compose.services.resticprofile.volumes }}"
+        backup_mount: "{{ resticprofile_volumes | select('mapping') | selectattr('target', 'eq', '/backup') | list }}"
+      ansible.builtin.assert:
+        that:
+          - "'server_name         ' ~ portainer_names in nginx_conf"
+          - "'server_name         ' ~ outbound_names in nginx_conf"
+          - "'server_name         pihole.' not in nginx_conf"
+          - "'ssl_certificate     /etc/nginx/' ~ inventory_hostname ~ '.pem;' in ssl_conf"
+          - compose.services.keys() | sort == dungeon_services
+          - "nginx_cert_mount in compose.services.nginx.volumes"
+          # Local repository on the SSD, guarded by its marker; no sftp client side at all
+          - "'repository: local:/backup/restic/dungeon' in profiles.splitlines() | map('trim') | list"
+          - "'sftp' not in profiles"
+          - "'/backup/.backup-ssd' in profiles"
+          - backup_mount | length == 1
+          - backup_mount[0].source == '/media/backup'
+          - resticprofile_volumes | select('string') | select('search', '[.]ssh|ssh_config') | list | length == 0
+          - "'extra_hosts' not in compose.services.resticprofile"
+          # Backups wait for infrastructure's restore marker only (smart-home isn't on dungeon)
+          - "'for stack in infrastructure; do' in compose.services.resticprofile.command[-1]"
+        fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
+      when: is_dungeon
 
     - name: Stat stack directories
       ansible.builtin.stat:
@@ -457,6 +628,7 @@
         - portainer/data/portainer.db
         - pihole/pihole/gravity.db
       register: restored
+      when: "item == 'portainer/data/portainer.db' or not is_dungeon"
 
     - name: Check the clean-slate restore brought the data back with owner and mode (raspberry#287)
       ansible.builtin.assert:
@@ -465,9 +637,22 @@
           - item.stat.uid == 1234
           - item.stat.mode == '0600'
         fail_msg: "{{ item.item }} wasn't restored from the snapshot made in prepare.yaml"
-      loop: "{{ restored.results }}"
+      loop: "{{ restored.results | rejectattr('skipped', 'defined') }}"
       loop_control:
         label: "{{ item.item }}"
+
+    # The snapshot holds pihole's data too (prepare.yaml serves both platforms); dungeon has no Pi-hole component, so
+    # the clean-slate restore doesn't bring it back.
+    - name: Stat Pi-hole's data on dungeon
+      ansible.builtin.stat:
+        path: /etc/docker/infrastructure/pihole
+      register: dungeon_pihole_data
+      when: is_dungeon
+
+    - name: Check dungeon's restore left Pi-hole's data in the backup
+      ansible.builtin.assert:
+        that: not dungeon_pihole_data.stat.exists
+      when: is_dungeon
 
     - name: Read the restored Portainer data
       ansible.builtin.slurp:
@@ -513,13 +698,28 @@
 
     - name: Check this stack's items are listed for the helper
       ansible.builtin.assert:
-        that: (restore_stack_items.content | b64decode | from_json)['items'].keys() | sort == ['pihole', 'portainer']
+        that: >-
+          (restore_stack_items.content | b64decode | from_json)['items'].keys() | sort
+          == (['portainer'] if is_dungeon else ['pihole', 'portainer'])
 
     - name: Check the restore helper is installed and executable
       ansible.builtin.assert:
         that:
           - restore_helper.stat.isreg
           - restore_helper.stat.mode == '0755'
+
+# More plays: ansible-lint caps a play at 100 tasks (complexity[play])
+- name: Verify the restore helper
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    is_dungeon: "{{ backup_target_enabled | default(false) | bool }}"
+  tasks:
+    - name: Read the latest test snapshot
+      ansible.builtin.command: restic -r /srv/restic-repo --password-file /srv/restic-password snapshots --json latest
+      register: test_snapshot
+      changed_when: false
 
     # Targeted restore on a running host (raspberry#286): break the Portainer data, then bring it back with the helper.
     # No Docker daemon runs here, so apply finds no running container to stop.
@@ -623,9 +823,118 @@
     - name: Check the drill passed, cleaned up and is scheduled monthly
       ansible.builtin.assert:
         that:
-          - "'infrastructure/portainer' in helper_drill.stdout and 'infrastructure/pihole' in helper_drill.stdout"
+          - "'infrastructure/portainer' in helper_drill.stdout"
+          - "is_dungeon or 'infrastructure/pihole' in helper_drill.stdout"
+          - "not is_dungeon or 'infrastructure/pihole' not in helper_drill.stdout"
           - "'restic_restore_drill_success 1' in (drill_metrics.content | b64decode).splitlines()"
           - drill_staging.matched == 0
           - "'0 12 1 * * /usr/local/bin/restic-restore drill 2>&1 | logger -t restic-restore-drill'
             in drill_crontab.stdout_lines"
         fail_msg: "drill: {{ helper_drill.stdout }} cron: {{ drill_crontab.stdout_lines | select('search', 'drill') }}"
+
+- name: Verify the backup target
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    is_dungeon: "{{ backup_target_enabled | default(false) | bool }}"
+  tasks:
+    # backup_target role (dungeon): the backup SSD is the tmpfs of the platform, the restic sftp user and its keys
+    - name: Check the raspi platform has no backup SSD marker
+      ansible.builtin.stat:
+        path: /media/backup/.backup-ssd
+      register: raspi_backup_marker
+      when: not is_dungeon
+
+    - name: Check only the backup target has the marker
+      ansible.builtin.assert:
+        that: not raspi_backup_marker.stat.exists
+      when: not is_dungeon
+
+    - name: Read fstab
+      ansible.builtin.slurp:
+        src: /etc/fstab
+      register: fstab
+      when: is_dungeon
+
+    # ansible.posix.mount writes the dump and pass fields behind the options
+    - name: Check fstab mounts the backup SSD by UUID, with no PARTUUID line
+      vars:
+        fstab_lines: "{{ (fstab.content | b64decode).splitlines() }}"
+        ssd_lines: "{{ fstab_lines | select('search', '/media/backup') | list }}"
+        fstab_pattern: >-
+          ^UUID=eeeb6563-1a18-4941-a7bd-72ec86622fa7\s+/media/backup\s+ext4\s+defaults,noatime,nofail(\s+\d+){0,2}\s*$
+      ansible.builtin.assert:
+        that:
+          - ssd_lines | length == 1
+          - ssd_lines[0] is match(fstab_pattern)
+          - fstab_lines | select('search', 'PARTUUID') | list | length == 0
+        fail_msg: "Unexpected fstab: {{ fstab_lines }}"
+      when: is_dungeon
+
+    - name: Check /media/backup is a mount point
+      ansible.builtin.command: mountpoint -q /media/backup
+      changed_when: false
+      when: is_dungeon
+
+    - name: Stat the backup SSD marker, the restic home and the repositories directory
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: backup_target_stats
+      loop:
+        - /media/backup/.backup-ssd
+        - /home/restic/.ssh
+        - /home/restic/.ssh/authorized_keys
+        - /media/backup/restic
+      when: is_dungeon
+
+    - name: Read the restic user and group
+      ansible.builtin.command: "{{ item }}"
+      register: restic_account
+      changed_when: false
+      loop:
+        - getent passwd restic
+        - getent group restic
+        - passwd -S restic
+      when: is_dungeon
+
+    - name: Read the restic authorized keys
+      ansible.builtin.slurp:
+        src: /home/restic/.ssh/authorized_keys
+      register: restic_authorized_keys
+      when: is_dungeon
+
+    - name: Check the backup target is set up
+      vars:
+        stats: "{{ backup_target_stats.results | items2dict(key_name='item', value_name='stat') }}"
+        key_lines: >-
+          {{ (restic_authorized_keys.content | b64decode).splitlines() | reject('match', '^\\s*(#|$)') | list }}
+      ansible.builtin.assert:
+        that:
+          - stats['/media/backup/.backup-ssd'].isreg
+          - stats['/media/backup/.backup-ssd'].pw_name == 'root'
+          - stats['/media/backup/.backup-ssd'].mode == '0644'
+          # restic sftp user: uid/gid 1002, /bin/sh, locked password
+          - restic_account.results[0].stdout.split(':')[2] == '1002'
+          - restic_account.results[0].stdout.split(':')[3] == '1002'
+          - restic_account.results[0].stdout.split(':')[5] == '/home/restic'
+          - restic_account.results[0].stdout.split(':')[6] == '/bin/sh'
+          - restic_account.results[1].stdout.split(':')[2] == '1002'
+          - restic_account.results[2].stdout.split()[1] == 'L'
+          # one restricted key per client, nothing else
+          - stats['/home/restic/.ssh'].isdir
+          - stats['/home/restic/.ssh'].pw_name == 'restic'
+          - stats['/home/restic/.ssh'].mode == '0700'
+          - stats['/home/restic/.ssh/authorized_keys'].pw_name == 'restic'
+          - stats['/home/restic/.ssh/authorized_keys'].mode == '0600'
+          - key_lines | length == 2
+          - key_lines | select('match', '^restrict ssh-ed25519 \\S+ (raspi|testbed)$') | list | length == 2
+          - key_lines | select('search', ' raspi$') | list | length == 1
+          - key_lines | select('search', ' testbed$') | list | length == 1
+          # the repositories directory: only restic can enter it
+          - stats['/media/backup/restic'].isdir
+          - stats['/media/backup/restic'].pw_name == 'restic'
+          - stats['/media/backup/restic'].gr_name == 'restic'
+          - stats['/media/backup/restic'].mode == '0700'
+        fail_msg: "Backup target: {{ restic_account.results | map(attribute='stdout') | list }} keys: {{ key_lines }}"
+      when: is_dungeon

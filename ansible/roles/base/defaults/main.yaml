@@ -12,6 +12,10 @@ base_dns_fallback:
 base_dns_options:
   - timeout:1
 
+# Install and configure rsnapshot with its cron jobs. When off, the role leaves all of it alone (neither installs
+# nor removes it).
+base_rsnapshot_enabled: true
+
 # Reload NetworkManager when the DNS config changes. Molecule turns this off: no NetworkManager runs in the test
 # container.
 base_networkmanager_reload: true

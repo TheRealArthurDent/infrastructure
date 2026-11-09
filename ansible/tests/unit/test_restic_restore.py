@@ -173,11 +173,16 @@ def test_snapshot_path_does_not_match_a_sibling_with_the_same_prefix():
         helper.snapshot_path("/etcetera/x", {"/etc": "/source/etc"})
 
 
+def short_volumes(service):
+    """The short-syntax volumes (host:container[:mode]); the long-syntax /backup bind mount (a dict) is skipped."""
+    return [v for v in service["volumes"] if isinstance(v, str)]
+
+
 def test_default_source_mounts_match_the_resticprofile_container():
     defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
     mounts = {}
-    for volume in service["volumes"]:
+    for volume in short_volumes(service):
         host, container = volume.split(":")[:2]
         if container.startswith("/source/"):
             mounts[host] = container
@@ -188,13 +193,13 @@ def test_default_staging_matches_the_restore_target_mount():
     defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
     staging = defaults["resticprofile_restore_staging"]
-    assert f"{staging['host']}:{staging['restic']}:rw" in service["volumes"]
+    assert f"{staging['host']}:{staging['restic']}:rw" in short_volumes(service)
 
 
 def test_resticprofile_schedules_backups_only_after_every_stack_is_restored():
     defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
-    mounts = dict(v.split(":")[:2] for v in service["volumes"])
+    mounts = dict(v.split(":")[:2] for v in short_volumes(service))
     assert mounts[defaults["resticprofile_restore_state_dir"]] == "/restore-state", "the marker directory is mounted"
     assert defaults["resticprofile_backup_stacks"] == ["{{ stack_project_name }}"]
     script = service["command"][-1]
@@ -275,7 +280,7 @@ def test_stage_rejects_an_unknown_stack(env):
 
 
 def test_usage_errors_do_not_look_like_a_missing_repository(env):
-    # argparse exits with 2; Ansible must not answer that with the init-restic.sh hint
+    # argparse exits with 2; Ansible must not answer that with the key hint
     code, _, _ = env.run("clean-slate", "--marker", "/x")
     assert code == 2
     assert code not in (10, 11)
@@ -474,7 +479,7 @@ def test_clean_slate_without_repository_access_fails_with_the_init_hint(env):
 
     code, _, err = clean_slate(env)
 
-    assert code == 10, "Ansible points the user to init-restic.sh on exit code 10"
+    assert code == 10, "Ansible points the user to the backup host's authorized keys on exit code 10"
     assert not env.marker.exists()
 
 
@@ -980,7 +985,7 @@ def test_drill_failure_keeps_the_time_of_the_last_success(env):
 def test_drill_metrics_go_to_the_metrics_mount_of_the_resticprofile_container():
     defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
-    mounts = dict(v.split(":")[:2] for v in service["volumes"])
+    mounts = dict(v.split(":")[:2] for v in short_volumes(service))
     metrics = PurePosixPath(defaults["resticprofile_restore_drill"]["metrics"])
     assert mounts[str(metrics.parent)] == "/metrics"
     assert f"/metrics/{metrics.name}" in service["healthcheck"]["test"][-1]
@@ -1070,3 +1075,4 @@ def test_drill_by_hand_on_a_host_without_the_monthly_drill_records_nothing(env):
     assert "infrastructure/portainer" in out
     assert "not recorded" in err
     assert not env.drill_metrics.exists()
+

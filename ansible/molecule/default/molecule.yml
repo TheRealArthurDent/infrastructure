@@ -17,6 +17,17 @@ platforms:
     # The resticprofile role resolves the backup host on the Pi (getent).
     etc_hosts:
       dungeon: 192.0.2.10
+  # dungeon's profile: the stack components without Pi-hole, a local restic repository on the backup SSD and the
+  # backup_target role (host_vars below mirror inventory/host_vars/dungeon.yaml).
+  - name: dungeon-trixie
+    image: debian:trixie
+    dockerfile: Dockerfile.j2
+    pre_build_image: false
+    command: sleep infinity
+    # A tmpfs is a mount point of its own, which the backup_target role checks (mountpoint -q) with
+    # backup_target_manage_mount: false, where a real host mounts the backup SSD.
+    tmpfs:
+      - /media/backup
 
 provisioner:
   name: ansible
@@ -46,6 +57,35 @@ provisioner:
         ansible_become: true
         # Fast DH params for tests; production uses inventory values.
         dhparameter_bits: 1024
+        # Like host_vars/raspi.yaml: only hosts in the Argon case run the fan role.
+        argon_fan_enabled: true
+      dungeon-trixie:
+        ansible_user: smarthome
+        ansible_become: true
+        dhparameter_bits: 1024
+        base_rsnapshot_enabled: false
+        secrets_smart_home_env: false
+        backup_target_enabled: true
+        # No SSD and no device to mount: the tmpfs from the platform stands in for the mounted SSD.
+        backup_target_manage_mount: false
+        backup_target_mount: /media/backup
+        backup_target_uuid: eeeb6563-1a18-4941-a7bd-72ec86622fa7
+        # Public keys, nothing secret
+        backup_target_clients:
+          raspi: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICc/eKct+1gtT9eqDeH8IBIi8XMjArF5mpxWommghE55
+          testbed: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bcoVarIiZLnsDk
+        stack_components:
+          - reverse_proxy
+          - portainer
+          - unbound
+          - outbound
+          - resticprofile
+          - healthmonitor
+        resticprofile_repository: local:/backup/restic/dungeon
+        resticprofile_backup_mount: /media/backup
+        resticprofile_backup_stacks: ["{{ stack_project_name }}"]
+        reverse_proxy_vhosts: [portainer, outbound]
+        certificate_check_subdomains: [portainer, outbound]
 
 verifier:
   name: ansible

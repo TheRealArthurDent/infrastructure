@@ -1,15 +1,15 @@
 ---
 name: working-with-ansible
-description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on testbed or raspi, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
+description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on raspi, dungeon or testbed, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
 ---
 
 # Working with Ansible in this repo
 
 ## Overview
 
-Ansible here changes a real smart home (DNS, SSH, Docker) on two Pis that only machines in the home
-network can reach. Know before you start what you can verify yourself, what only CI can, and what only the user
-can run on their developer machine.
+Ansible here changes a real smart home (DNS, SSH, Docker, backups) on three Pis (`raspi`, `dungeon`, `testbed`)
+that only machines in the home network can reach. Know before you start what you can verify yourself, what only CI
+can, and what only the user can run on their developer machine.
 How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it too when you touch `ansible/`.
 
 ## Who can run what
@@ -23,7 +23,7 @@ First find out where you run: a cloud container (claude.ai/code) or a local sess
 | `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes | yes (lint `--strict`, raspberry#240) |
 | Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, if Docker runs | yes, on every PR and on pushes to `main` touching `ansible/**` |
 | Anything against testbed | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | **only after asking**, every time, `--check --diff` first | no |
-| Anything against raspi | no | **no**: hand the user the commands | no |
+| Anything against raspi or dungeon | no | **no**: hand the user the commands (dungeon is production: private cloud and the backup SSD holding every host's backups) | no |
 
 In a local session the LAN, the SSH key and `with-keepass` are all reachable, so the only things between you and
 production are the rule above and `.claude/hooks/guard.py`.
@@ -44,12 +44,13 @@ cd ansible                                               # ansible.cfg + invento
 ansible-playbook <play>.yaml --limit testbed --check --diff
 ansible-playbook <play>.yaml --limit testbed             # real run
 ansible-playbook <play>.yaml --limit testbed             # must end with changed=0
-# raspi only after the user says so, same three steps with --limit raspi
+# raspi and dungeon only after the user says so, same three steps with --limit raspi / dungeon
 # stack only: ansible-playbook bootstrap.yaml --limit <host> --tags stack (same three steps)
 ```
 
 Every playbook is `hosts: all` with an assert that fails without `--limit`. Keep that guard on new playbooks.
-The `PreToolUse` hook in `.claude/hooks/guard.py` blocks you from raspi, `--limit all` and `main`; when it blocks
+The `PreToolUse` hook in `.claude/hooks/guard.py` blocks you from raspi, `--limit all` and `main` (dungeon follows
+once the user applies the pending hook patch, #15; treat it as blocked already); when it blocks
 something, hand the user the command instead of looking for another way to run it.
 
 ## Things that look wrong but aren't (and traps)
@@ -58,6 +59,14 @@ something, hand the user the command instead of looking for another way to run i
   run is the dry run; read its "to delete / to add" debug lines before running on raspi.
 - **The Pi-hole sync deletes** every record or list not in `configs/pihole.yaml`. Ask whether raspi has
   hand-made entries before a first sync.
+- **Components differ per host** (`stack_components` in `host_vars`): dungeon has no `pihole`, so its vhosts, SANs
+  and Pi-hole instances are only `portainer` and `outbound`. Check the host's `host_vars` before assuming a component.
+- **KeePass is per database**: each host reads its own (`keepass_database`: `raspberry`, or `dungeon` for dungeon),
+  the root CA always comes from `keepass_ca_database` (`raspberry`). Master passwords are `KEEPASS_PASSWORD` and
+  `KEEPASS_PASSWORD_<NAME>`; `with-keepass --store [name]` is the user's job. The entries each database needs are in
+  `ansible/README.md`.
+- **The backup SSD of dungeon must be plugged in** for the `backup_target` role and the stack: the run stops with
+  "plug in the backup SSD (UUID ...)" otherwise, on purpose. It never writes below the empty `/media/backup`.
 - **A new subdomain needs three places**: the CNAME in `configs/pihole.yaml`, nginx `server_name` in
   `ansible/roles/reverse_proxy/templates/nginx/nginx.conf.j2`, and the SAN in `certificate_check_subdomains`. DNS alone lands on nginx's default
   server with a certificate error.
