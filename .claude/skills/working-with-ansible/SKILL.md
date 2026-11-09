@@ -1,13 +1,13 @@
 ---
 name: working-with-ansible
-description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on testbed, raspi or dungeon, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
+description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on raspi, dungeon or testbed, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
 ---
 
 # Working with Ansible in this repo
 
 ## Overview
 
-Ansible here changes a real smart home (DNS, SSH, Docker, backups) on three Pis (`raspi`, `testbed`, `dungeon`)
+Ansible here changes a real smart home (DNS, SSH, Docker, backups) on three Pis (`raspi`, `dungeon`, `testbed`)
 that only machines in the home network can reach. Know before you start what you can verify yourself, what only CI
 can, and what only the user can run on their developer machine.
 How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it too when you touch `ansible/`.

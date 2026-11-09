@@ -8,8 +8,8 @@ Infrastructure of the smart home hosts. Everything is deployed per host from one
 | Host | What it is |
 | --- | --- |
 | `raspi` | Raspberry Pi 4, production smart home |
-| `testbed` | Test Pi for real integration runs |
 | `dungeon` | Raspberry Pi 5, private cloud and backup target (SSD at `/media/backup`) |
+| `testbed` | Test Pi for real integration runs |
 
 Moved from the private `raspberry` repo on 2026-11-08; older issues and PRs (`raspberry#…`) live there.
 Everything, from the host to the Docker stack, is deployed with Ansible; see [ansible/README.md](ansible/README.md).

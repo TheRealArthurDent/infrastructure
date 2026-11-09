@@ -20,8 +20,8 @@ Defined in `inventory/hosts.yaml`, which only says how to reach each host. Setti
 | Host | IP | SSH port | User |
 | --- | --- | --- | --- |
 | `raspi` | 192.168.1.2 | 1357 | `smarthome` (production) |
-| `testbed` | 192.168.1.7 | 4242 | `testuser` |
 | `dungeon` | 192.168.1.5 | 1359 | `dragon` (production: private cloud and backup target) |
+| `testbed` | 192.168.1.7 | 4242 | `testuser` |
 
 > All playbooks target `hosts: all` and refuse to run without `--limit <host>`, so a forgotten `--limit`
 > never reaches `raspi` by accident.
@@ -181,7 +181,7 @@ nginx serves the vhosts `portainer` and `outbound`, and its resticprofile backs 
 
 The same steps for a new Pi and for one rebuilt after a crash or reinstall. On a host with a backup, the state that
 isn't IaC comes back from restic by itself in steps 5 and 7, before the stacks start
-([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `testbed` or `dungeon`); `<user>`,
+([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `dungeon` or `testbed`); `<user>`,
 `<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node. Where
 dungeon differs, the step says so; [dungeon](#dungeon) has the details.
 
@@ -193,8 +193,8 @@ In Raspberry Pi Imager:
    SSD (USB adapter); on dungeon the NVMe drive. **dungeon: unplug the backup SSD first**, so it can't be picked as
    the target.
 2. Edit settings (OS customisation):
-   - Hostname: `raspi`, `testbed` or `dungeon`
-   - Username: `smarthome` (raspi), `testuser` (testbed) or `dragon` (dungeon), with a password
+   - Hostname: `raspi`, `dungeon` or `testbed`
+   - Username: `smarthome` (raspi), `dragon` (dungeon) or `testuser` (testbed), with a password
    - Services: enable SSH, **public-key authentication only**, paste the content of `~/.ssh/id_ed25519.pub`
 3. Write.
 

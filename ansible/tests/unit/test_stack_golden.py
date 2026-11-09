@@ -14,7 +14,7 @@ from render import ANSIBLE_DIR, RENDER_DESTS, ROLE_TASKS, role_task, rendered_tr
 GOLDEN = ANSIBLE_DIR / "tests" / "unit" / "golden"
 
 
-@pytest.mark.parametrize("host", ["raspi", "testbed", "dungeon"])
+@pytest.mark.parametrize("host", ["raspi", "dungeon", "testbed"])
 def test_rendered_output_matches_golden_files(tmp_path, host):
     tree = rendered_tree(tmp_path, host)
     golden_dir = GOLDEN / host
