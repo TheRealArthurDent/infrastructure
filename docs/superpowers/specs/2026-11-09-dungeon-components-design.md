@@ -182,6 +182,16 @@ Run `check-certificates.yaml --limit dungeon` first (CA-signed certificate repla
 the pinned versions (nginx 1.29 → 1.31, portainer 2.35 → 2.45). Leftovers of the fork (`~/dev/infrastructure`,
 `/etc/docker/infrastructure/borgmatic`, `/home/borg`) stay untouched; Mika removes them by hand.
 
+### Fan (dungeon)
+
+dungeon sits in an Argon NEO 5. Checked 2026-11-09: its fan is on the Pi 5 fan header (`cooling_fan` hwmon with
+`pwm1`), I2C is off, no `argononed`, nothing about the fan in `config.txt`. So the kernel controls the fan, and the
+ONE V2 daemon (I2C 0x1a) doesn't apply. Proposal, pending Mika's pick: `argon_fan` gets a second mode
+(`argon_fan_type: one_v2 | pi5_fan_header`, default `one_v2` so raspi is unchanged). `pi5_fan_header` writes the
+thresholds from `argon_fan_thresholds` as `dtparam=fan_temp0..3` (+ `_speed` 0–255, `_hyst`) into
+`config.txt`, no daemon, effective after a reboot (reported like the kernel command line). The alternative is the
+Pi 5's default curve, with `argon_fan` off on dungeon.
+
 ### Setting up dungeon from scratch (README, PR 2)
 
 `ansible/README.md` → "Set up a host" covers dungeon as well, with its differences marked per step (Mika,
