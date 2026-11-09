@@ -1,7 +1,8 @@
 # Ansible
 
 Ansible sets up the Pi host: SSH port and hardening, sudoers, base packages, rsnapshot, Docker, secret `.env` files,
-the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role).
+the nginx certificate, the Pi-hole DNS configuration, and the Docker stack itself (`stack` role plus its component
+roles, see [Stack components](#stack-components)).
 
 | Playbook | What it does |
 | --- | --- |
@@ -103,6 +104,14 @@ ansible-playbook bootstrap.yaml --limit testbed --tags stack
 
 A second run of `bootstrap.yaml` should end with `changed=0`.
 
+## Stack components
+
+The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,
+`pihole`, `outbound`, `resticprofile` (backups, restore helper) and `healthmonitor`. Each brings its compose fragment
+and config; `stack` merges the fragments, runs the clean-slate restore and `docker compose up`. `stack_components`
+lists the enabled ones and defaults to all seven. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml`
+(components must be listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts).
+
 ## Set up a host (new install or after a crash)
 
 The same steps for a new Pi and for one rebuilt after a crash or reinstall. On a host with a backup, the state that
@@ -170,7 +179,7 @@ The new key reaches the host's existing repository: its path is the hostname, th
 
 ### 5. Certificate and stack (restores the infrastructure state)
 
-The stack needs the nginx certificate (the `stack` role stops with a message if it is missing) and `dungeon` to
+The stack needs the nginx certificate (the `reverse_proxy` role stops with a message if it is missing) and `dungeon` to
 resolve on the Pi (the role looks up its IP at every run).
 
 ```sh
@@ -205,7 +214,7 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 ### 7. smart-home (restores its volumes)
 
 Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
-Backups wait for its marker too (`stack_backup_stacks`), so don't skip this. In `ansible/` of the smart-home repo:
+Backups wait for its marker too (`resticprofile_backup_stacks`), so don't skip this. In `ansible/` of the smart-home repo:
 
 ```sh
 ansible-playbook deploy.yaml --limit <target> --check --diff
@@ -227,11 +236,12 @@ under `/var/cache/backup/` (7 daily, 4 weekly), which are gone after a crash.
 
 Most of the host doesn't need a restore: Ansible renders the configs, certificates and `.env` files (secrets come
 from KeePass), `setup-pihole.yaml` configures the Pi-hole, and the restic SSH key is created anew. What does
-need one is listed as `restore_items` in `inventory/group_vars/all/restore_items.yaml` (for this stack: the
-Portainer data and the Pi-hole folder). The backup excludes `.env` files, `*secret*`, private keys and
+need one is listed in the `<component>_restore_items` of the component roles' defaults (`portainer_restore_items`,
+`pihole_restore_items`; the `stack` role merges them into `stack_restore_items`; for this stack: the Portainer data
+and the Pi-hole folder). The backup excludes `.env` files, `*secret*`, private keys and
 `pihole-FTL.db`, so a restore never brings back stale secrets.
 
-Both scenarios use the helper `/usr/local/bin/restic-restore`, which the `stack` role installs. It runs restic in
+Both scenarios use the helper `/usr/local/bin/restic-restore`, which the `resticprofile` role installs. It runs restic in
 the resticprofile container, so repository, passphrase and SSH key are the ones the backups use, and it takes
 host paths. `sudo restic-restore --help` lists all commands. A restore always goes into a staging directory
 under `/var/restore/` first and only `apply` puts it in place.
@@ -292,7 +302,7 @@ sudo restic-restore stage /etc/docker/smart-home/some/file --snapshot <id>
 ### Clean slate restore
 
 What steps 5 and 7 of [Set up a host](#set-up-a-host-new-install-or-after-a-crash) do on their own: before
-`docker compose up`, the `stack` role runs `restic-restore --runner oneoff clean-slate infrastructure` (the
+`docker compose up`, the `resticprofile` role (`tasks/restore.yaml`, run by `stack`) runs `restic-restore --runner oneoff clean-slate infrastructure` (the
 smart-home role the same for `smart-home`).
 
 What the role decides:
@@ -322,17 +332,17 @@ Options and failures:
   repository has no snapshot (a new host: run again with `skip_infrastructure_restore`).
 
 Backups stay off until the restore is done: resticprofile schedules them only once every stack in
-`stack_backup_stacks` (this stack and smart-home) has its marker, so a fresh host never backs up its empty or
+`resticprofile_backup_stacks` (this stack and smart-home) has its marker, so a fresh host never backs up its empty or
 half-restored state as the latest snapshot. `docker logs resticprofile` says which marker it waits for.
 
 ### Other stacks
 
 resticprofile backs up the whole host, so the helper is shared. Every stack lists its items in
 `/etc/restic-restore/stacks/<stack>.json` (`{"items": {name: {paths, containers, preserve}}}`), runs
-`restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to `stack_backup_stacks` once
+`restic-restore --runner oneoff clean-slate <stack>` before it starts, and is added to `resticprofile_backup_stacks` once
 its deployment does. Its items then work with `stage <stack>/<item>` and `apply` like this stack's. The
-smart-home stack does since TheRealArthurDent/smart-home#1, so `inventory/group_vars/all/restore_items.yaml` adds
-it to `stack_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`.
+smart-home stack does since TheRealArthurDent/smart-home#1, so `inventory/group_vars/all/backup.yaml` adds
+it to `resticprofile_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`.
 
 ### Monthly drill (every host)
 
@@ -348,8 +358,8 @@ sudo restic-restore drill                                  # run it now, e.g. af
 sudo restic-restore drill --read-data-subset 1/1           # read all of the data (slow)
 ```
 
-The schedule and the number of parts are in `stack_restore_drill` (stack role defaults). On a host that is often
-switched off on the 1st, set `stack_restore_drill_enabled: false` (testbed has it in
+The schedule and the number of parts are in `resticprofile_restore_drill` (resticprofile role defaults). On a host that is often
+switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbed has it in
 `inventory/host_vars/testbed.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
 still works there by hand, without recording a result.
 

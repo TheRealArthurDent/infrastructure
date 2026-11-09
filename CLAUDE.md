@@ -25,6 +25,10 @@ Never push from a clone of raspberry: it would bring back the old history. The h
 - `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`,
   `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`,
   `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
+- `ansible/roles/` – besides host roles (`ssh`, `base`, `docker`, `secrets`, `argon_fan`, `certificate_check`), the stack
+  components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile` and `healthmonitor`, each
+  with its compose fragment (`templates/docker-compose.yaml.j2`); `stack` merges them, restores and runs
+  `docker compose up`. `stack_components` (default: all seven) switches them per host in `host_vars`.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets, repo hygiene)
 - `.claude/` – Claude Code settings, the guard hook (`hooks/guard.py`) and skills
@@ -75,7 +79,7 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
 
 - Commit messages: conventional style (`feat:`, `fix:`, `test:`, `chore:`), referencing issues (`Refs #5`).
 - Never commit or push to `main`. Branch off `main` and open a PR into `main`; the user merges.
-- Container images in `ansible/roles/stack/templates/docker-compose.yaml.j2` are pinned and updated by Renovate
+- Container images in `ansible/roles/<component>/templates/docker-compose.yaml.j2` are pinned and updated by Renovate
   (`renovate.json` points its docker-compose manager at the template); keep them pinned.
 - Work test-driven, unless something speaks against it (then say why). Write the test first and watch it fail
   for the right reason before changing the code: pytest for Python, `verify.yaml` checks for Ansible roles,
