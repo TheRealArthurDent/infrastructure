@@ -33,6 +33,18 @@ EXPECTED = {
         "dhparameter_bits": 2048,
         "resticprofile_restore_drill_enabled": False,
     },
+    "dungeon": {
+        "ansible_host": "192.168.1.5",
+        "ansible_port": 1359,
+        "ansible_user": "dragon",
+        "ansible_ssh_private_key_file": "~/.ssh/id_ed25519",
+        "ansible_become": True,
+        "dhparameter_bits": 4096,
+        "keepass_database": "dungeon",
+        "base_dns_servers": ["192.168.1.2"],
+        "docker_daemon_dns": ["192.168.1.2"],
+        "base_rsnapshot_enabled": False,
+    },
 }
 
 

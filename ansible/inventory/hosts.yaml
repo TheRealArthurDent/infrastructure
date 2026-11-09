@@ -9,3 +9,7 @@ all:
       ansible_host: 192.168.1.7
       ansible_port: 4242
       ansible_user: testuser
+    dungeon:
+      ansible_host: 192.168.1.5
+      ansible_port: 1359
+      ansible_user: dragon

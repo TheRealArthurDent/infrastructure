@@ -1,0 +1,10 @@
+---
+# Second Pi, runs the stack components without Pi-hole. It resolves through raspi's Pi-hole; no rsnapshot, no
+# Argon case (argon_fan_enabled stays off).
+dhparameter_bits: 4096
+keepass_database: dungeon
+base_dns_servers:
+  - 192.168.1.2
+docker_daemon_dns:
+  - 192.168.1.2
+base_rsnapshot_enabled: false

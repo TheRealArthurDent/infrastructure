@@ -32,6 +32,7 @@
     state: present
     update_cache: true
     cache_valid_time: 86400
+  when: base_rsnapshot_enabled | bool
 
 - name: Provision config files
   block:
@@ -61,6 +62,7 @@
         owner: root
         group: root
         mode: '0644'
+      when: base_rsnapshot_enabled | bool
 
     # weekly runs before daily so the two never overlap on Sundays (rsnapshot shares one lockfile, raspberry#232)
     - name: Ensure cron job "rsnapshot daily" exists
@@ -69,6 +71,7 @@
         minute: "0"
         hour: "2"
         job: "rsnapshot daily"
+      when: base_rsnapshot_enabled | bool
     - name: Ensure cron job "rsnapshot weekly" exists
       ansible.builtin.cron:
         name: "rsnapshot weekly"
@@ -76,3 +79,4 @@
         hour: "1"
         weekday: "0"
         job: "rsnapshot weekly"
+      when: base_rsnapshot_enabled | bool
