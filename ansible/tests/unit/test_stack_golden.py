@@ -9,7 +9,7 @@ import shutil
 import pytest
 import yaml
 
-from render import ANSIBLE_DIR, rendered_tree
+from render import ANSIBLE_DIR, RENDER_DESTS, ROLE_TASKS, role_task, rendered_tree
 
 GOLDEN = ANSIBLE_DIR / "tests" / "unit" / "golden"
 
@@ -30,3 +30,17 @@ def test_rendered_output_matches_golden_files(tmp_path, host):
             assert yaml.safe_load(content) == yaml.safe_load(golden[name]), name
         else:
             assert content == golden[name], name
+
+
+@pytest.mark.parametrize("task_file,name,module", ROLE_TASKS, ids=[t[1] for t in ROLE_TASKS])
+def test_render_reuses_the_role_tasks(task_file, name, module):
+    # The golden files only cover the role if render.py finds these tasks: a rename must fail here, not drop them.
+    task = role_task(task_file, name)
+    assert module in task, f"{name} no longer uses {module}"
+    if module == "ansible.builtin.copy":
+        assert task[module]["dest"] in RENDER_DESTS, f"{name}: dest {task[module]['dest']} unknown to render.py"
+
+
+def test_role_task_fails_on_a_missing_task():
+    with pytest.raises(LookupError):
+        role_task("stack/tasks/main.yaml", "No such task")

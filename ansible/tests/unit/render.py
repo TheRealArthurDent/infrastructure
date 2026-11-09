@@ -20,6 +20,55 @@ DUNGEON_IP = "192.0.2.10"
 DUNGEON_SSH_PORT = 1359
 
 
+# Role tasks the render reuses: (task file, task name, module) -> what the render keeps of them
+ROLE_TASKS = [
+    ("stack/tasks/main.yaml", "Merge the compose fragments of the components", "ansible.builtin.set_fact"),
+    ("stack/tasks/main.yaml", "Ensure the compose file is present", "ansible.builtin.copy"),
+    ("resticprofile/tasks/restore.yaml", "Ensure the restore helper host config is present", "ansible.builtin.copy"),
+    (
+        "resticprofile/tasks/restore.yaml",
+        "Ensure the restore items of this stack are listed for the helper",
+        "ansible.builtin.copy",
+    ),
+]
+# Where the render writes what the copy tasks write on the host, relative to its output directory
+RENDER_DESTS = {
+    "{{ stack_compose_dir }}/docker-compose.yaml": "docker-compose.yaml",
+    "/etc/restic-restore/config.json": "restic-restore/config.json",
+    "/etc/restic-restore/stacks/{{ stack_project_name }}.json": "restic-restore/stacks/{{ stack_project_name }}.json",
+}
+
+
+def role_task(task_file, name):
+    """The task called name in roles/<task_file>, searched in blocks too."""
+    pending = list(yaml.safe_load((ROLES_DIR / task_file).read_text()))
+    while pending:
+        task = pending.pop(0)
+        if task.get("name") == name:
+            return task
+        for key in ("block", "rescue", "always"):
+            pending[:0] = task.get(key, [])
+    raise LookupError(f"no task {name!r} in roles/{task_file}")
+
+
+def role_tasks(out):
+    """The ROLE_TASKS with their expressions verbatim; dest goes to out, role_path | dirname to the roles dir."""
+    tasks = []
+    for task_file, name, module in ROLE_TASKS:
+        task = role_task(task_file, name)
+        rendered = {"name": name, module: dict(task[module])}
+        if "vars" in task:
+            rendered["vars"] = task["vars"]
+        if module == "ansible.builtin.copy":
+            dest = RENDER_DESTS[task[module]["dest"]]
+            rendered[module] = {"content": task[module]["content"], "dest": f"{out}/{dest}"}
+        # yaml round trip so nested strings get the same replacement
+        text = yaml.safe_dump(rendered).replace("role_path | dirname", repr(str(ROLES_DIR)))
+        assert "role_path" not in text, f"{name}: role_path left that the render can't resolve"
+        tasks.append(yaml.safe_load(text))
+    return tasks
+
+
 def component_templates():
     """(component, template path relative to its templates/) of every config template, not the compose fragments."""
     return [
@@ -67,62 +116,7 @@ def rendered_tree(tmp_path, host):
                 "loop": templates,
                 "when": "item.component in stack_components",
             },
-            # The same expressions as roles/stack/tasks/main.yaml, with the roles directory for role_path | dirname
-            {
-                "name": "Merge the compose fragments of the components",
-                "ansible.builtin.set_fact": {"stack_compose_definition": (
-                    "{{ (query('ansible.builtin.template', *stack_compose_fragments)"
-                    " | map('ansible.builtin.from_yaml') | list\n"
-                    "    + [stack_compose_networks])\n"
-                    "   | compose_merge }}"
-                )},
-                "vars": {"stack_compose_fragments": (
-                    "{{ stack_components\n"
-                    "   | map('ansible.builtin.regex_replace', '^(.+)$',\n"
-                    f"         '{ROLES_DIR}' ~ '/\\1/templates/docker-compose.yaml.j2')\n"
-                    "   | list }}"
-                )},
-            },
-            {
-                "name": "Render the compose file",
-                "ansible.builtin.copy": {
-                    "content": (
-                        "# Merged by the stack role from the components' compose fragments (#14). Don't edit, run the"
-                        " playbook.\n"
-                        "{{ stack_compose_definition | ansible.builtin.to_nice_yaml(indent=2) }}"
-                    ),
-                    "dest": f"{out}/docker-compose.yaml",
-                },
-            },
-            # The same expressions as roles/resticprofile/tasks/restore.yaml
-            {
-                "name": "Render the restore helper host config",
-                "ansible.builtin.copy": {
-                    "content": "{{ resticprofile_restore_config | to_nice_json }}\n",
-                    "dest": f"{out}/restic-restore/config.json",
-                },
-                "vars": {"resticprofile_restore_config": {
-                    "stacks_dir": "/etc/restic-restore/stacks",
-                    "state_dir": "{{ resticprofile_restore_state_dir }}",
-                    "source_mounts": "{{ resticprofile_restore_source_mounts }}",
-                    "staging": "{{ resticprofile_restore_staging }}",
-                    "runners": "{{ resticprofile_restore_runners }}",
-                    "rsnapshot": "{{ resticprofile_restore_rsnapshot }}",
-                    "drill": (
-                        "{{ {'metrics': resticprofile_restore_drill.metrics,"
-                        " 'parts': resticprofile_restore_drill.parts | int,\n"
-                        "    'enabled': resticprofile_restore_drill_enabled | bool} }}"
-                    ),
-                }},
-            },
-            {
-                "name": "Render the restore items of this stack",
-                "ansible.builtin.copy": {
-                    "content": "{{ {'items': stack_restore_items} | to_nice_json }}\n",
-                    "dest": f"{out}/restic-restore/stacks/{{{{ stack_project_name }}}}.json",
-                },
-            },
-        ],
+        ] + role_tasks(out),
     }]))
     result = subprocess.run(
         ["ansible-playbook", "-i", "inventory/", "--limit", host, str(playbook)],
