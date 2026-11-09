@@ -312,6 +312,18 @@
         fail_msg: "Unexpected boot config: {{ boot_lines }}"
       vars:
         boot_lines: "{{ (boot_config.content | b64decode).splitlines() }}"
+      when: not is_dungeon
+
+    # Without the Argon case nothing enables I2C: prepare.yaml's boot config stays as planted
+    - name: Check dungeon's boot config is untouched, I2C stays off
+      ansible.builtin.assert:
+        that:
+          - "'#dtparam=i2c_arm=on' in boot_lines"
+          - boot_lines | select('match', '^dtparam=i2c_arm=') | list | length == 0
+        fail_msg: "dungeon's boot config changed: {{ boot_lines }}"
+      vars:
+        boot_lines: "{{ (boot_config.content | b64decode).splitlines() }}"
+      when: is_dungeon
 
     - name: Stat the fan control files
       ansible.builtin.stat:
