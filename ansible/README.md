@@ -104,6 +104,10 @@ ansible-playbook bootstrap.yaml --limit testbed --tags stack
 
 A second run of `bootstrap.yaml` should end with `changed=0`.
 
+When an image tag changed (a Renovate update), the dry run can't pull the new image, so Compose can't simulate
+recreating its containers. "Ensure the stack is up" then reports `changed`, and "Note the image that check mode
+couldn't pull" names the image; the real run pulls it. Any other Compose error still fails the dry run.
+
 ## Stack components
 
 The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,

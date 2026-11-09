@@ -127,5 +127,23 @@
         project_name: "{{ stack_project_name }}"
         state: present
         pull: policy
+      register: stack_compose_up
       # In check mode a missing network isn't created, and Compose would fail on the external network.
       when: not (ansible_check_mode and (stack_network_siz is changed or stack_network_outbound is changed))
+      # Compose's --dry-run only pretends to pull a new image tag, then fails to recreate the container with it
+      # ("No such image"). The real run pulls it, so in check mode only that error is tolerated, and only when
+      # every error line is about it.
+      failed_when: >-
+        stack_compose_up is failed
+        and not (ansible_check_mode
+                 and stack_compose_up.msg | default('') | length > 0
+                 and stack_compose_up.msg.splitlines() | reject('search', 'No such image') | list | length == 0)
+
+    - name: Note the image that check mode couldn't pull
+      ansible.builtin.debug:
+        msg: >-
+          Check mode can't pull new image tags, so Compose couldn't simulate recreating the containers that use
+          them. The real run pulls them. Compose said: {{ stack_compose_up.msg }}
+      when:
+        - ansible_check_mode
+        - stack_compose_up.msg | default('') is search('No such image')
