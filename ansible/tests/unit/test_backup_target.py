@@ -96,3 +96,11 @@ def test_every_client_key_is_installed_restricted(tmp_path):
         assert run.returncode == 0, run.stdout + run.stderr
     lines = (tmp_path / "authorized_keys").read_text().splitlines()
     assert sorted(lines) == sorted(f"restrict {key} {name}" for name, key in KEYS.items())
+
+
+def test_an_empty_uuid_fails_before_any_mount_task(tmp_path):
+    names = [t["name"] for t in yaml.safe_load((ANSIBLE_DIR / "roles/backup_target/tasks/main.yaml").read_text())]
+    assert names[0] == "Require at least one backup client"
+    run = run_play(tmp_path, [role_task(FILE, names[0])], {"backup_target_uuid": "", "backup_target_clients": KEYS})
+    assert run.returncode != 0, run.stdout
+    assert "backup_target_uuid" in run.stdout + run.stderr

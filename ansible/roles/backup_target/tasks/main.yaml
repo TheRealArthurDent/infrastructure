@@ -1,8 +1,12 @@
 ---
 - name: Require at least one backup client
   ansible.builtin.assert:
-    that: backup_target_clients | length > 0
-    fail_msg: backup_target_clients is empty; name the backup clients and their ssh public keys
+    that:
+      - backup_target_uuid | length > 0
+      - backup_target_clients | length > 0
+    fail_msg: >-
+      backup_target_uuid and backup_target_clients must be set (the backup SSD's UUID; the backup clients with
+      their ssh public keys)
     quiet: true
 
 - name: Check the backup SSD is plugged in
