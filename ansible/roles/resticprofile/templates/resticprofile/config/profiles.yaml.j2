@@ -16,6 +16,15 @@ default:
   lock: /tmp/resticprofile-default.lock
   repository: {{ resticprofile_repository }}
   initialize: true
+{% if resticprofile_backup_mount | length > 0 %}
+  # Profile level on purpose: resticprofile runs these before "initialize" (section-level run-before runs after it),
+  # so a missing SSD can't get a repository created on the system disk. The SSD's marker exists only while it is
+  # mounted; without it /backup is the empty directory of the system disk. Every command of the profile is guarded.
+  run-before:
+    - >-
+      [ -f /backup/{{ resticprofile_backup_marker | basename }} ]
+      || { echo "/backup/{{ resticprofile_backup_marker | basename }} is missing: the backup SSD isn't mounted"; exit 1; }
+{% endif %}
   prometheus-save-to-file: /metrics/backup.prom
   backup:
     source: '/source/'
@@ -30,12 +39,6 @@ default:
     schedule-lock-wait: 30m
     check-before: true
     run-before:
-{% if resticprofile_backup_mount | length > 0 %}
-      # The SSD's marker exists only while it is mounted; without it /backup is the empty directory of the system disk
-      - >-
-        [ -f /backup/{{ resticprofile_backup_marker | basename }} ]
-        || { echo "/backup/{{ resticprofile_backup_marker | basename }} is missing: the backup SSD isn't mounted"; exit 1; }
-{% endif %}
       - rm -f /metrics/backup.prom
     run-after:
       # Runs after backup and retention succeeded. Survives a failed run (backup.prom is deleted by

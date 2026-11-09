@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_DIR = Path(__file__).parents[3]
 COMPOSE_FRAGMENTS = sorted(
@@ -32,3 +33,11 @@ def test_renovate_updates_the_compose_fragments(fragment):
     config = json.loads((REPO_DIR / "renovate.json").read_text())
     patterns = config.get("docker-compose", {}).get("managerFilePatterns", [])
     assert any(matches(p, fragment) for p in patterns), patterns
+
+
+@pytest.mark.parametrize("fragment", COMPOSE_FRAGMENTS)
+def test_compose_fragments_are_valid_yaml(fragment):
+    # Renovate parses the fragments as they are, Jinja and all: a {% if %} line of its own breaks that and Renovate
+    # silently stops finding the images. Conditions go into YAML comments ("# {% if ... +%}").
+    compose = yaml.safe_load((REPO_DIR / fragment).read_text())
+    assert compose["services"]

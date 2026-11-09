@@ -31,8 +31,12 @@ def test_local_repository_mounts_the_backup_ssd(tmp_path):
 
 def test_local_repository_backup_fails_without_the_ssd_marker(tmp_path):
     profiles = yaml.safe_load(rendered_tree(tmp_path, "raspi", LOCAL)["resticprofile/config/profiles.yaml"])
-    run_before = profiles["default"]["backup"]["run-before"]
+    # Profile level: resticprofile 0.33.1 runs the profile's run-before, then "initialize" (restic init), then the
+    # section's run-before. A guard in the backup section would come after init created the repository.
+    run_before = profiles["default"]["run-before"]
     assert any("/backup/.backup-ssd" in command and "exit 1" in command for command in run_before), run_before
+    assert profiles["default"]["initialize"] is True
+    assert not any(".backup-ssd" in c for c in profiles["default"]["backup"]["run-before"])
 
 
 def test_local_repository_profile(tmp_path):
@@ -48,7 +52,7 @@ def test_sftp_repository_keeps_the_ssh_parts(tmp_path):
     assert not any(isinstance(v, dict) for v in resticprofile["volumes"])
     profiles = yaml.safe_load(tree["resticprofile/config/profiles.yaml"])
     assert profiles["default"]["repository"] == "sftp:restic@dungeon:/media/backup/restic/raspi"
-    assert not any(".backup-ssd" in c for c in profiles["default"]["backup"]["run-before"])
+    assert "run-before" not in profiles["default"]
 
 
 def run_restore_check(tmp_path, marker, mount, check):
