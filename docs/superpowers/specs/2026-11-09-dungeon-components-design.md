@@ -167,9 +167,13 @@ A host-level component `backup_target`, on for dungeon: everything a fresh dunge
   root disk. `authorized_keys` from `backup_target_clients` in `host_vars/dungeon.yaml` (client name -> public
   key, e.g. raspi's `resticprofile` key), each with `restrict`. Public keys only, so they can live in the repo.
 - `/media/backup/restic` owned by `restic`, 0700, created only below the marker check.
-- `init-restic.sh` on raspi (ssh-copy-id, needs a password login that the ssh role turns off) is replaced.
-  Open (Mika): either raspi's restic key pair comes from KeePass (stable across a rebuild, so dungeon never needs a
-  change), or the raspi run prints a new public key to put into `backup_target_clients` and run dungeon again.
+- `init-restic.sh` on raspi (ssh-copy-id, needs a password login that the ssh role turns off) goes away. Decided
+  (Mika, 2026-11-09): each sftp client's restic key pair lives in its KeePass database (raspi: today's key from
+  `/etc/docker/infrastructure/resticprofile/.ssh/`, so dungeon's current `authorized_keys` stays valid; testbed: its
+  own entry). The `secrets` role writes it instead of generating one, so a rebuilt raspi has the same key and dungeon
+  never changes. The public keys go into `backup_target_clients` in `host_vars/dungeon.yaml` (dungeon's run can't
+  read raspi's database). Entry name: a host variable, default `Backup/Resticprofile SSH` with attachments
+  `id_ed25519` and `id_ed25519.pub`.
 
 ### Takeover of dungeon (PR 2, by Mika)
 
