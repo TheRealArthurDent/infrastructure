@@ -14,7 +14,8 @@ repo. One Ansible code base for both hosts ends the drift; the fork can be archi
 
 - dungeon is in the inventory and set up by the same `bootstrap.yaml` (one playbook, `--limit dungeon`).
 - The `stack` role is split into components, switched on or off per host in `host_vars`.
-- dungeon gets: reverse proxy (nginx), portainer, resticprofile, healthmonitor. Not: Pi-hole, outbound, unbound.
+- dungeon gets: reverse proxy (nginx), portainer, resticprofile, healthmonitor, outbound + unbound (revised by
+  Mika 2026-11-09: containers' egress DNS filter on dungeon too). Not: the LAN Pi-hole.
 - dungeon backs up to itself, onto its external SSD at `/media/backup`, repository `/media/backup/restic/dungeon`.
 - The backup never writes to the system disk when the SSD is missing.
 
@@ -66,10 +67,11 @@ repo. One Ansible code base for both hosts ends the drift; the fork can be archi
 
 ### Components and selection
 
-- Component roles: `reverse_proxy` (nginx), `portainer`, `pihole` (pihole + unbound + outbound, they only make sense
-  together), `resticprofile` (incl. the restic-restore helper and restore drill), `healthmonitor`.
+- Component roles: `reverse_proxy` (nginx), `portainer`, `unbound` (recursive resolver), `pihole` (the LAN Pi-hole,
+  port 53), `outbound` (the containers' egress DNS filter), `resticprofile` (incl. the restic-restore helper and
+  restore drill), `healthmonitor`. `pihole` and `outbound` need `unbound` (asserted).
 - `stack_components` lists the enabled ones. Default in `group_vars/all`: all five (raspi, testbed unchanged).
-  `host_vars/dungeon.yaml`: `[reverse_proxy, portainer, resticprofile, healthmonitor]`.
+  `host_vars/dungeon.yaml`: `[reverse_proxy, portainer, unbound, outbound, resticprofile, healthmonitor]`.
 - `bootstrap.yaml` keeps one `stack` entry tagged `stack`; the `stack` role includes the enabled component roles
   itself, so the playbook and `--tags stack` work as before.
 - Each component role has `templates/docker-compose.yaml.j2` with its services (plus its volumes/secrets). `stack`
@@ -89,14 +91,23 @@ as parsed YAML. The golden files only change in a commit that says why.
 ### reverse_proxy
 
 - `nginx.conf.j2` keeps today's server blocks, each wrapped in a condition on `reverse_proxy_vhosts` (default: all
-  of today's, raspi byte-identical). dungeon: `[portainer]` plus the host vhost and the health endpoint.
-- The `pihole`/`outbound` vhosts only render with the `pihole` component.
-- `certificate_check_subdomains` for dungeon in `host_vars`: `portainer`.
+  of today's, raspi byte-identical). dungeon: `[portainer, outbound]` plus the host vhost and the health endpoint.
+- The `pihole` vhost only renders with the `pihole` component, the `outbound` vhost only with `outbound`.
+- `certificate_check_subdomains` for dungeon in `host_vars`: `portainer`, `outbound`.
 
-### pihole
+### pihole, outbound, unbound
 
-- Owns the `.env`/`.outbound.env` files (moved out of `secrets`), the `outbound_pihole` volume and its restore item.
-- `healthmonitor` uses the outbound Pi-hole as DNS only when this component is enabled; otherwise the daemon DNS.
+- `pihole` owns `.env` and its restore item; `outbound` owns `.outbound.env` and the `outbound_pihole` volume;
+  `unbound` is the shared upstream of both.
+- How outbound works (for the record): it publishes no port, so LAN devices never use it. It is the DNS server of
+  the containers that set `dns: 172.30.1.153` (healthmonitor; smart-home's containers on the `outbound` network),
+  and it denies every name not on its allow list. It filters names only; a container that connects to an IP
+  directly isn't stopped.
+- On dungeon `healthmonitor` keeps `dns: 172.30.1.153`, same as raspi. Later apps (OpenCloud) get the same.
+- `setup-pihole.yaml --limit dungeon` provisions dungeon's outbound through `https://outbound.dungeon`: the
+  instance list in `configs/pihole.yaml` becomes per host (raspi: `pihole`, `outbound`; dungeon: `outbound`), and
+  dungeon's allow list starts with what healthmonitor needs (Discord). dungeon's nginx gets the `outbound` vhost
+  and the certificate the `outbound` SAN. KeePass (dungeon's database): `smart-home/outbound`, same name as raspi.
 
 ### resticprofile
 
@@ -116,8 +127,7 @@ as parsed YAML. The golden files only change in a commit that says why.
 
 ### healthmonitor
 
-- Owns `.healthmonitor.env`. On dungeon it reaches the internet through the `outbound` network, which there is a
-  plain bridge without the Pi-hole egress filter.
+- Owns `.healthmonitor.env`. Uses the outbound Pi-hole as DNS on both hosts.
 
 ### Host roles on dungeon
 
@@ -151,7 +161,7 @@ lives only in raspi's database.
   every stored one: Windows credential `<name>-keepass` (`raspberry-keepass` as today). `--store`/`--forget` take
   the database name (`bin/with-keepass --store dungeon`), default `raspberry`. No `--limit` parsing needed.
 - dungeon's database uses the same group/title names as raspi's. It needs: `Backup/Resticprofile` (field
-  `passphrase`) and `Discord/Docker Webhook` (fields `id`, `token`). testbed's own webhook is a new entry in raspi's
+  `passphrase`), `Discord/Docker Webhook` (fields `id`, `token`) and `smart-home/outbound` (password). testbed's own webhook is a new entry in raspi's
   database (`Discord/Docker Webhook testbed`), selected by a host variable.
 - `check-certificates.yaml` reads the root CA from `keepass_ca_database` only, never from the host's database.
   Moving the root CA into a database of its own (#10) then only changes `keepass_ca_database`.
@@ -206,7 +216,7 @@ ONE V2 daemon (I2C 0x1a) doesn't apply. Decided (Mika, 2026-11-09): keep the Pi 
 4. **Backup access**: nothing to do on dungeon (local repository).
 5. **Certificate and stack**: as for raspi. The clean-slate restore reads dungeon's repository on the SSD
    (portainer). The dry run names the snapshot; the marker check stops it if the SSD is gone.
-6. **Pi-hole**: skipped (no Pi-hole on dungeon).
+6. **Pi-hole**: `setup-pihole.yaml --limit dungeon` provisions dungeon's outbound (no LAN Pi-hole there).
 7. **Apps**: OpenCloud etc. from their own repo, later.
 
 A lost SSD loses dungeon's and raspi's backups; restoring dungeon then needs the off-site copy, which isn't part of
