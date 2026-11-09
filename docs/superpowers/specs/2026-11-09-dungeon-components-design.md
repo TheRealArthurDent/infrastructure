@@ -204,4 +204,4 @@ includes the components, test layout, commit slicing inside each PR.
   role installs nothing new.
 - Below the mount point on the root disk: root-owned `/media/backup` (0755) with a stale `rsnapshot/` from
   2026-03-13 (Mika's hand-made rsnapshot once ran without the SSD). `restic` can't write there.
-- Still needed: `id restic` on dungeon (UID/GID to pin).
+- `restic` on dungeon: uid=1002, gid=1002 (group `restic`, no other groups); the role pins these.
