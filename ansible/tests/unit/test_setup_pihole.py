@@ -141,7 +141,7 @@ def keepass(tmp_path_factory, pki):
     keyfile.write_bytes(os.urandom(64))
     db = directory / "test.kdbx"
     kp = create_database(str(db), password=KEEPASS_PASSWORD, keyfile=str(keyfile))
-    smart_home = kp.add_group(kp.root_group, "smart-home")
+    smart_home = kp.add_group(kp.root_group, "Pihole")
     kp.add_entry(smart_home, "pihole", "", PIHOLE_PASSWORD)
     kp.add_entry(smart_home, "outbound", "", OUTBOUND_PASSWORD)
     domain = kp.add_group(kp.root_group, "Domain")

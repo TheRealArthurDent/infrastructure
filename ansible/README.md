@@ -93,17 +93,21 @@ Group/title, with the fields the roles read:
 
 | Database | Entry | Content |
 | --- | --- | --- |
-| `dungeon` | `Backup/Resticprofile` | field `passphrase` (dungeon's own restic repository) |
+| `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository |
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (a webhook of its own, so Discord shows which host wrote) |
-| `dungeon` | `smart-home/outbound` | password of dungeon's outbound Pi-hole |
+| `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `raspberry` | `Backup/Resticprofile SSH` | attachments `id_ed25519` and `id_ed25519.pub`: raspi's restic key pair |
 | `raspberry` | `Backup/Resticprofile SSH testbed` | the same for testbed |
 | `raspberry` | `Discord/Docker Webhook testbed` | fields `id` and `token` of testbed's webhook |
 
-raspi's other entries (`Backup/Resticprofile`, `Discord/Docker Webhook`, `smart-home/...`, `Backup/Dungeon` with the
+| `raspberry` | `Backup/Resticprofile` | password: the passphrase of raspi's restic repository |
+| `raspberry` | `Backup/Resticprofile testbed` | password: the passphrase of testbed's restic repository (throwaway) |
+| `raspberry` | `Pihole/pihole`, `Pihole/outbound` | passwords of raspi's and testbed's Pi-holes |
+
+raspi's other entries (`Discord/Docker Webhook`, `smart-home/...` for the smart-home stack, `Backup/Dungeon` with the
 field `ssh-port`) are the existing ones. dungeon's database holds nothing of the smart-home stack. The entry titles
-are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`; testbed sets its own in
-`host_vars/testbed.yaml`).
+are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`;
+testbed sets its own in `host_vars/testbed.yaml`).
 
 #### Put the restic key pairs into KeePass
 

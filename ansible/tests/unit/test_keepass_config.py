@@ -200,3 +200,26 @@ def test_restic_key_pair_comes_from_the_hosts_entry():
         assert "title=resticprofile_ssh_key_title" in value, name
         assert "group='Backup'" in value, name
         assert f"attachment='{attachment}'" in value, name
+
+
+def test_pihole_passwords_come_from_the_pihole_group():
+    # Both Pi-hole instances belong to the infrastructure, not to the smart-home stack.
+    facts = keepass_facts()
+    for name, title in (("pihole_password", "pihole"), ("outbound_password", "outbound")):
+        value = " ".join(str(facts[name]).split())
+        assert f"group='Pihole', title='{title}'" in value, name
+        assert "field=" not in value, name
+
+
+def test_restic_passphrase_is_the_entrys_password():
+    value = " ".join(str(keepass_facts()["restic_passphrase"]).split())
+    assert "group='Backup', title=resticprofile_passphrase_title" in value
+    assert "field=" not in value
+
+
+def test_testbed_has_its_own_restic_passphrase():
+    # testbed's repository is throwaway: its own passphrase, so changing raspi's doesn't touch it
+    testbed = yaml.safe_load((ANSIBLE_DIR / "inventory" / "host_vars" / "testbed.yaml").read_text())
+    defaults = yaml.safe_load((ANSIBLE_DIR / "roles" / "secrets" / "defaults" / "main.yaml").read_text())
+    assert defaults["resticprofile_passphrase_title"] == "Resticprofile"
+    assert testbed["resticprofile_passphrase_title"] == "Resticprofile testbed"

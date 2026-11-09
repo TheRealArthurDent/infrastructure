@@ -45,11 +45,11 @@
       ansible.builtin.set_fact:
         pihole_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home', title='pihole')
+                    group='Pihole', title='pihole')
              if 'pihole' in stack_components else '' }}
         outbound_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='smart-home', title='outbound')
+                    group='Pihole', title='outbound')
              if 'outbound' in stack_components else '' }}
         discord_docker_webhook_id: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
@@ -61,7 +61,7 @@
              if 'healthmonitor' in stack_components else '' }}
         restic_passphrase: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Backup', title='Resticprofile', field='passphrase')
+                    group='Backup', title=resticprofile_passphrase_title)
              if 'resticprofile' in stack_components else '' }}
         resticprofile_ssh_private_key: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,

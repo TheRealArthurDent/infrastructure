@@ -6,7 +6,7 @@
 - name: Get the Pi-hole password from KeePass
   ansible.builtin.set_fact:
     pihole_password: "{{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                                group='smart-home', title=pihole_instance.keepass_title
+                                group='Pihole', title=pihole_instance.keepass_title
                                 | default(pihole_instance.name)) }}"
   no_log: true
 

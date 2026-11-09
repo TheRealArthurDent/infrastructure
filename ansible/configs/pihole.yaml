@@ -2,7 +2,7 @@
 # Pi-hole configuration, one entry per instance, synced by setup-pihole.yaml through each instance's API.
 #
 # name: the instance; its API is reached at https://<name>.<inventory_hostname>, its password is the KeePass
-#   entry smart-home/<name>. host, port and keepass_title override those defaults.
+#   entry Pihole/<name>. host, port and keepass_title override those defaults.
 # a_records, cname_records, block_lists: always synced; an empty list removes everything.
 # groups, clients, domains: synced only when the list is defined. Leave a list out (or set it to null) to leave
 #   that part to the web interface. The Default group always exists and is not managed here. Groups are
