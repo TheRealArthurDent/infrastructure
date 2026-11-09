@@ -81,43 +81,43 @@
         iobroker_states_redis_port: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/ioBroker', title='States Redis', field='port')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         iobroker_objects_redis_port: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/ioBroker', title='Objects Redis', field='port')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         influxdb_admin_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/Influx DB', title='Influx admin')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         influxdb_read_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/Influx DB', title='Influx read')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         influxdb_write_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/Influx DB', title='Influx write')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         grafana_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home', title='Grafana')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         mosquitto_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home', title='mosquitto')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         deconz_vnc_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/deconz - Phoscon-GW', title='Deconz VNC')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         nodered_github_user: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='GitHub', title='NodeRed', field='username')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
         nodered_github_email: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='GitHub', title='NodeRed', field='email')
-             if secrets_smart_home_env else '' }}
+             if secrets_smart_home_env | bool else '' }}
       no_log: true
       tags: always
 

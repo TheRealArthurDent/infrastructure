@@ -171,7 +171,7 @@ LOOKUP_CONDITIONS = {
     "resticprofile_ssh_private_key": SFTP,
     "resticprofile_ssh_public_key": SFTP,
     "dungeon_ssh_port": SFTP,
-    **{key: "secrets_smart_home_env" for key in SMART_HOME_KEYS},
+    **{key: "secrets_smart_home_env | bool" for key in SMART_HOME_KEYS},
 }
 
 
