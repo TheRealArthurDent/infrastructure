@@ -21,10 +21,10 @@ import pytest
 import yaml
 
 ANSIBLE_DIR = Path(__file__).parents[2]
-HELPER = ANSIBLE_DIR / "roles" / "stack" / "files" / "restic-restore"
-STACK_DEFAULTS = ANSIBLE_DIR / "roles" / "stack" / "defaults" / "main.yaml"
+HELPER = ANSIBLE_DIR / "roles" / "resticprofile" / "files" / "restic-restore"
+RESTICPROFILE_DEFAULTS = ANSIBLE_DIR / "roles" / "resticprofile" / "defaults" / "main.yaml"
 RSNAPSHOT_CONF = ANSIBLE_DIR / "roles" / "base" / "files" / "etc" / "rsnapshot.conf"
-COMPOSE = ANSIBLE_DIR / "roles" / "stack" / "templates" / "docker-compose.yaml.j2"
+COMPOSE = ANSIBLE_DIR / "roles" / "resticprofile" / "templates" / "docker-compose.yaml.j2"
 
 pytestmark = pytest.mark.skipif(
     not (shutil.which("restic") and shutil.which("rsync")), reason="needs restic and rsync (CI installs them)"
@@ -174,31 +174,31 @@ def test_snapshot_path_does_not_match_a_sibling_with_the_same_prefix():
 
 
 def test_default_source_mounts_match_the_resticprofile_container():
-    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
     mounts = {}
     for volume in service["volumes"]:
         host, container = volume.split(":")[:2]
         if container.startswith("/source/"):
             mounts[host] = container
-    assert defaults["stack_restore_source_mounts"] == mounts
+    assert defaults["resticprofile_restore_source_mounts"] == mounts
 
 
 def test_default_staging_matches_the_restore_target_mount():
-    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
-    staging = defaults["stack_restore_staging"]
+    staging = defaults["resticprofile_restore_staging"]
     assert f"{staging['host']}:{staging['restic']}:rw" in service["volumes"]
 
 
 def test_resticprofile_schedules_backups_only_after_every_stack_is_restored():
-    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
     mounts = dict(v.split(":")[:2] for v in service["volumes"])
-    assert mounts[defaults["stack_restore_state_dir"]] == "/restore-state", "the marker directory is mounted"
-    assert defaults["stack_backup_stacks"] == ["{{ stack_project_name }}"]
+    assert mounts[defaults["resticprofile_restore_state_dir"]] == "/restore-state", "the marker directory is mounted"
+    assert defaults["resticprofile_backup_stacks"] == ["{{ stack_project_name }}"]
     script = service["command"][-1]
-    loop = script.index("for stack in {{ stack_backup_stacks | join(' ') }}; do")
+    loop = script.index("for stack in {{ resticprofile_backup_stacks | join(' ') }}; do")
     wait = script.index("while [ ! -f /restore-state/$$stack.done ]")
     assert loop < wait < script.index("resticprofile schedule")
 
@@ -865,14 +865,14 @@ def test_clean_without_staging_dir_does_nothing(env):
 
 
 def test_default_rsnapshot_config_matches_rsnapshot_conf():
-    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     conf = [line.split() for line in RSNAPSHOT_CONF.read_text().splitlines() if line and not line.startswith("#")]
     root = next(fields[1] for fields in conf if fields[0] == "snapshot_root")
     backups = {fields[1]: fields[2] for fields in conf if fields[0] == "backup"}
-    rsnapshot = defaults["stack_restore_rsnapshot"]
+    rsnapshot = defaults["resticprofile_restore_rsnapshot"]
     assert PurePosixPath(root) == PurePosixPath(rsnapshot["root"])
     # Every restic source mount is also in the local copy, below the same destination
-    for host in defaults["stack_restore_source_mounts"]:
+    for host in defaults["resticprofile_restore_source_mounts"]:
         assert backups[f"{host}/"] == f"{rsnapshot['host']}/"
 
 
@@ -978,10 +978,10 @@ def test_drill_failure_keeps_the_time_of_the_last_success(env):
 
 
 def test_drill_metrics_go_to_the_metrics_mount_of_the_resticprofile_container():
-    defaults = yaml.safe_load(STACK_DEFAULTS.read_text())
+    defaults = yaml.safe_load(RESTICPROFILE_DEFAULTS.read_text())
     service = yaml.safe_load(COMPOSE.read_text())["services"]["resticprofile"]
     mounts = dict(v.split(":")[:2] for v in service["volumes"])
-    metrics = PurePosixPath(defaults["stack_restore_drill"]["metrics"])
+    metrics = PurePosixPath(defaults["resticprofile_restore_drill"]["metrics"])
     assert mounts[str(metrics.parent)] == "/metrics"
     assert f"/metrics/{metrics.name}" in service["healthcheck"]["test"][-1]
 

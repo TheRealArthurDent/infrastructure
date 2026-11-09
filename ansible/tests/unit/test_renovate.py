@@ -1,15 +1,19 @@
 """Renovate keeps the stack's pinned images up to date (raspberry#238).
 
-The compose file only exists as the stack role's Jinja template, which Renovate's docker-compose manager does not
-pick up by default.
+The compose file only exists as the components' Jinja fragments (roles/<component>/templates/docker-compose.yaml.j2),
+which Renovate's docker-compose manager does not pick up by default.
 """
 import fnmatch
 import json
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_DIR = Path(__file__).parents[3]
-COMPOSE_TEMPLATE = "ansible/roles/stack/templates/docker-compose.yaml.j2"
+COMPOSE_FRAGMENTS = sorted(
+    str(p.relative_to(REPO_DIR)) for p in (REPO_DIR / "ansible" / "roles").glob("*/templates/docker-compose.yaml.j2")
+)
 
 
 def matches(pattern, path):
@@ -19,7 +23,12 @@ def matches(pattern, path):
     return fnmatch.fnmatch(path, pattern)
 
 
-def test_renovate_updates_the_compose_template():
+def test_there_are_compose_fragments():
+    assert COMPOSE_FRAGMENTS
+
+
+@pytest.mark.parametrize("fragment", COMPOSE_FRAGMENTS)
+def test_renovate_updates_the_compose_fragments(fragment):
     config = json.loads((REPO_DIR / "renovate.json").read_text())
     patterns = config.get("docker-compose", {}).get("managerFilePatterns", [])
-    assert any(matches(p, COMPOSE_TEMPLATE) for p in patterns), patterns
+    assert any(matches(p, fragment) for p in patterns), patterns

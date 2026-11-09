@@ -1,0 +1,11 @@
+---
+# Restored from the backup on a fresh host; the format is described at stack_restore_items (stack role defaults).
+portainer_restore_items:
+  portainer:
+    paths:
+      - /etc/docker/infrastructure/portainer/data
+    containers: [portainer]
+    preserve: []
+    note: >-
+      To be removed later: the data belongs in a docker volume (TODO in docker-compose.yaml), and its content
+      is probably not important.

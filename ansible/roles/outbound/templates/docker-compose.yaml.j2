@@ -1,0 +1,35 @@
+services:
+  outbound:
+    hostname: outbound
+    container_name: outbound
+    image: pihole/pihole:2026.09.0
+    env_file:
+      - /etc/docker/infrastructure/.outbound.env
+    environment:
+      TZ: 'Europe/Berlin'
+      FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
+      FTLCONF_dns_listeningMode: 'ALL'  # Answer on every network, their interface order can change (SINGLE broke DNS)
+      FTLCONF_dns_dnssec: 'true'
+      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
+    # Only a cache: setup-pihole.yaml provisions this Pi-hole, so the volume isn't backed up. It keeps the egress
+    # filter closed when the container is recreated; an empty Pi-hole would allow everything (raspberry#293).
+    volumes:
+      - outbound_pihole:/etc/pihole
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    #cap_add:
+    #  - NET_ADMIN
+    restart: unless-stopped
+    networks:
+      outbound:
+        ipv4_address: 172.30.1.153
+      siz: {}
+    dns:
+      - 127.0.0.1
+      - 172.30.2.52
+      - 9.9.9.9
+    depends_on:
+      - unbound
+volumes:
+  outbound_pihole:
+    name: outbound_pihole

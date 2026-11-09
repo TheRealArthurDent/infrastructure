@@ -1,0 +1,3 @@
+---
+# healthmonitor needs nothing on the host besides its compose fragment (templates/docker-compose.yaml.j2).
+[]

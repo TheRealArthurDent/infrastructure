@@ -1,0 +1,16 @@
+services:
+  # portainer
+  portainer:
+    hostname: portainer
+    container_name: portainer
+    image: portainer/portainer-ce:2.45.2-alpine
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/docker/infrastructure/portainer/data:/data  # TODO move to storage
+    environment:
+      - TRUSTED_ORIGINS=https://portainer.{{ inventory_hostname }}
+    networks:
+      - siz
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "--no-check-certificate", "http://localhost:9000" ]

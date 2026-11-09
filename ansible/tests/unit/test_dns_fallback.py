@@ -43,6 +43,6 @@ def test_base_is_the_first_role_after_ssh_in_bootstrap():
 # On a fresh Pi without Pi-hole, the Fritzbox answers for dungeon with its IPv6 address first. The resticprofile
 # container has no IPv6 network, so ssh failed with "Network unreachable" and the restore with "unexpected EOF".
 def test_backup_host_is_looked_up_as_ipv4_only():
-    stack_tasks = (ANSIBLE_DIR / "roles" / "stack" / "tasks" / "main.yaml").read_text()
+    resticprofile_tasks = (ANSIBLE_DIR / "roles" / "resticprofile" / "tasks" / "main.yaml").read_text()
 
-    assert "getent ahostsv4 {{ stack_dungeon_host }}" in stack_tasks
+    assert "getent ahostsv4 {{ resticprofile_backup_host }}" in resticprofile_tasks

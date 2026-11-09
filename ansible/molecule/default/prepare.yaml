@@ -98,7 +98,7 @@
       args:
         creates: /srv/restic-repo/config
 
-    # root and 0755 like the stack role creates portainer/data, or its second run would change them back
+    # root and 0755 like the portainer role creates portainer/data, or its second run would change them back
     - name: Create the backed up item directories
       ansible.builtin.file:
         path: "/source/etc/docker/infrastructure/{{ item }}"

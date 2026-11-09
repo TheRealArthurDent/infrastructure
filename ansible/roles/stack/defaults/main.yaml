@@ -7,63 +7,51 @@ stack_dir: /etc/docker/infrastructure
 stack_project_name: infrastructure
 # Not stack_dir itself: Compose reads a .env next to the compose file for variable interpolation.
 stack_compose_dir: "{{ stack_dir }}/compose"
-# Resolved on the host at every run, so its IP isn't configured anywhere.
-# Set stack_dungeon_ip to skip the lookup.
-stack_dungeon_host: dungeon
-stack_nginx_container: nginx
 # Networks, compose up and the nginx reload need a running Docker daemon (false in Molecule).
 stack_manage_containers: true
 
-# Clean-slate restore of restore_items before the stack starts on a fresh host (raspberry#287): tasks/restore.yaml.
-# resticprofile backs up the whole host, so the restore helper is a host service and every stack restores its own
-# items with it. -e skip_infrastructure_restore=true (a new host with nothing to restore) only writes this stack's
-# marker; -e infrastructure_restore_snapshot=<id> restores another snapshot than the latest.
-stack_skip_restore: "{{ skip_infrastructure_restore | default(false) }}"
-stack_restore_snapshot: "{{ infrastructure_restore_snapshot | default('latest') }}"
-# <stack>.done markers, written once a stack's restore is done or skipped
-stack_restore_state_dir: /var/lib/restic-restore
-# resticprofile only schedules backups once each of these stacks has its marker, so a fresh host never backs up a
-# half-restored state as the latest snapshot. Add a stack here once its deployment runs restic-restore clean-slate.
-stack_backup_stacks:
-  - "{{ stack_project_name }}"
-# Host path -> path inside the resticprofile container, as mounted in docker-compose.yaml.j2
-stack_restore_source_mounts:
-  /home: /source/home
-  /etc: /source/etc
-  /var/lib/docker/volumes: /source/docker-volumes
-# Where the helper stages a restore: on the host and inside the resticprofile container
-stack_restore_staging:
-  host: /var/restore
-  restic: /restore-target
-# The local rsnapshot copy (base role's rsnapshot.conf) for restic-restore --from rsnapshot: <root>/<snapshot>/<host>
-stack_restore_rsnapshot:
-  root: /var/cache/backup
-  host: localhost
-# Monthly restore drill (raspberry#288): restic check reads one of `parts` parts of the data (all of it over `parts`
-# months), then every item of every stack is staged and removed again. The result goes to the resticprofile container's
-# metrics dir, where its healthcheck reads it. Runs from root's crontab on the host, away from the 03:00 backup.
-# false removes the cron job and the last result, e.g. on a host that is often switched off
-stack_restore_drill_enabled: true
-stack_restore_drill:
-  metrics: /var/lib/resticprofile/metrics/restore_drill.prom
-  parts: 12
-  day: "1"
-  hour: "12"
-  minute: "0"
-# How the helper runs restic: in the running container (exec) or, before the stack is up, in a one-off one
-stack_restore_runners:
-  exec: [docker, exec, resticprofile, resticprofile]
-  oneoff:
-    - docker
-    - compose
-    - --file
-    - "{{ stack_compose_dir }}/docker-compose.yaml"
-    - --project-name
-    - "{{ stack_project_name }}"
-    - run
-    - --rm
-    - --no-deps
-    - --no-TTY
-    - --entrypoint
-    - resticprofile
-    - resticprofile
+# The components of the stack (#14): each one is a role with its own compose fragment
+# (roles/<component>/templates/docker-compose.yaml.j2) and the config it needs. The stack role imports the roles
+# listed here and merges their fragments into one Compose project.
+stack_components:
+  - reverse_proxy
+  - portainer
+  - unbound
+  - pihole
+  - outbound
+  - resticprofile
+  - healthmonitor
+
+# The stack's own part of the compose file: the networks it creates in tasks/main.yaml, external for Compose.
+stack_compose_networks:
+  networks:
+    siz:
+      name: siz
+      external: true
+    outbound:
+      name: outbound
+      external: true
+
+# State that doesn't come from IaC and gets restored from the resticprofile backup (raspberry#284, raspberry#285). The
+# targeted restore helper (raspberry#286) and the clean-slate restore (raspberry#287) both work from this list:
+# the <component>_restore_items of the enabled components (portainer, pihole), merged.
+#
+# Scope is this repo's stack. Other repos (smart-home, Nextcloud, ...) restore their own state, and nothing
+# else under /etc or /home is needed: Ansible renders the configs, certificates and .env files, the restic SSH
+# key is created anew and registered with init-restic.sh, and the OS installer sets up users, network and
+# authorized_keys. resticprofile itself must come up without a backup, so it is not listed either.
+#
+# Each item:
+#   paths:      host directories to restore, all of them in the backup (ansible/tests/unit/test_restore_items.py)
+#   containers: stopped while the item is restored, started again afterwards
+#   preserve:   files inside paths (globs, relative to the path) the backup excludes; a restore that mirrors the
+#               snapshot must keep them. Each exclude pattern in excludes.j2 that lies inside an item is
+#               listed here, which the test checks.
+#   note:       why the item is here
+#
+# Owner and mode aren't listed: restic restores them along with the files.
+stack_restore_items: >-
+  {{ query('ansible.builtin.vars',
+           *(stack_components | map('ansible.builtin.regex_replace', '^(.+)$', '\1_restore_items')),
+           default={})
+     | ansible.builtin.combine }}

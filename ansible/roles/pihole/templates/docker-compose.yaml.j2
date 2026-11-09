@@ -1,0 +1,35 @@
+services:
+  # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
+  pihole:
+    hostname: pihole
+    container_name: pihole
+    image: pihole/pihole:2026.09.0
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    env_file:
+      - /etc/docker/infrastructure/.env
+    environment:
+      TZ: 'Europe/Berlin'
+      FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
+      FTLCONF_dns_listeningMode: 'ALL'  # Answer on every network, their interface order can change (SINGLE broke DNS)
+      FTLCONF_dns_dnssec: 'true'
+      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
+    # Volumes store your data between container upgrades
+    volumes:
+      - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
+    # Recommended but not required (DHCP needs NET_ADMIN)
+    # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+    #cap_add:
+    #  - NET_ADMIN
+    restart: unless-stopped
+    networks:
+      siz:
+        ipv4_address: 172.30.2.53
+      outbound: {}  # replace with outbound if needed
+    dns:
+      - 127.0.0.1
+      - 172.30.2.52
+      - 9.9.9.9
+    depends_on:
+      - unbound
