@@ -1,11 +1,13 @@
 """Unit tests for the compose_merge filter plugin."""
 import importlib.util
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 from ansible.errors import AnsibleFilterError
 
-PLUGIN = Path(__file__).parents[2] / "filter_plugins" / "compose_merge.py"
+PLUGIN = Path(__file__).parents[2] / "roles" / "stack" / "filter_plugins" / "compose_merge.py"
 
 
 def compose_merge(fragments):
@@ -48,3 +50,22 @@ def test_unknown_top_level_key_fails():
 
 def test_empty_list_gives_empty_dict():
     assert compose_merge([]) == {}
+
+
+def test_role_embedded_plugin_loads_for_a_playbook_outside_ansible(tmp_path):
+    """A role that ships the plugin makes the filter available to any playbook using it (e.g. Molecule's)."""
+    role = tmp_path / "roles" / "probe"
+    (role / "tasks").mkdir(parents=True)
+    (role / "filter_plugins").symlink_to(PLUGIN.parent)
+    (role / "tasks" / "main.yaml").write_text(
+        "- name: Merge\n  ansible.builtin.assert:\n    that: \"([{'services': {'a': {}}}] | compose_merge) == {'services': {'a': {}}}\"\n"
+    )
+    playbook = tmp_path / "play.yaml"
+    playbook.write_text("- hosts: localhost\n  gather_facts: false\n  roles: [probe]\n")
+    cfg = tmp_path / "ansible.cfg"
+    cfg.write_text("[defaults]\n")
+    result = subprocess.run(
+        ["ansible-playbook", str(playbook)], cwd=tmp_path, capture_output=True, text=True,
+        env={**os.environ, "ANSIBLE_ROLES_PATH": str(tmp_path / "roles"), "ANSIBLE_CONFIG": str(cfg)},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
