@@ -161,15 +161,16 @@ SMART_HOME_KEYS = {
     "nodered_github_email",
 }
 # The facts of the "Read secrets from KeePass" task -> the condition that switches their lookup on
+SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
 LOOKUP_CONDITIONS = {
     "pihole_password": "'pihole' in stack_components",
     "outbound_password": "'outbound' in stack_components",
     "discord_docker_webhook_id": "'healthmonitor' in stack_components",
     "discord_docker_webhook_token": "'healthmonitor' in stack_components",
     "restic_passphrase": "'resticprofile' in stack_components",
-    "resticprofile_ssh_private_key": "'resticprofile' in stack_components",
-    "resticprofile_ssh_public_key": "'resticprofile' in stack_components",
-    "dungeon_ssh_port": "'resticprofile' in stack_components",
+    "resticprofile_ssh_private_key": SFTP,
+    "resticprofile_ssh_public_key": SFTP,
+    "dungeon_ssh_port": SFTP,
     **{key: "secrets_smart_home_env" for key in SMART_HOME_KEYS},
 }
 

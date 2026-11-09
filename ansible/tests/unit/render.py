@@ -80,6 +80,14 @@ def component_templates():
     ]
 
 
+def fragment_yaml(path):
+    """The YAML of a compose fragment as written, for tests of what is static in it.
+
+    Lines with only a Jinja statement ({% if %} / {% endif %}) are dropped, so every optional branch stays in.
+    """
+    return "".join(line for line in Path(path).read_text().splitlines(keepends=True) if not line.lstrip().startswith("{%"))
+
+
 def rendered_tree(tmp_path, host, extra_vars=None):
     """Relative destination path -> content of every file the stack role renders for the host.
 

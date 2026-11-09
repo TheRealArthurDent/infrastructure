@@ -131,7 +131,9 @@ def secrets_tasks():
         yield task
 
 
-# The files the secrets role writes for a component -> the component whose host needs them
+# The files the secrets role writes for a component -> the component whose host needs them (the ssh key pair only
+# with an sftp repository)
+SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
 SECRET_FILES = {
     "/etc/docker/infrastructure/.env": "pihole",
     "/etc/docker/infrastructure/.outbound.env": "outbound",
@@ -139,9 +141,9 @@ SECRET_FILES = {
     "/etc/docker/infrastructure/secrets": "resticprofile",
     "/etc/docker/infrastructure/secrets/restic_passphrase": "resticprofile",
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub": "resticprofile",
+    "/etc/docker/infrastructure/resticprofile/.ssh": SFTP,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": SFTP,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub": SFTP,
 }
 
 
@@ -155,7 +157,8 @@ def test_secrets_are_written_only_for_enabled_components():
                     found[target] = task
     assert sorted(found) == sorted(SECRET_FILES)
     for target, component in SECRET_FILES.items():
-        assert found[target].get("when") == f"'{component}' in stack_components", target
+        condition = component if component == SFTP else f"'{component}' in stack_components"
+        assert found[target].get("when") == condition, target
 
 
 def test_old_restic_init_script_and_generated_key_are_gone():

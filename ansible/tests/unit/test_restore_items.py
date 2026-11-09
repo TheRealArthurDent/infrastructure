@@ -12,6 +12,8 @@ from pathlib import PurePosixPath
 import pytest
 import yaml
 
+from render import fragment_yaml
+
 ANSIBLE_DIR = PurePosixPath(__file__).parents[2]
 ROLES_DIR = ANSIBLE_DIR / "roles"
 BACKUP_VARS = ANSIBLE_DIR / "inventory" / "group_vars" / "all" / "backup.yaml"
@@ -42,9 +44,11 @@ def exclude_patterns():
 
 def source_mounts():
     """Host path -> path inside the resticprofile container, for the mounts under /source/."""
-    service = yaml.safe_load(read(RESTICPROFILE_COMPOSE))["services"]["resticprofile"]
+    service = yaml.safe_load(fragment_yaml(RESTICPROFILE_COMPOSE))["services"]["resticprofile"]
     mounts = {}
     for volume in service["volumes"]:
+        if not isinstance(volume, str):  # the long syntax of the backup SSD
+            continue
         host, container = volume.split(":")[:2]
         if container.startswith("/source/"):
             mounts[host] = container

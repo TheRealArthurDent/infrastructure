@@ -4,7 +4,7 @@ import re
 import pytest
 import yaml
 
-from render import ANSIBLE_DIR, COMPONENTS, rendered_tree
+from render import ANSIBLE_DIR, COMPONENTS, fragment_yaml, rendered_tree
 
 ROLES_DIR = ANSIBLE_DIR / "roles"
 
@@ -27,7 +27,7 @@ def test_every_component_has_a_compose_fragment():
 @pytest.mark.parametrize("fragment", compose_fragments(), ids=lambda p: p.parts[-3])
 def test_compose_images_are_pinned(fragment):
     # Renovate updates the pinned versions (CLAUDE.md); an unpinned image would change on any pull.
-    compose = yaml.safe_load(fragment.read_text())
+    compose = yaml.safe_load(fragment_yaml(fragment))
     assert compose.get("services"), f"{fragment} defines no service"
     for service, config in compose["services"].items():
         image = config["image"]
