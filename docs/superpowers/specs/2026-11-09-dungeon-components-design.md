@@ -153,7 +153,8 @@ lives only in raspi's database.
 - dungeon's database uses the same group/title names as raspi's. It needs: `Backup/Resticprofile` (field
   `passphrase`) and `Discord/Docker Webhook` (fields `id`, `token`). testbed's own webhook is a new entry in raspi's
   database (`Discord/Docker Webhook testbed`), selected by a host variable.
-- Moving the root CA into a database of its own later only changes `keepass_ca_database`.
+- `check-certificates.yaml` reads the root CA from `keepass_ca_database` only, never from the host's database.
+  Moving the root CA into a database of its own (#10) then only changes `keepass_ca_database`.
 
 ### Backup target (dungeon)
 
