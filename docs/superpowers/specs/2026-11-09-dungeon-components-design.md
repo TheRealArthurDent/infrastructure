@@ -186,11 +186,8 @@ the pinned versions (nginx 1.29 → 1.31, portainer 2.35 → 2.45). Leftovers of
 
 dungeon sits in an Argon NEO 5. Checked 2026-11-09: its fan is on the Pi 5 fan header (`cooling_fan` hwmon with
 `pwm1`), I2C is off, no `argononed`, nothing about the fan in `config.txt`. So the kernel controls the fan, and the
-ONE V2 daemon (I2C 0x1a) doesn't apply. Proposal, pending Mika's pick: `argon_fan` gets a second mode
-(`argon_fan_type: one_v2 | pi5_fan_header`, default `one_v2` so raspi is unchanged). `pi5_fan_header` writes the
-thresholds from `argon_fan_thresholds` as `dtparam=fan_temp0..3` (+ `_speed` 0–255, `_hyst`) into
-`config.txt`, no daemon, effective after a reboot (reported like the kernel command line). The alternative is the
-Pi 5's default curve, with `argon_fan` off on dungeon.
+ONE V2 daemon (I2C 0x1a) doesn't apply. Decided (Mika, 2026-11-09): keep the Pi 5's default fan curve;
+`argon_fan_enabled` stays false on dungeon, nothing to build.
 
 ### Setting up dungeon from scratch (README, PR 2)
 
