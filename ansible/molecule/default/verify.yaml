@@ -188,6 +188,34 @@
       loop_control:
         label: "{{ item.item }}"
 
+    - name: Read the restic SSH key pair
+      ansible.builtin.slurp:
+        src: "/etc/docker/infrastructure/resticprofile/.ssh/{{ item }}"
+      register: restic_key_pair
+      loop:
+        - id_ed25519
+        - id_ed25519.pub
+      no_log: true
+
+    - name: Stat the restic SSH public key and the old init script
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: restic_key_stats
+      loop:
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub
+        - /etc/docker/infrastructure/init-restic.sh
+
+    - name: Check the restic key pair is the one from KeePass, and the init script is gone
+      ansible.builtin.assert:
+        that:
+          - restic_key_pair.results[0].content | b64decode == 'LEAKCANARY-ssh-key\n'
+          - restic_key_pair.results[1].content | b64decode == 'ssh-ed25519 LEAKCANARY-ssh-key-pub molecule@test\n'
+          - restic_key_stats.results[0].stat.pw_name == 'root'
+          - restic_key_stats.results[0].stat.mode == '0644'
+          - not restic_key_stats.results[1].stat.exists
+        fail_msg: The restic key pair doesn't match the KeePass values, or init-restic.sh still exists
+      no_log: true
+
     - name: Read infrastructure .env
       ansible.builtin.slurp:
         src: /etc/docker/infrastructure/.env

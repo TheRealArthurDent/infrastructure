@@ -275,7 +275,7 @@ def test_stage_rejects_an_unknown_stack(env):
 
 
 def test_usage_errors_do_not_look_like_a_missing_repository(env):
-    # argparse exits with 2; Ansible must not answer that with the init-restic.sh hint
+    # argparse exits with 2; Ansible must not answer that with the key hint
     code, _, _ = env.run("clean-slate", "--marker", "/x")
     assert code == 2
     assert code not in (10, 11)
@@ -474,7 +474,7 @@ def test_clean_slate_without_repository_access_fails_with_the_init_hint(env):
 
     code, _, err = clean_slate(env)
 
-    assert code == 10, "Ansible points the user to init-restic.sh on exit code 10"
+    assert code == 10, "Ansible points the user to the backup host's authorized keys on exit code 10"
     assert not env.marker.exists()
 
 

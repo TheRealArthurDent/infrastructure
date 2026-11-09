@@ -141,14 +141,14 @@ SECRET_FILES = {
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
     "/etc/docker/infrastructure/resticprofile/.ssh": "resticprofile",
     "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": "resticprofile",
-    "/etc/docker/infrastructure/init-restic.sh": "resticprofile",
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub": "resticprofile",
 }
 
 
 def test_secrets_are_written_only_for_enabled_components():
     found = {}
     for task in secrets_tasks():
-        for module in ("ansible.builtin.copy", "ansible.builtin.file", "community.crypto.openssh_keypair"):
+        for module in ("ansible.builtin.copy", "ansible.builtin.file"):
             if module in task:
                 target = task[module].get("dest") or task[module]["path"]
                 if target in SECRET_FILES:
@@ -156,3 +156,13 @@ def test_secrets_are_written_only_for_enabled_components():
     assert sorted(found) == sorted(SECRET_FILES)
     for target, component in SECRET_FILES.items():
         assert found[target].get("when") == f"'{component}' in stack_components", target
+
+
+def test_old_restic_init_script_and_generated_key_are_gone():
+    # The key pair comes from KeePass and dungeon authorises it (backup_target_clients), so nothing is generated or
+    # copied to the backup host any more. A script left from an earlier run is removed on every host.
+    tasks = list(secrets_tasks())
+    assert not [t for t in tasks if "community.crypto.openssh_keypair" in t]
+    removal = [t for t in tasks if t.get("ansible.builtin.file", {}).get("path") == "/etc/docker/infrastructure/init-restic.sh"]
+    assert len(removal) == 1
+    assert removal[0]["ansible.builtin.file"]["state"] == "absent"

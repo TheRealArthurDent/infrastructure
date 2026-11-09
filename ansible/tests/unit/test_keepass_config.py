@@ -153,3 +153,49 @@ def test_unconfigured_database_has_empty_paths(monkeypatch):
     monkeypatch.delenv("KEEPASS_DB", raising=False)
     args = host_vars(keepass_database="dungeon", local_keepass_databases={})
     assert '"keepass_db": ""' in keepass_var("keepass_db", *args)
+
+
+SMART_HOME_KEYS = {
+    "iobroker_states_redis_port", "iobroker_objects_redis_port", "influxdb_admin_password", "influxdb_read_password",
+    "influxdb_write_password", "grafana_password", "mosquitto_password", "deconz_vnc_password", "nodered_github_user",
+    "nodered_github_email",
+}
+# The facts of the "Read secrets from KeePass" task -> the condition that switches their lookup on
+LOOKUP_CONDITIONS = {
+    "pihole_password": "'pihole' in stack_components",
+    "outbound_password": "'outbound' in stack_components",
+    "discord_docker_webhook_id": "'healthmonitor' in stack_components",
+    "discord_docker_webhook_token": "'healthmonitor' in stack_components",
+    "restic_passphrase": "'resticprofile' in stack_components",
+    "resticprofile_ssh_private_key": "'resticprofile' in stack_components",
+    "resticprofile_ssh_public_key": "'resticprofile' in stack_components",
+    "dungeon_ssh_port": "'resticprofile' in stack_components",
+    **{key: "secrets_smart_home_env" for key in SMART_HOME_KEYS},
+}
+
+
+def keepass_facts():
+    bootstrap = next(play for play in plays("bootstrap.yaml") if play["name"] == "Bootstrap Raspberry Pi")
+    task = next(t for t in bootstrap["pre_tasks"] if t["name"] == "Read secrets from KeePass")
+    return task["ansible.builtin.set_fact"]
+
+
+def test_bootstrap_only_looks_up_what_the_host_needs():
+    # A lookup of a part the host doesn't run would need an entry in the host's database (dungeon has no pihole).
+    facts = keepass_facts()
+    assert set(facts) == set(LOOKUP_CONDITIONS)
+    for name, condition in LOOKUP_CONDITIONS.items():
+        value = " ".join(str(facts[name]).split())
+        assert value.startswith("{{ lookup('keepass'"), name
+        assert value.endswith(f"if {condition} else '' }}}}"), name
+    assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_id"])
+    assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_token"])
+
+
+def test_restic_key_pair_comes_from_the_hosts_entry():
+    facts = keepass_facts()
+    for name, attachment in (("resticprofile_ssh_private_key", "id_ed25519"), ("resticprofile_ssh_public_key", "id_ed25519.pub")):
+        value = " ".join(str(facts[name]).split())
+        assert "title=resticprofile_ssh_key_title" in value, name
+        assert "group='Backup'" in value, name
+        assert f"attachment='{attachment}'" in value, name

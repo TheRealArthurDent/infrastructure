@@ -9,6 +9,8 @@
     containermonitor_notification_url: discord://LEAKCANARY-webhook-token@id
     restic_passphrase: LEAKCANARY-restic
     dungeon_ssh_port: 2222
+    resticprofile_ssh_private_key: LEAKCANARY-ssh-key
+    resticprofile_ssh_public_key: ssh-ed25519 LEAKCANARY-ssh-key-pub molecule@test
     iobroker_states_redis_port: 9000
     iobroker_objects_redis_port: 9001
     influxdb_admin_password: LEAKCANARY-influx-admin

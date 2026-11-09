@@ -172,14 +172,11 @@ ssh -p <port> <user>@<ip> sudo reboot
 
 ### 4. Backup access
 
-The `secrets` role created a new restic key and the script in step 3. Authorise the key on the backup host
-`dungeon`, on the Pi:
+The `secrets` role wrote the host's restic key pair from its KeePass entry (`Backup/Resticprofile SSH`, attachments
+`id_ed25519` and `id_ed25519.pub`; `resticprofile_ssh_key_title` names another entry). The backup host `dungeon` must
+accept the public key: it is in `backup_target_clients` in `host_vars/dungeon.yaml`, applied by dungeon's playbook.
 
-```sh
-sudo /etc/docker/infrastructure/init-restic.sh
-```
-
-The new key reaches the host's existing repository: its path is the hostname, the passphrase comes from KeePass.
+The key reaches the host's existing repository: its path is the hostname, the passphrase comes from KeePass.
 
 ### 5. Certificate and stack (restores the infrastructure state)
 
@@ -334,7 +331,8 @@ Options and failures:
   ```
 
 - `-e skip_infrastructure_restore=true`: a new host with nothing to restore; only writes the marker (step 5).
-- The run stops with a hint if `dungeon` refuses the key (run `init-restic.sh`, then the playbook again) or the
+- The run stops with a hint if `dungeon` refuses the key (add the public key to `backup_target_clients`,
+  run dungeon's playbook, then this one again) or the
   repository has no snapshot (a new host: run again with `skip_infrastructure_restore`).
 
 Backups stay off until the restore is done: resticprofile schedules them only once every stack in

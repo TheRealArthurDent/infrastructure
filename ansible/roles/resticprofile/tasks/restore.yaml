@@ -112,8 +112,8 @@
   vars:
     resticprofile_restore_hints:
       10: >-
-        Check that the backup host accepts this host's restic SSH key: run sudo {{ stack_dir }}/init-restic.sh
-        on the host, then run the playbook again.
+        Check that the backup host accepts this host's restic SSH key: its public key must be in dungeon's
+        backup_target_clients (host_vars/dungeon.yaml). Then run the dungeon playbook and this one again.
       11: >-
         If this is a new host with nothing to restore, run the playbook again with
         -e skip_infrastructure_restore=true.

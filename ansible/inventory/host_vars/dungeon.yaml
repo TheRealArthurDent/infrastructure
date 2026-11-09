@@ -8,3 +8,5 @@ base_dns_servers:
 docker_daemon_dns:
   - 192.168.1.2
 base_rsnapshot_enabled: false
+# No smart-home stack on this host: no smart-home .env, no lookups of its secrets
+secrets_smart_home_env: false

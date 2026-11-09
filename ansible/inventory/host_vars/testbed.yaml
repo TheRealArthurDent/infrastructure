@@ -3,3 +3,6 @@
 dhparameter_bits: 2048
 # Often switched off on the 1st: a missed monthly restore drill would turn resticprofile unhealthy (raspberry#288)
 resticprofile_restore_drill_enabled: false
+# Its own entries in raspi's database, so a Discord message and a backup key show which host they belong to
+discord_docker_webhook_title: Docker Webhook testbed
+resticprofile_ssh_key_title: Resticprofile SSH testbed
