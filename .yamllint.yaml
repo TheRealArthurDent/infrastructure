@@ -3,6 +3,10 @@
 ---
 extends: default
 
+# Rendered output pinned by ansible/tests/unit/test_stack_golden.py, not hand-written YAML
+ignore: |
+  ansible/tests/unit/golden/
+
 rules:
   document-start: disable
   line-length:

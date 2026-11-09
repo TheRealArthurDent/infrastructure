@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://creativeprojects.github.io/resticprofile/jsonschema/config.json
+
+version: "1"
+
+global:
+  scheduler: crond
+  # restic refreshes the lock of a running command every 5 minutes; 2h leaves a margin for the slow Pi
+  restic-stale-lock-age: 2h
+  restic-lock-retry-after: 1m
+
+default:
+  password-file: /run/secrets/restic_passphrase
+  # Remove restic locks older than restic-stale-lock-age (left by an interrupted run) and retry (raspberry#250)
+  force-inactive-lock: true
+  # No overlapping resticprofile runs inside the container
+  lock: /tmp/resticprofile-default.lock
+  repository: sftp:restic@dungeon:/media/backup/restic/testbed
+  initialize: true
+  prometheus-save-to-file: /metrics/backup.prom
+  backup:
+    source: '/source/'
+    exclude-caches: true
+    exclude-file: '/etc/resticprofile/excludes'
+    exclude-if-present: DO_NOT_BACKUP
+    one-file-system: false
+    schedule: '*-*-* 03:00:00'
+    schedule-permission: system
+    schedule-priority: background
+    # Wait for a live lock (e.g. a manual run) instead of failing at once
+    schedule-lock-wait: 30m
+    check-before: true
+    run-before:
+      - rm -f /metrics/backup.prom
+    run-after:
+      # Runs after backup and retention succeeded. Survives a failed run (backup.prom is deleted by
+      # run-before), so an alert can fire on its age (raspberry#250). The retention section has no run-after
+      # (raspberry#233).
+      - >-
+        echo "resticprofile_backup_last_success_timestamp_seconds{profile=\"default\"} $(date +%s)"
+        > /metrics/backup_last_success.prom.tmp
+        && mv /metrics/backup_last_success.prom.tmp /metrics/backup_last_success.prom
+    extended-status: true
+  retention:
+    after-backup: true
+    keep-within-daily: 7d12h
+    keep-within-weekly: 1m12h
+    keep-within-monthly: 1y12h
+    keep-yearly: unlimited
+    prune: true

@@ -1,59 +1,10 @@
 """Templates of the stack role, which deploys the infrastructure stack (raspberry#238)."""
 import re
-import subprocess
-from pathlib import Path
 
 import pytest
 import yaml
 
-ANSIBLE_DIR = Path(__file__).parents[2]
-ROLE_DIR = ANSIBLE_DIR / "roles" / "stack"
-TEMPLATES = ROLE_DIR / "templates"
-DUNGEON_IP = "192.0.2.10"
-DUNGEON_SSH_PORT = 1359
-
-
-def rendered_tree(tmp_path, host):
-    out = tmp_path / "out"
-    templates = sorted(str(p.relative_to(TEMPLATES)) for p in TEMPLATES.rglob("*.j2"))
-    playbook = tmp_path / "render.yaml"
-    playbook.write_text(yaml.safe_dump([{
-        "name": "Render the stack templates",
-        "hosts": "all",
-        "connection": "local",
-        "gather_facts": False,
-        "vars_files": [str(ROLE_DIR / "defaults" / "main.yaml")],
-        "vars": {
-            "stack_dungeon_ip": DUNGEON_IP,
-            "dungeon_ssh_port": DUNGEON_SSH_PORT,
-            "ansible_python_interpreter": "auto_silent",
-        },
-        "tasks": [
-            {
-                "name": "Ensure output directories",
-                "ansible.builtin.file": {"path": f"{out}/{{{{ item | dirname }}}}", "state": "directory"},
-                "loop": templates,
-            },
-            {
-                "name": "Render template",
-                "ansible.builtin.template": {
-                    "src": f"{TEMPLATES}/{{{{ item }}}}",
-                    "dest": f"{out}/{{{{ item | regex_replace('\\.j2$', '') }}}}",
-                },
-                "loop": templates,
-            },
-        ],
-    }]))
-    result = subprocess.run(
-        ["ansible-playbook", "-i", f"{host},", str(playbook)],
-        cwd=ANSIBLE_DIR,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    return {str(p.relative_to(out)): p.read_text() for p in sorted(out.rglob("*")) if p.is_file()}
+from render import ANSIBLE_DIR, rendered_tree
 
 
 @pytest.mark.parametrize("host", ["raspi", "testbed"])
