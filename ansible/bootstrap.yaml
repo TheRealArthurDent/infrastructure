@@ -61,7 +61,7 @@
              if 'healthmonitor' in stack_components else '' }}
         restic_passphrase: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Backup', title='Resticprofile')
+                    group='Backup', title=resticprofile_passphrase_title)
              if 'resticprofile' in stack_components else '' }}
         resticprofile_ssh_private_key: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,

@@ -213,5 +213,13 @@ def test_pihole_passwords_come_from_the_pihole_group():
 
 def test_restic_passphrase_is_the_entrys_password():
     value = " ".join(str(keepass_facts()["restic_passphrase"]).split())
-    assert "group='Backup', title='Resticprofile'" in value
+    assert "group='Backup', title=resticprofile_passphrase_title" in value
     assert "field=" not in value
+
+
+def test_testbed_has_its_own_restic_passphrase():
+    # testbed's repository is throwaway: its own passphrase, so changing raspi's doesn't touch it
+    testbed = yaml.safe_load((ANSIBLE_DIR / "inventory" / "host_vars" / "testbed.yaml").read_text())
+    defaults = yaml.safe_load((ANSIBLE_DIR / "roles" / "secrets" / "defaults" / "main.yaml").read_text())
+    assert defaults["resticprofile_passphrase_title"] == "Resticprofile"
+    assert testbed["resticprofile_passphrase_title"] == "Resticprofile testbed"

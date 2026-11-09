@@ -100,13 +100,14 @@ Group/title, with the fields the roles read:
 | `raspberry` | `Backup/Resticprofile SSH testbed` | the same for testbed |
 | `raspberry` | `Discord/Docker Webhook testbed` | fields `id` and `token` of testbed's webhook |
 
-| `raspberry` | `Backup/Resticprofile` | password: the passphrase of raspi's and testbed's restic repositories |
+| `raspberry` | `Backup/Resticprofile` | password: the passphrase of raspi's restic repository |
+| `raspberry` | `Backup/Resticprofile testbed` | password: the passphrase of testbed's restic repository (throwaway) |
 | `raspberry` | `Pihole/pihole`, `Pihole/outbound` | passwords of raspi's and testbed's Pi-holes |
 
 raspi's other entries (`Discord/Docker Webhook`, `smart-home/...` for the smart-home stack, `Backup/Dungeon` with the
 field `ssh-port`) are the existing ones. dungeon's database holds nothing of the smart-home stack. The entry titles
-are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`; testbed sets its own in
-`host_vars/testbed.yaml`).
+are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`;
+testbed sets its own in `host_vars/testbed.yaml`).
 
 #### Put the restic key pairs into KeePass
 
