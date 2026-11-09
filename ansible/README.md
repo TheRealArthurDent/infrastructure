@@ -46,8 +46,10 @@ You also need:
 
 Every host reads its secrets from its own KeePass database (host variable `keepass_database`: `raspberry` by default,
 `dungeon` for dungeon). raspi and testbed share the `raspberry` database. The root CA for `check-certificates.yaml`
-always comes from `keepass_ca_database` (`raspberry`), so `--limit dungeon` opens raspi's database for it as well. The
-CA stays there until it gets a database of its own (#10); then only `keepass_ca_database` changes.
+always comes from `keepass_ca_database` (`raspberry`), so `check-certificates.yaml --limit dungeon` and
+`setup-pihole.yaml --limit dungeon` (which also needs the root CA) open raspi's database as well: both master passwords
+are needed (`bin/with-keepass --store` stores one per database). The CA stays there until it gets a database of its
+own (#10); then only `keepass_ca_database` changes.
 
 The paths depend on your machine, so they aren't in the repo. Set them once in a local file that git ignores, one
 entry per database in `local_keepass_databases`:
@@ -113,14 +115,15 @@ the host. A rebuilt host has the same key, so dungeon's `authorized_keys` (`back
   `/etc/docker/infrastructure/resticprofile/.ssh/` on raspi to your machine (they are root-owned, so copy them with
   `sudo`; the private key is mode 0600), attach both to the entry `Backup/Resticprofile SSH` in the `raspberry`
   database and delete the copies. Check that the public key equals `backup_target_clients.raspi`.
-- testbed: create a new pair and attach it to `Backup/Resticprofile SSH testbed`:
+- testbed: keep its existing key as well. Copy `id_ed25519` and `id_ed25519.pub` from
+  `/etc/docker/infrastructure/resticprofile/.ssh/` on testbed exactly as for raspi, attach both to
+  `Backup/Resticprofile SSH testbed` and check that the public key equals `backup_target_clients.testbed`. A new pair
+  (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbed -f ./id_ed25519`) needs its public key in
+  `host_vars/dungeon.yaml` and a dungeon run first. Delete the copies after attaching them.
 
-  ```sh
-  ssh-keygen -t ed25519 -N '' -C resticprofile@testbed -f ./id_ed25519
-  ```
-
-  Its public key is `backup_target_clients.testbed` in `host_vars/dungeon.yaml`; if you create a different one, put
-  that there and run dungeon's playbook. Delete the files after attaching them.
+The `secrets` role compares the public key of the entry with `backup_target_clients.<host>` before it writes the key
+files and stops with the next step if they differ, so a wrong attachment never replaces a working key. The comparison
+uses public keys only.
 
 ## Daily business
 
@@ -222,7 +225,7 @@ ssh <user>@<ip>
 `stack` tag): it mounts the SSD by UUID (`nofail`), checks `mountpoint -q /media/backup`, creates the `restic` user
 (UID/GID 1002, so the files on the SSD keep their owner), writes its `authorized_keys` and the marker
 `/media/backup/.backup-ssd`. Without the SSD it stops with `plug in the backup SSD (UUID ...) and run again` and writes
-nothing below the empty mount point. Plug it in and run again.
+nothing below the empty mount point. Plug it in and run again. From here raspi's nightly backup works again.
 
 ```sh
 bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --skip-tags stack --ask-become-pass
@@ -312,7 +315,8 @@ ssh -p <port> <user>@<ip> docker logs resticprofile
 ## dungeon
 
 The Pi 5 in the Argon NEO 5 case: private cloud and the backup target of raspi and testbed. It is production like
-raspi: the user runs everything against it, Claude's guard hook blocks it.
+raspi: the user runs everything against it, and Claude's guard hook blocks it once the patch from #15 is applied
+(treat it as blocked already).
 
 - **Backup SSD**: ext4, UUID `eeeb6563-1a18-4941-a7bd-72ec86622fa7`, mounted at `/media/backup`
   (`defaults,noatime,nofail`), marker `/media/backup/.backup-ssd`. raspi and testbed back up to
@@ -340,11 +344,33 @@ entries in KeePass ([Entries each database needs](#entries-each-database-needs))
 database and `bin/with-keepass --store dungeon` has stored its master password. Raspi's Pi-hole needs the CNAME
 `outbound.dungeon` first (`setup-pihole.yaml --limit raspi`).
 
+Order after merging this change, because the new key and DNS entries are prerequisites of the later steps:
+
+1. KeePass: the entries for all three hosts, including the restic key pairs of raspi and testbed (see
+   [Put the restic key pairs into KeePass](#put-the-restic-key-pairs-into-keepass)). Every raspi run needs
+   `Backup/Resticprofile SSH` first, `--tags stack` included, and testbed needs its two new entries.
+2. `setup-pihole.yaml --limit raspi` (the CNAME `outbound.dungeon`).
+3. raspi: `bootstrap.yaml --limit raspi --check --diff`. Expect `init-restic.sh` to be removed and the key files
+   unchanged. Then the real run.
+4. The takeover of dungeon (below).
+5. testbed.
+
 ```sh
 # 1. The CA-signed certificate replaces the self-signed one (opens raspi's database for the root CA)
 bin/with-keepass ansible-playbook check-certificates.yaml --limit dungeon
 # 2. Dry run, read the diff
 bin/with-keepass ansible-playbook bootstrap.yaml --limit dungeon --check --diff
+```
+
+The dry run tells you in a debug line that the marker `/media/backup/.backup-ssd` is created by the real run (and, on a
+freshly flashed dungeon, that the SSD is mounted by it). Before step 3, back up portainer's data by hand on dungeon: the
+image upgrade migrates its database, and dungeon has no restic snapshot yet.
+
+```sh
+sudo cp -a /etc/docker/infrastructure/portainer/data /root/portainer-data.pre-takeover
+```
+
+```sh
 # 3. The real run
 bin/with-keepass ansible-playbook bootstrap.yaml --limit dungeon
 # 4. A second run must end with changed=0
@@ -357,7 +383,8 @@ What to expect: the images move to the pinned versions (nginx 1.29 to 1.31, port
 finds portainer's data in `/etc/docker/infrastructure/portainer/data`, so the clean-slate restore only writes the
 marker `infrastructure.done` and restores nothing; backups start after that. The leftovers of the fork
 (`~/dev/infrastructure`, `/etc/docker/infrastructure/borgmatic`, `/home/borg`) stay untouched, remove them by hand. On
-the SSD, `borg/`, `kopia/` and `rsnapshot/` stay as they are.
+the SSD, `borg/`, `kopia/` and `rsnapshot/` stay as they are. `restic`'s `authorized_keys` is replaced by exactly the
+keys in `backup_target_clients`: any other key there, for example a personal one, is removed.
 
 ## Restore
 
