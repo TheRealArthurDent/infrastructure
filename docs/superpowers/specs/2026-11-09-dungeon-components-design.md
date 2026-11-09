@@ -104,14 +104,13 @@ as parsed YAML. The golden files only change in a commit that says why.
   `local:/backup/restic/dungeon` with `/media/backup` mounted into the container as `/backup` (bind propagation
   `rslave`, so a later mount reaches a running container). The ssh key, `ssh_config`, `init-restic.sh`, the
   `dungeon` lookup and `extra_hosts` only exist with an sftp repository.
-- SSD (dungeon only, `resticprofile_backup_disk` in `host_vars`: UUID, fstype, path): mounted by UUID with `nofail`
-  (`ansible.posix.mount`). A marker `/media/backup/.backup-ssd` is created only when `mountpoint -q /media/backup`
+- SSD: mounted by `backup_target` (below). A marker `/media/backup/.backup-ssd` is created only when `mountpoint -q /media/backup`
   holds on the host. A `mountpoint` check inside the container doesn't work (a bind mount is always a mount point),
   so resticprofile's `run-before` fails the backup when the marker is missing; healthmonitor then reports it.
 - The clean-slate restore asserts the marker before it runs, so a missing SSD isn't read as "no snapshot, new host".
 - Retention and restore drill as on raspi, on dungeon for dungeon's own repository.
-- raspi's sftp backups land on the same SSD (`/media/backup/restic/raspi`). The `restic` sftp user stays set up by
-  hand (not managed here). With the SSD missing, the bare mount point directory is root-owned and empty, so the
+- raspi's sftp backups land on the same SSD (`/media/backup/restic/raspi`), through the `restic` user of the
+  `backup_target` component. With the SSD missing, the bare mount point directory is root-owned and empty, so the
   `restic` user can't create a repository there and raspi's backup fails instead of writing to the system disk
   (builder's call; Mika checks once that nothing lies below the unmounted mount point).
 
@@ -137,6 +136,39 @@ as parsed YAML. The golden files only change in a commit that says why.
 `siz` (internal, 172.30.2.0/24) and `outbound` (172.30.1.128/25, iprange .192/26) are created by the fork's
 `run.sh` with exactly raspi's settings, so the shared network tasks in `stack` don't recreate them on dungeon.
 
+### KeePass per host
+
+dungeon has its own KeePass database with its own master password and key file (Mika, 2026-11-09). The root CA
+lives only in raspi's database.
+
+- `local.yaml` lists the databases by name (`local_keepass_databases: {raspberry: {db, key}, dungeon: {db, key}}`).
+  A host's secrets come from its `keepass_database` (default `raspberry`, dungeon `dungeon`); the root CA comes from
+  `keepass_ca_database` (`raspberry`), so `check-certificates.yaml --limit dungeon` opens raspi's database only.
+  The old `local_keepass_db`/`local_keepass_key` keep working as `raspberry`, so an existing `local.yaml` doesn't
+  break. `KEEPASS_DB`/`KEEPASS_KEY` still override `raspberry`.
+- Master passwords per database: `KEEPASS_PASSWORD_<NAME>` (e.g. `KEEPASS_PASSWORD_DUNGEON`), `KEEPASS_PASSWORD`
+  stays the one for `raspberry`; a missing one is prompted for, naming the database. `bin/with-keepass` exports
+  every stored one: Windows credential `<name>-keepass` (`raspberry-keepass` as today). `--store`/`--forget` take
+  the database name (`bin/with-keepass --store dungeon`), default `raspberry`. No `--limit` parsing needed.
+- dungeon's database uses the same group/title names as raspi's. It needs: `Backup/Resticprofile` (field
+  `passphrase`) and `Discord/Docker Webhook` (fields `id`, `token`). testbed's own webhook is a new entry in raspi's
+  database (`Discord/Docker Webhook testbed`), selected by a host variable.
+- Moving the root CA into a database of its own later only changes `keepass_ca_database`.
+
+### Backup target (dungeon)
+
+A host-level component `backup_target`, on for dungeon: everything a fresh dungeon needs to receive backups.
+
+- The SSD mount (UUID, `nofail`) and the marker `.backup-ssd`, moved here from resticprofile (dungeon's own
+  resticprofile only checks the marker).
+- The `restic` user (Raspberry Pi Imager only creates `dragon`): fixed UID/GID matching today's owner of
+  `/media/backup/restic` (the files survive a reinstall on the SSD), no password, shell for sftp, home on the
+  root disk. `authorized_keys` from `backup_target_clients` in `host_vars/dungeon.yaml` (client name -> public
+  key, e.g. raspi's `resticprofile` key), each with `restrict`. Public keys only, so they can live in the repo.
+- `/media/backup/restic` owned by `restic`, 0700, created only below the marker check.
+- `init-restic.sh` on raspi (ssh-copy-id, needs a password login that the ssh role turns off) is replaced: the
+  raspi run prints the public key to put into `backup_target_clients` when dungeon doesn't accept it yet.
+
 ### Takeover of dungeon (PR 2, by Mika)
 
 Run `check-certificates.yaml --limit dungeon` first (CA-signed certificate replaces the self-signed one), then
@@ -149,7 +181,8 @@ the pinned versions (nginx 1.29 → 1.31, portainer 2.35 → 2.45). Leftovers of
 1. **PR 1, split:** golden files, component roles, `stack` as assembler, Molecule unchanged in what it checks.
    No dungeon yet.
 2. **PR 2, dungeon:** inventory + `host_vars/dungeon.yaml`, the per-host switches in base/docker/secrets, the SSD
-   mount and marker, the local repository, a second Molecule platform `dungeon-trixie` with dungeon's
+   mount and marker, the `backup_target` component (restic user), KeePass per host incl. `bin/with-keepass`, the
+   local repository, a second Molecule platform `dungeon-trixie` with dungeon's
    components, README/CLAUDE.md.
 
 ## Left to the builder
@@ -168,5 +201,6 @@ includes the components, test layout, commit slicing inside each PR.
 - Root disk: NVMe, 1.7 TB.
 - Docker 29.7.2 (`/usr/bin/docker`), i.e. `docker-ce` from Docker's repository (Debian ships 26.x), so the `docker`
   role installs nothing new.
-- Still to check once by Mika: what lies below the mount point on the root disk (`sudo mount --bind / /mnt && ls -la
-  /mnt/media/backup; sudo umount /mnt`). Expected: an empty, root-owned directory.
+- Below the mount point on the root disk: root-owned `/media/backup` (0755) with a stale `rsnapshot/` from
+  2026-03-13 (Mika's hand-made rsnapshot once ran without the SSD). `restic` can't write there.
+- Still needed: `id restic` on dungeon (UID/GID to pin).
