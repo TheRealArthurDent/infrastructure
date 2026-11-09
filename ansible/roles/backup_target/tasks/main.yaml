@@ -1,5 +1,5 @@
 ---
-- name: Require at least one backup client
+- name: Require the backup SSD's UUID and at least one backup client
   ansible.builtin.assert:
     that:
       - backup_target_uuid | length > 0
@@ -20,7 +20,7 @@
     msg: plug in the backup SSD (UUID {{ backup_target_uuid }}) and run again
   when: backup_target_manage_mount | bool and not backup_target_device.stat.exists
 
-# Replaces the PARTUUID line for the same path.
+# Replaces the PARTUUID line for the same path. register: in check mode "changed" means the SSD isn't mounted yet.
 - name: Mount the backup SSD
   ansible.posix.mount:
     path: "{{ backup_target_mount }}"
@@ -28,6 +28,7 @@
     fstype: "{{ backup_target_fstype }}"
     opts: "{{ backup_target_options }}"
     state: "{{ 'mounted' if backup_target_manage_mount | bool else 'present' }}"
+  register: backup_target_mount_result
 
 - name: Check the backup SSD is mounted
   ansible.builtin.command: mountpoint -q {{ backup_target_mount }}
@@ -36,12 +37,28 @@
   failed_when: false
   check_mode: false
 
+# --check doesn't mount: on a fresh host with the SSD plugged in (the device check above passed) the mount point is
+# empty only because the mount task didn't run. A real run mounts it, or stops below.
+- name: Note that the backup SSD gets mounted by a real run
+  ansible.builtin.set_fact:
+    backup_target_mount_pending: true
+  when: >-
+    ansible_check_mode and backup_target_manage_mount | bool and backup_target_mount_result is changed
+    and backup_target_mountpoint.rc != 0
+
+- name: Report the pending mount of the backup SSD
+  ansible.builtin.debug:
+    msg: >-
+      The backup SSD (UUID {{ backup_target_uuid }}) is plugged in but not mounted at {{ backup_target_mount }} yet:
+      a real run mounts it and creates {{ backup_target_marker }}.
+  when: backup_target_mount_pending | default(false) | bool
+
 - name: Stop when the backup SSD is not mounted
   ansible.builtin.fail:
     msg: >-
       plug in the backup SSD (UUID {{ backup_target_uuid }}) and run again:
       {{ backup_target_mount }} is not a mount point
-  when: backup_target_mountpoint.rc != 0
+  when: backup_target_mountpoint.rc != 0 and not backup_target_mount_pending | default(false) | bool
 
 - name: Mark the mount point as the backup SSD
   ansible.builtin.file:

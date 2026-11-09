@@ -28,7 +28,7 @@ KEYS = {
 UUID = "eeeb6563-1a18-4941-a7bd-72ec86622fa7"
 
 
-def run_play(tmp_path, tasks, extra_vars, assert_clients=False):
+def run_play(tmp_path, tasks, extra_vars, check=False):
     defaults = yaml.safe_load((ANSIBLE_DIR / "roles/backup_target/defaults/main.yaml").read_text())
     playbook = tmp_path / "play.yaml"
     playbook.write_text(yaml.safe_dump([{
@@ -40,7 +40,7 @@ def run_play(tmp_path, tasks, extra_vars, assert_clients=False):
         "tasks": tasks,
     }]))
     return subprocess.run(
-        ["ansible-playbook", "-i", "localhost,", str(playbook)],
+        ["ansible-playbook", "-i", "localhost,", *(["--check"] if check else []), str(playbook)],
         cwd=ANSIBLE_DIR,
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -61,6 +61,44 @@ def test_stops_when_the_backup_ssd_is_not_mounted(tmp_path):
     assert not (mount / "restic").exists()
 
 
+PENDING_TASKS = (
+    "Mount the backup SSD",
+    "Check the backup SSD is mounted",
+    "Note that the backup SSD gets mounted by a real run",
+    "Report the pending mount of the backup SSD",
+    "Stop when the backup SSD is not mounted",
+    "Mark the mount point as the backup SSD",
+)
+
+
+def run_check_mode_mount(tmp_path, manage_mount):
+    """--check with an empty mount point that the mount task would mount (the SSD itself is plugged in)."""
+    mount = tmp_path / "backup"
+    mount.mkdir()
+    tasks = [role_task(FILE, name) for name in PENDING_TASKS]
+    tasks[0]["ansible.posix.mount"]["fstab"] = str(tmp_path / "fstab")
+    (tmp_path / "fstab").write_text("")
+    # become would need sudo; the check mode run touches nothing
+    for task in tasks:
+        task["become"] = False
+    extra = {"backup_target_mount": str(mount), "backup_target_manage_mount": manage_mount}
+    return mount, run_play(tmp_path, tasks, extra, check=True)
+
+
+def test_check_mode_gets_through_a_not_yet_mounted_backup_ssd(tmp_path):
+    mount, run = run_check_mode_mount(tmp_path, True)
+    assert run.returncode == 0, run.stdout + run.stderr
+    assert "a real run mounts it" in run.stdout
+    assert not (mount / ".backup-ssd").exists()
+
+
+def test_check_mode_still_stops_when_the_mount_is_not_the_roles_job(tmp_path):
+    # manage_mount false: the role never mounts, so an empty mount point is not "to be mounted"
+    _, run = run_check_mode_mount(tmp_path, False)
+    assert run.returncode != 0, run.stdout
+    assert "plug in the backup SSD" in run.stdout + run.stderr
+
+
 def test_mount_uses_uuid_and_nofail():
     mount = role_task(FILE, "Mount the backup SSD")["ansible.posix.mount"]
     assert mount["src"] == "UUID={{ backup_target_uuid }}"
@@ -79,7 +117,7 @@ def test_nothing_is_written_below_the_mount_before_the_mountpoint_check():
 
 
 def test_clients_are_required(tmp_path):
-    tasks = [role_task(FILE, "Require at least one backup client")]
+    tasks = [role_task(FILE, "Require the backup SSD's UUID and at least one backup client")]
     run = run_play(tmp_path, tasks, {"backup_target_clients": {}})
     assert run.returncode != 0, run.stdout
     assert "backup_target_clients" in run.stdout + run.stderr
@@ -100,7 +138,7 @@ def test_every_client_key_is_installed_restricted(tmp_path):
 
 def test_an_empty_uuid_fails_before_any_mount_task(tmp_path):
     names = [t["name"] for t in yaml.safe_load((ANSIBLE_DIR / "roles/backup_target/tasks/main.yaml").read_text())]
-    assert names[0] == "Require at least one backup client"
+    assert names[0] == "Require the backup SSD's UUID and at least one backup client"
     run = run_play(tmp_path, [role_task(FILE, names[0])], {"backup_target_uuid": "", "backup_target_clients": KEYS})
     assert run.returncode != 0, run.stdout
     assert "backup_target_uuid" in run.stdout + run.stderr

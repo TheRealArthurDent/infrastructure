@@ -106,12 +106,36 @@
   register: resticprofile_backup_marker_stat
   when: resticprofile_backup_mount | length > 0
 
+# --check doesn't create the marker (a takeover: the SSD is mounted, the marker is new) or mount the SSD (a fresh
+# host: backup_target sets backup_target_mount_pending). Only a mounted SSD gets through then; a real run needs the
+# marker.
+- name: Probe the backup SSD mount point
+  ansible.builtin.command: mountpoint -q {{ resticprofile_backup_mount }}
+  register: resticprofile_backup_mountpoint
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: resticprofile_backup_mount | length > 0 and not resticprofile_backup_marker_stat.stat.exists
+
+- name: Report the missing backup SSD marker in check mode
+  ansible.builtin.debug:
+    msg: >-
+      {{ resticprofile_backup_marker }} is missing: it is created by backup_target in the real run
+      (the backup SSD is {{ 'mounted' if resticprofile_backup_mountpoint.rc == 0 else 'mounted by the real run' }}).
+  when: >-
+    resticprofile_backup_mount | length > 0 and not resticprofile_backup_marker_stat.stat.exists
+    and ansible_check_mode
+    and (resticprofile_backup_mountpoint.rc == 0 or backup_target_mount_pending | default(false) | bool)
+
 - name: Ensure the backup SSD is mounted
   ansible.builtin.fail:
     msg: >-
       {{ resticprofile_backup_marker }} is missing: the backup SSD isn't mounted at {{ resticprofile_backup_mount }}.
       Mount it (run the playbook again if the backup_target component sets it up), then restore.
-  when: resticprofile_backup_mount | length > 0 and not resticprofile_backup_marker_stat.stat.exists
+  when: >-
+    resticprofile_backup_mount | length > 0 and not resticprofile_backup_marker_stat.stat.exists
+    and not (ansible_check_mode and (resticprofile_backup_mountpoint.rc == 0
+                                     or backup_target_mount_pending | default(false) | bool))
 
 - name: Ensure the restore items are restored on a fresh host
   ansible.builtin.command:
@@ -134,8 +158,11 @@
   vars:
     resticprofile_restore_hints:
       10: >-
-        Check that the backup host accepts this host's restic SSH key: its public key must be in dungeon's
-        backup_target_clients (host_vars/dungeon.yaml). Then run the dungeon playbook and this one again.
+        {{ "Check that the backup host accepts this host's restic SSH key: its public key must be in dungeon's
+        backup_target_clients (host_vars/dungeon.yaml). Then run the dungeon playbook and this one again."
+        if resticprofile_repository_is_sftp | bool else
+        'Check that the backup SSD holds ' ~ resticprofile_repository ~ '; a new host with nothing to restore: run
+        again with -e skip_infrastructure_restore=true.' }}
       11: >-
         If this is a new host with nothing to restore, run the playbook again with
         -e skip_infrastructure_restore=true.
