@@ -21,6 +21,7 @@
     deconz_vnc_password: LEAKCANARY-vnc
     nodered_github_user: test-user
     nodered_github_email: test@example.com
+    opencloud_admin_password: LEAKCANARY-opencloud-admin
     # No Docker daemon runs inside the test container.
     certificate_check_reload_nginx: false
     docker_restart_daemon: false

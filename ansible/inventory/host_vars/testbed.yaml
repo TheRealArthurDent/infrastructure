@@ -8,3 +8,12 @@ resticprofile_restore_drill_enabled: false
 discord_docker_webhook_title: Docker Webhook testbed
 resticprofile_ssh_key_title: Resticprofile SSH testbed
 resticprofile_passphrase_title: Resticprofile testbed
+opencloud_admin_title: admin testbed
+
+# private-cloud's OpenCloud, for its integration runs: its .env, and the default vhosts and SANs plus opencloud
+# (opencloud isn't in the roles' defaults, raspi doesn't run it)
+secrets_opencloud_env: true
+reverse_proxy_vhosts: [iobroker, ui, node-red, deconz, deconz-ui, roomba, grafana, chronograf, portainer, nextcloud,
+                       pihole, outbound, opencloud]
+certificate_check_subdomains: [pihole, portainer, nextcloud, iobroker, node-red, grafana, chronograf, outbound, deconz,
+                               deconz-ui, ui, opencloud]

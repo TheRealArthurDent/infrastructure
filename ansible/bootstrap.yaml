@@ -40,7 +40,8 @@
       tags: always
 
     # Resolved once per host. As play vars, every use would re-run the lookup (raspberry#235). A lookup runs only
-    # for a part the host runs (stack_components, secrets_smart_home_env): the host's database needn't hold the rest.
+    # for a part the host runs (stack_components, secrets_smart_home_env, secrets_opencloud_env): the host's database
+    # needn't hold the rest.
     - name: Read secrets from KeePass
       ansible.builtin.set_fact:
         pihole_password: >-
@@ -118,6 +119,10 @@
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='GitHub', title='NodeRed', field='email')
              if secrets_smart_home_env | bool else '' }}
+        opencloud_admin_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='OpenCloud', title=opencloud_admin_title)
+             if secrets_opencloud_env | bool else '' }}
       no_log: true
       tags: always
 

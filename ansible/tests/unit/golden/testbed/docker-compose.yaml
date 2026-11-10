@@ -15,8 +15,10 @@ services:
       - /etc/docker/infrastructure/nginx/testbed.pem:/etc/nginx/testbed.pem:ro
       - /etc/docker/infrastructure/nginx/testbed.key:/etc/nginx/testbed.key:ro
     networks:
-      - nginx
-      - siz
+      nginx:
+      siz:
+        aliases:
+          - opencloud.testbed
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
   # portainer

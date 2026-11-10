@@ -57,6 +57,8 @@ pihole_instances:
         target: "dungeon"
       - domain: "portainer.dungeon"
         target: "dungeon"
+      - domain: "opencloud.dungeon"
+        target: "dungeon"
       - domain: "nextcloud.erika"
         target: "erika"
       - domain: "portainer.erika"
@@ -80,6 +82,8 @@ pihole_instances:
       - domain: "grafana.testbed"
         target: "testbed"
       - domain: "portainer.testbed"
+        target: "testbed"
+      - domain: "opencloud.testbed"
         target: "testbed"
 
     block_lists:

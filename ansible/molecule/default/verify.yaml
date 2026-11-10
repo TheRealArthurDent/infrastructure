@@ -190,7 +190,8 @@
            + ([] if is_dungeon else
               ['/etc/docker/infrastructure/.env',
                '/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519',
-               '/etc/docker/smart-home/.env']) }}
+               '/etc/docker/smart-home/.env'])
+           + (['/etc/docker/opencloud/.env'] if is_dungeon else []) }}
 
     - name: Check secret files exist, are owned by root and are not world-readable
       ansible.builtin.assert:
@@ -256,6 +257,32 @@
         - /etc/docker/smart-home
         - /etc/docker/infrastructure/pihole
       when: is_dungeon
+
+    # Read by private-cloud's opencloud role (OPENCLOUD_ADMIN_PASSWORD, its opencloud/.env.example)
+    - name: Read the OpenCloud .env
+      ansible.builtin.slurp:
+        src: /etc/docker/opencloud/.env
+      register: opencloud_env
+      when: is_dungeon
+
+    - name: Check the OpenCloud admin password is rendered
+      ansible.builtin.assert:
+        that: >-
+          'OPENCLOUD_ADMIN_PASSWORD=LEAKCANARY-opencloud-admin' in (opencloud_env.content | b64decode).splitlines()
+        fail_msg: /etc/docker/opencloud/.env lacks OPENCLOUD_ADMIN_PASSWORD
+      when: is_dungeon
+
+    - name: Stat the OpenCloud .env on a host without OpenCloud
+      ansible.builtin.stat:
+        path: /etc/docker/opencloud
+      register: opencloud_dir
+      when: not is_dungeon
+
+    - name: Check a host without OpenCloud gets no OpenCloud .env
+      ansible.builtin.assert:
+        that: not opencloud_dir.stat.exists
+        fail_msg: /etc/docker/opencloud exists on a host with secrets_opencloud_env false
+      when: not is_dungeon
 
     - name: Check dungeon has no pihole .env, no restic key pair, no ssh_config and no smart-home .env
       ansible.builtin.assert:
@@ -458,11 +485,12 @@
           - "is_dungeon or 'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
 
     # certificate_check_subdomains of the platform: just the vhosts dungeon runs
-    - name: Check dungeon's certificate covers portainer and outbound only
+    - name: Check dungeon's certificate covers portainer, outbound and opencloud only
       ansible.builtin.assert:
         that:
           - "'DNS:portainer.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:outbound.' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:opencloud.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:pihole.' ~ inventory_hostname not in cert_san.stdout"
           - "'DNS:grafana.' ~ inventory_hostname not in cert_san.stdout"
         fail_msg: "Unexpected SANs: {{ cert_san.stdout }}"
@@ -561,6 +589,8 @@
           # Resolved through the etc_hosts entry in molecule.yml
           - compose.services.resticprofile.extra_hosts.dungeon == '192.0.2.10'
           - "nginx_cert_mount in compose.services.nginx.volumes"
+          # Only hosts with the opencloud vhost give nginx a network alias
+          - compose.services.nginx.networks.siz is none
       when: not is_dungeon
 
     # dungeon: portainer and outbound vhosts only, the six components and a local repository on the backup SSD
@@ -596,6 +626,8 @@
           - "'extra_hosts' not in compose.services.resticprofile"
           # Backups wait for infrastructure's restore marker only (smart-home isn't on dungeon)
           - "'for stack in infrastructure; do' in compose.services.resticprofile.command[-1]"
+          # private-cloud's OpenCloud reaches its own URL through nginx without DNS
+          - compose.services.nginx.networks.siz.aliases == ['opencloud.' ~ inventory_hostname]
         fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
       when: is_dungeon
 

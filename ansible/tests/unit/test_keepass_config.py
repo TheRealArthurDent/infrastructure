@@ -172,6 +172,7 @@ LOOKUP_CONDITIONS = {
     "resticprofile_ssh_public_key": SFTP,
     "dungeon_ssh_port": SFTP,
     **{key: "secrets_smart_home_env | bool" for key in SMART_HOME_KEYS},
+    "opencloud_admin_password": "secrets_opencloud_env | bool",
 }
 
 
@@ -191,6 +192,7 @@ def test_bootstrap_only_looks_up_what_the_host_needs():
         assert value.endswith(f"if {condition} else '' }}}}"), name
     assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_id"])
     assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_token"])
+    assert "group='OpenCloud', title=opencloud_admin_title" in str(facts["opencloud_admin_password"])
 
 
 def test_restic_key_pair_comes_from_the_hosts_entry():
