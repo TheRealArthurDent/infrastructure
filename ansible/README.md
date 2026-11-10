@@ -261,7 +261,9 @@ dungeon: nothing to do, its repository is local on the SSD.
 
 The stack needs the nginx certificate (the `reverse_proxy` role stops with a message if it is missing). On raspi and
 testbed it also needs `dungeon` to resolve on the Pi (the role looks up its IP at every run); dungeon resolves
-through raspi's Pi-hole, so raspi must be up.
+through raspi's Pi-hole, so raspi must be up. `--tags stack` also runs the `secrets` role, so a changed KeePass
+entry reaches its file; a running container only sees it after a restart (`docker restart resticprofile` for the
+restic passphrase).
 
 ```sh
 bin/with-keepass ansible-playbook check-certificates.yaml --limit <target>

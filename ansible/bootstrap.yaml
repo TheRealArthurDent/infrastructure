@@ -128,7 +128,9 @@
     # dungeon: the restic sftp target of raspi and testbed
     - role: backup_target
       when: backup_target_enabled | default(false) | bool
-    - secrets
+    # Also under --tags stack: the stack mounts the files it writes, so a changed secret reaches them
+    - role: secrets
+      tags: stack
     # Only hosts in the Argon ONE V2 case (raspberry#325)
     - role: argon_fan
       when: argon_fan_enabled | default(false) | bool

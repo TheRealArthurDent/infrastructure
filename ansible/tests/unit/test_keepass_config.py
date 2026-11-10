@@ -223,3 +223,11 @@ def test_testbed_has_its_own_restic_passphrase():
     defaults = yaml.safe_load((ANSIBLE_DIR / "roles" / "secrets" / "defaults" / "main.yaml").read_text())
     assert defaults["resticprofile_passphrase_title"] == "Resticprofile"
     assert testbed["resticprofile_passphrase_title"] == "Resticprofile testbed"
+
+
+def test_the_stack_tag_also_writes_the_secrets():
+    # `--tags stack` reads the secrets (the lookups are tagged always); the secrets role must write them too, or a
+    # changed passphrase or Pi-hole password never reaches the files the stack mounts.
+    bootstrap = next(play for play in plays("bootstrap.yaml") if play["name"] == "Bootstrap Raspberry Pi")
+    secrets = next(r for r in bootstrap["roles"] if r == "secrets" or (isinstance(r, dict) and r.get("role") == "secrets"))
+    assert isinstance(secrets, dict) and "stack" in secrets.get("tags", [])
