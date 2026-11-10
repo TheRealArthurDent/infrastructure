@@ -95,10 +95,12 @@ Group/title, with the fields the roles read:
 | --- | --- | --- |
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository |
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (a webhook of its own, so Discord shows which host wrote) |
+| `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `raspberry` | `Backup/Resticprofile SSH` | attachments `id_ed25519` and `id_ed25519.pub`: raspi's restic key pair |
 | `raspberry` | `Backup/Resticprofile SSH testbed` | the same for testbed |
 | `raspberry` | `Discord/Docker Webhook testbed` | fields `id` and `token` of testbed's webhook |
+| `raspberry` | `OpenCloud/admin testbed` | the same for testbed's OpenCloud |
 
 | `raspberry` | `Backup/Resticprofile` | password: the passphrase of raspi's restic repository |
 | `raspberry` | `Backup/Resticprofile testbed` | password: the passphrase of testbed's restic repository (throwaway) |
@@ -106,8 +108,9 @@ Group/title, with the fields the roles read:
 
 raspi's other entries (`Discord/Docker Webhook`, `smart-home/...` for the smart-home stack, `Backup/Dungeon` with the
 field `ssh-port`) are the existing ones. dungeon's database holds nothing of the smart-home stack. The entry titles
-are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`;
-testbed sets its own in `host_vars/testbed.yaml`).
+are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`,
+`opencloud_admin_title`; testbed sets its own in `host_vars/testbed.yaml`). The OpenCloud entries are only read on hosts
+with `secrets_opencloud_env` (dungeon, testbed).
 
 #### Put the restic key pairs into KeePass
 

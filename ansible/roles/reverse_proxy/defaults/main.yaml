@@ -3,7 +3,8 @@
 reverse_proxy_container: nginx
 
 # The vhosts of the host (one server block each, "deconz" covers both of its blocks). The host's own vhosts and the
-# health endpoint always render; pihole and outbound also need their component in stack_components.
+# health endpoint always render; pihole and outbound also need their component in stack_components. opencloud
+# (private-cloud) isn't in the default: only hosts running it list it.
 reverse_proxy_vhosts:
   - iobroker
   - ui

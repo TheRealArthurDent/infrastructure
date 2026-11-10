@@ -175,7 +175,7 @@ def test_old_restic_init_script_and_generated_key_are_gone():
 def test_dungeon_renders_only_its_vhosts(tmp_path):
     tree = rendered_tree(tmp_path, "dungeon")
     names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
-    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon"}
+    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon", "opencloud.dungeon"}
     assert "listen              8443" not in tree["nginx/nginx.conf"]
     assert "location /health" in tree["nginx/nginx.conf"]
 
@@ -198,3 +198,33 @@ def test_healthmonitor_needs_outbound(tmp_path):
     assert result.returncode != 0
     assert "healthmonitor needs outbound" in result.stdout + result.stderr
     assert run_components_check(tmp_path, ["unbound", "outbound", "healthmonitor"]).returncode == 0
+
+
+def test_opencloud_vhost_proxies_to_the_container(tmp_path):
+    """private-cloud's opencloud container listens on 9200 in the network siz, without TLS (its README)."""
+    tree = rendered_tree(tmp_path, "dungeon")
+    assert "include             snippets/opencloud.conf;" in tree["nginx/nginx.conf"]
+    snippet = tree["nginx/snippets/opencloud.conf"]
+    assert "set $opencloud opencloud:9200;" in snippet
+    assert "proxy_pass http://$opencloud;" in snippet
+    assert "proxy_set_header X-Forwarded-Proto https;" in snippet
+    # Uploads of any size, websockets for the web UI
+    assert "client_max_body_size 0;" in snippet
+    assert 'proxy_set_header Connection "upgrade";' in snippet
+
+
+def test_raspi_has_no_opencloud_vhost(tmp_path):
+    tree = rendered_tree(tmp_path, "raspi")
+    assert "opencloud." not in tree["nginx/nginx.conf"]
+
+
+def test_testbed_keeps_the_default_vhosts_and_sans_plus_opencloud():
+    """testbed lists them in full to add opencloud; a vhost added to a default must reach testbed too."""
+    import yaml
+    from pathlib import Path
+
+    ansible = Path(__file__).resolve().parents[2]
+    testbed = yaml.safe_load((ansible / "inventory/host_vars/testbed.yaml").read_text())
+    for role, var in (("reverse_proxy", "reverse_proxy_vhosts"), ("certificate_check", "certificate_check_subdomains")):
+        default = yaml.safe_load((ansible / f"roles/{role}/defaults/main.yaml").read_text())[var]
+        assert sorted(testbed[var]) == sorted(default + ["opencloud"]), var
