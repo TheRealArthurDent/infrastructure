@@ -15,7 +15,12 @@ services:
       - /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
       - /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.key:/etc/nginx/{{ inventory_hostname }}.key:ro
     networks:
-      - nginx
-      - siz
+      nginx:
+      siz:
+        # {% if 'opencloud' in reverse_proxy_vhosts +%}
+        # private-cloud's OpenCloud calls its own URL (OpenID Connect): Docker resolves it to nginx, without Pi-hole.
+        aliases:
+          - opencloud.{{ inventory_hostname }}
+        # {% endif +%}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]

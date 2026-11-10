@@ -589,6 +589,8 @@
           # Resolved through the etc_hosts entry in molecule.yml
           - compose.services.resticprofile.extra_hosts.dungeon == '192.0.2.10'
           - "nginx_cert_mount in compose.services.nginx.volumes"
+          # Only hosts with the opencloud vhost give nginx a network alias
+          - compose.services.nginx.networks.siz is none
       when: not is_dungeon
 
     # dungeon: portainer and outbound vhosts only, the six components and a local repository on the backup SSD
@@ -624,6 +626,8 @@
           - "'extra_hosts' not in compose.services.resticprofile"
           # Backups wait for infrastructure's restore marker only (smart-home isn't on dungeon)
           - "'for stack in infrastructure; do' in compose.services.resticprofile.command[-1]"
+          # private-cloud's OpenCloud reaches its own URL through nginx without DNS
+          - compose.services.nginx.networks.siz.aliases == ['opencloud.' ~ inventory_hostname]
         fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
       when: is_dungeon
 

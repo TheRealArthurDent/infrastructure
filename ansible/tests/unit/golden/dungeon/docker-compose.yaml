@@ -41,8 +41,10 @@ services:
     hostname: raspberry
     image: nginx:1.31-alpine
     networks:
-    - nginx
-    - siz
+      nginx: null
+      siz:
+        aliases:
+        - opencloud.dungeon
     ports:
     - 80:80
     - 443:443

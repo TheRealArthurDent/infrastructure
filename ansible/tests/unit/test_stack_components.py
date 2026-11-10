@@ -228,3 +228,17 @@ def test_testbed_keeps_the_default_vhosts_and_sans_plus_opencloud():
     for role, var in (("reverse_proxy", "reverse_proxy_vhosts"), ("certificate_check", "certificate_check_subdomains")):
         default = yaml.safe_load((ansible / f"roles/{role}/defaults/main.yaml").read_text())[var]
         assert sorted(testbed[var]) == sorted(default + ["opencloud"]), var
+
+
+@pytest.mark.parametrize("host", ["dungeon", "testbed"])
+def test_containers_reach_opencloud_through_nginx_without_dns(tmp_path, host):
+    """OpenCloud fetches its own OIDC discovery from https://opencloud.<host>; Docker resolves it to nginx in siz."""
+    compose = yaml.safe_load(rendered_tree(tmp_path, host)["docker-compose.yaml"])
+    siz = compose["services"]["nginx"]["networks"]["siz"]
+    assert siz["aliases"] == [f"opencloud.{host}"]
+    assert "nginx" in compose["services"]["nginx"]["networks"]
+
+
+def test_raspi_nginx_gets_no_network_alias(tmp_path):
+    compose = yaml.safe_load(rendered_tree(tmp_path, "raspi")["docker-compose.yaml"])
+    assert compose["services"]["nginx"]["networks"] == {"nginx": None, "siz": None}
