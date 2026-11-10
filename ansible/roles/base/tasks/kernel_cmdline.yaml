@@ -7,7 +7,8 @@
     path: "{{ base_kernel_cmdline_file }}"
   register: base_kernel_cmdline_stat
 
-- name: Ensure the kernel command line has the parameter {{ item }}
+# No {{ item }} in the name: Ansible renders it before the loop ('item' is undefined). The label shows it.
+- name: Ensure the kernel command line has its parameters
   ansible.builtin.lineinfile:
     path: "{{ base_kernel_cmdline_file }}"
     # Matches the line only while it lacks the parameter as a whole word
@@ -15,5 +16,7 @@
     line: '\1 {{ item }}'
     backrefs: true
   loop: "{{ base_kernel_cmdline_params }}"
+  loop_control:
+    label: "{{ item }}"
   when: base_kernel_cmdline_stat.stat.exists
   notify: Report that the kernel command line takes effect after a reboot
