@@ -186,6 +186,10 @@ class FakePihole:
             return 500, {"error": "injected failure"}
         if self.unavailable:
             self.unavailable -= 1
+            if self.unavailable_as == "unreachable":
+                # Pi-hole is also the DNS server of the control node: while FTL restarts, pihole.raspi doesn't
+                # resolve and the uri module reports status -1. A dropped connection gives the same -1.
+                return None, None
             if self.unavailable_as == "database":
                 return 500, {"error": {"key": "database_error", "message": "Could not read domains from database table",
                                        "hint": "Database not available"}}
@@ -362,6 +366,9 @@ def serve(pihole, cert):
             length = int(self.headers.get("Content-Length") or 0)
             body = self.rfile.read(length) if length else b"{}"
             status, payload = pihole.handle(self.command, self.path, self.headers, body)
+            if status is None:
+                self.close_connection = True
+                return
             self.send_response(status)
             if payload is None:
                 self.send_header("Content-Length", "0")
@@ -486,7 +493,7 @@ def test_check_mode_reports_changes_without_making_them(run):
     assert ("DELETE", "/api/auth") in pihole.requests
 
 
-@pytest.mark.parametrize("unavailable_as", ["bad_gateway", "database"])
+@pytest.mark.parametrize("unavailable_as", ["bad_gateway", "database", "unreachable"])
 def test_waits_for_the_api_when_pi_hole_restarts_after_a_change(run, unavailable_as):
     pihole = FakePihole(unavailable_as=unavailable_as, hosts=["10.0.0.9 old"], cnames=["old.raspi,raspi"], lists=[OLD_LIST],
                         groups=[{"name": "old"}], clients=[{"client": "192.168.1.99"}],
