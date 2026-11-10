@@ -159,3 +159,23 @@ def test_playbooks_get_the_credentials_before_the_first_lookup(playbook):
     assert imports, "tasks/keepass_credentials.yaml is not imported"
     assert lookups
     assert imports[0] < lookups[0]
+
+
+@pytest.mark.parametrize("password", [
+    "LEAKCANARY-{{ 7 * 7 }}",
+    "LEAKCANARY-{% if true %}x{% endif %}{# c #}",
+    "LEAKCANARY-$X ${Y} 'q' \"d\" \\ #h",
+    " LEAKCANARY-trail ",
+    "LEAKCANARY-0123",
+])
+def test_takes_a_hostile_password_from_the_environment_verbatim(tmp_path, keepass_files, password):
+    """Jinja in the master password is not evaluated, nothing is stripped or converted."""
+    db, key = keepass_files
+    result = run_tasks(
+        tmp_path,
+        databases=raspberry(db, key),
+        password=password,
+        check="keepass_password == lookup('ansible.builtin.env', 'KEEPASS_PASSWORD')",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "LEAKCANARY" not in result.stdout + result.stderr

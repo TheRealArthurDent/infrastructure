@@ -265,11 +265,13 @@
       register: opencloud_env
       when: is_dungeon
 
-    - name: Check the OpenCloud admin password is rendered
+    # Double-quoted with \\, " and $ escaped, so Compose reads the value back verbatim
+    - name: Check the OpenCloud admin password is rendered for Compose
+      vars:
+        expected: 'OPENCLOUD_ADMIN_PASSWORD="LEAKCANARY-opencloud-\$admin \"x'' \\ #y"'
       ansible.builtin.assert:
-        that: >-
-          'OPENCLOUD_ADMIN_PASSWORD=LEAKCANARY-opencloud-admin' in (opencloud_env.content | b64decode).splitlines()
-        fail_msg: /etc/docker/opencloud/.env lacks OPENCLOUD_ADMIN_PASSWORD
+        that: expected in (opencloud_env.content | b64decode).splitlines()
+        fail_msg: /etc/docker/opencloud/.env lacks the escaped OPENCLOUD_ADMIN_PASSWORD
       when: is_dungeon
 
     - name: Stat the OpenCloud .env on a host without OpenCloud
@@ -301,7 +303,7 @@
 
     - name: Check pihole password is rendered
       ansible.builtin.assert:
-        that: "'FTLCONF_webserver_api_password=LEAKCANARY-pihole' in (infra_env.content | b64decode)"
+        that: "'FTLCONF_webserver_api_password=\"LEAKCANARY-pihole\"' in (infra_env.content | b64decode).splitlines()"
       when: not is_dungeon
 
     - name: Read the kernel command line
