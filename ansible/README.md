@@ -112,6 +112,11 @@ are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title
 `opencloud_admin_title`; testbed sets its own in `host_vars/testbed.yaml`). The OpenCloud entries are only read on hosts
 with `secrets_opencloud_env` (dungeon, testbed).
 
+Passwords may hold any printable character (`$`, `{{ }}`, quotes, backslashes, `#`, blanks, umlauts): the secrets role
+quotes every `.env` value for Compose (`dotenv_quote`). It refuses, before writing anything, line breaks and other
+control characters in any entry, `'` and `\` in the InfluxDB passwords (`smart-home/Influx DB`; the influxdb image's
+init script can't create the user then) and `\` in the deCONZ VNC password (deCONZ' start script changes it).
+
 #### Put the restic key pairs into KeePass
 
 The sftp clients (raspi, testbed) back up to dungeon with a key pair from KeePass, which the `secrets` role writes to

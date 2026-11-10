@@ -7,6 +7,8 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # Ansible tags such as !unsafe (molecule/default/vars/secrets.yaml)
+        args: [--unsafe]
       - id: check-added-large-files
       - id: detect-private-key
       - id: no-commit-to-branch

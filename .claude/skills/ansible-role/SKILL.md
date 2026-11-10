@@ -95,15 +95,24 @@ never from files in the repo and not from ansible-vault.
   secret prints it at `-v`, so it needs `no_log` too.
 - Molecule's `verify.yaml` fails if any dummy secret (values containing `LEAKCANARY`) appears in the Ansible log of
   the test run, which runs at `-v` with `--diff`. When you add a role variable holding a secret, give its dummy
-  value in `converge.yaml` the `LEAKCANARY-` prefix so the leak test covers it.
+  value in `molecule/default/vars/secrets.yaml` the `LEAKCANARY-` prefix so the leak test covers it.
 - Secret files on the host: `owner: root`, `mode: '0600'`, below `/etc/docker/<stack>/`.
 - Resolve each secret **once** (e.g. a single `set_fact` with `no_log: true` at the start of the play) instead of
   referencing a lazy `lookup()` var many times; each reference re-decrypts the KDBX (raspberry#235).
 - Private keys of the root CA never go to the Pi. Sign on the control node (`delegate_to: localhost`) and copy
   only the leaf cert and key (raspberry#229).
-- In Molecule, replace lookups with plain dummy values in `converge.yaml` vars
-  (e.g. `pihole_password: LEAKCANARY-pihole`),
-  so tests never need the real KeePass DB.
+- **Any character can be in a KeePass value**, and a password like `tes$abc$bla{xyz}blub` must reach the container
+  unchanged. Write every value of a `.env` file through `| dotenv_quote` (the secrets role's filter): Compose
+  expands `$` in unquoted `.env` values and cuts them at ` #`. Never pass a secret through `shell`/`command`; if
+  there's no way around it, `| quote` it. Where a consumer can't take some characters (InfluxDB's init script: `'`
+  and `\`; deCONZ' VNC password: `\`), refuse them with an `assert` whose message names the entry, never the value.
+  Lookup results are data, not templates (ansible-core ≥ 2.19), so `{{` in a password is harmless; a dummy value
+  in a playbook is a template, which is why the Molecule dummies are `!unsafe`.
+- In Molecule, replace lookups with dummy values in `molecule/default/vars/secrets.yaml` (read by converge and verify),
+  awkward ones marked `!unsafe` (e.g. `pihole_password: !unsafe 'LEAKCANARY-pihole tes$abc{{ x }} #c'`), so tests
+  never need the real KeePass DB. verify reads every `.env` file with `docker compose config` and expects the
+  values back unchanged; `tests/unit/test_secret_env_files.py` does the same through a real KDBX and the keepass
+  lookup.
 
 ## Testing every change
 

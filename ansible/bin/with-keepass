@@ -85,8 +85,8 @@ case "${1:-}" in
   --store)
     database=$(database_name "${2:-}")
     if [[ -t 0 ]]; then
-      read -rsp "KeePass master password of '$database': " password && echo >&2
-      read -rsp "Repeat: " repeated && echo >&2
+      IFS= read -rsp "KeePass master password of '$database': " password && echo >&2
+      IFS= read -rsp "Repeat: " repeated && echo >&2
       if [[ "$password" != "$repeated" ]]; then
         echo "with-keepass: the passwords don't match." >&2
         exit 1
