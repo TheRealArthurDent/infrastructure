@@ -283,6 +283,22 @@
       when: not is_dungeon
       no_log: true
 
+    # The fresh-host restore needs the backup host's key: without it ssh fails with "Host key verification failed"
+    - name: Read resticprofile's known_hosts
+      ansible.builtin.slurp:
+        src: /etc/docker/infrastructure/resticprofile/.ssh/known_hosts
+      register: restic_known_hosts
+      when: not is_dungeon
+
+    - name: Check known_hosts holds the backup host's key under [dungeon]:<ssh port>
+      ansible.builtin.assert:
+        that:
+          - >-
+            restic_known_hosts.content | b64decode
+            == '[dungeon]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMwoOx91BPOyMYT0DW2eReS6Zcipw19ZBqFNM/rPLTSe\n'
+        fail_msg: "known_hosts: {{ restic_known_hosts.content | b64decode }}"
+      when: not is_dungeon
+
     # A local repository needs no key pair and no .ssh directory (the sftp client side is raspi's and testbed's)
     - name: Stat the files dungeon doesn't get
       ansible.builtin.stat:
@@ -293,6 +309,7 @@
         - /etc/docker/infrastructure/resticprofile/.ssh
         - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
         - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub
+        - /etc/docker/infrastructure/resticprofile/.ssh/known_hosts
         - /etc/docker/infrastructure/resticprofile/ssh_config
         - /etc/docker/smart-home/.env
         - /etc/docker/smart-home

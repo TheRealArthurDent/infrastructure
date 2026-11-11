@@ -284,7 +284,9 @@ ssh -p <port> <user>@<ip> sudo reboot
 raspi and testbed: the `secrets` role wrote the host's restic key pair from its KeePass entry
 (`Backup/Resticprofile SSH`, attachments `id_ed25519` and `id_ed25519.pub`; `resticprofile_ssh_key_title` names another
 entry, see [KeePass](#put-the-restic-key-pairs-into-keepass)). The backup host `dungeon` must accept the public key: it
-is in `backup_target_clients` in `host_vars/dungeon.yaml`, applied by dungeon's playbook.
+is in `backup_target_clients` in `host_vars/dungeon.yaml`, applied by dungeon's playbook. The other way round, the
+`resticprofile` role writes dungeon's ssh host key (`resticprofile_backup_host_keys` in `group_vars/all/backup.yaml`)
+into the container's `known_hosts` as `[dungeon]:<ssh port>`.
 
 The key reaches the host's existing repository: its path is the hostname, the passphrase comes from KeePass.
 
@@ -371,6 +373,10 @@ raspi: the user runs everything against it, and Claude's guard hook blocks it on
   `192.168.1.2`), rsnapshot off (the hand-made one on the SSD stays untouched), no `argon_fan` (the Pi 5 fan header
   is controlled by the kernel), `dhparameter_bits: 4096`, no smart-home `.env`, `resticprofile_backup_stacks` is only
   `infrastructure`.
+- **Reinstalled dungeon**: a new install has a new ssh host key, and raspi's and testbed's resticprofile refuse it
+  ("Host key verification failed"). Compare `ssh-keyscan -p <ssh port> -t ed25519 192.168.1.5` with
+  `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on dungeon, put the key into `resticprofile_backup_host_keys`
+  (`group_vars/all/backup.yaml`) and run the stack of raspi and testbed.
 - **Lost SSD**: dungeon's and raspi's backups are gone with it; restoring dungeon would need an off-site copy, which
   doesn't exist yet.
 
@@ -528,8 +534,8 @@ Options and failures:
 
 - `-e skip_infrastructure_restore=true`: a new host with nothing to restore; only writes the marker (step 5).
 - The run stops with a hint if `dungeon` refuses the key (add the public key to `backup_target_clients`,
-  run dungeon's playbook, then this one again) or the
-  repository has no snapshot (a new host: run again with `skip_infrastructure_restore`).
+  run dungeon's playbook, then this one again), if ssh doesn't trust dungeon's host key (`resticprofile_backup_host_keys`,
+  see [dungeon](#dungeon)) or the repository has no snapshot (a new host: run again with `skip_infrastructure_restore`).
 
 Backups stay off until the restore is done: resticprofile schedules them only once every stack in
 `resticprofile_backup_stacks` (this stack and smart-home) has its marker, so a fresh host never backs up its empty or

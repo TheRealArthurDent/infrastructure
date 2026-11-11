@@ -164,7 +164,7 @@ def test_backups_wait_for_the_smart_home_restore_too():
     resticprofile schedules backups only once every stack in resticprofile_backup_stacks has its marker.
     """
     group_vars = yaml.safe_load(read(BACKUP_VARS))
-    assert group_vars == {"resticprofile_backup_stacks": ["{{ stack_project_name }}", "smart-home"]}
+    assert group_vars["resticprofile_backup_stacks"] == ["{{ stack_project_name }}", "smart-home"]
 
 
 def test_stack_merges_the_restore_items_of_its_components():
