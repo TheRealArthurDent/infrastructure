@@ -483,6 +483,27 @@ def test_clean_slate_without_repository_access_fails_with_the_init_hint(env):
     assert not env.marker.exists()
 
 
+def test_clean_slate_with_an_unknown_backup_host_key_fails_with_the_known_hosts_hint(env, tmp_path):
+    # What restic prints when ssh doesn't know or doesn't trust the backup host's key (a fresh host without
+    # known_hosts, or a reinstalled backup host)
+    fake_restic = tmp_path / "bin" / "fake-restic"
+    fake_restic.write_text(
+        "#!/bin/sh\n"
+        "echo 'subprocess ssh: Host key verification failed.' >&2\n"
+        "echo 'Fatal: unable to open repository at sftp:restic@dungeon:/media/backup/restic/raspi' >&2\n"
+        "exit 1\n"
+    )
+    fake_restic.chmod(0o755)
+    env.config["runners"]["oneoff"] = [str(fake_restic)]
+    env.config_path.write_text(json.dumps(env.config))
+
+    code, _, err = clean_slate(env)
+
+    assert code == 12, "Ansible points the user to the backup host's key in known_hosts on exit code 12"
+    assert "Host key verification failed" in err
+    assert not env.marker.exists()
+
+
 def test_clean_slate_fails_if_an_item_is_missing_from_the_snapshot(env):
     env.write(env.source, "portainer/data/portainer.db", "portainer")
     env.backup()

@@ -6,7 +6,7 @@ pykeepass==4.2.0
 
 # Tests
 molecule==26.11.0
-molecule-plugins[docker]==26.10.12
+molecule-plugins[docker]==26.11.0
 pytest==9.2.0
 pytest-xdist==3.8.0
 
