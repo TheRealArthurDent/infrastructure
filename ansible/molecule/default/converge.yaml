@@ -1,27 +1,15 @@
 - name: Converge
   hosts: all
   gather_facts: true
+  # Dummy secrets instead of KeePass lookups
+  vars_files:
+    - vars/secrets.yaml
   vars:
-    # Dummy secrets instead of KeePass lookups. Every value containing LEAKCANARY is a secret;
-    # verify.yaml fails if one of them shows up in the Ansible log (raspberry#230).
-    pihole_password: LEAKCANARY-pihole
-    outbound_password: LEAKCANARY-outbound
-    containermonitor_notification_url: discord://LEAKCANARY-webhook-token@id
-    restic_passphrase: LEAKCANARY-restic
     dungeon_ssh_port: 2222
-    resticprofile_ssh_private_key: LEAKCANARY-ssh-key
-    resticprofile_ssh_public_key: ssh-ed25519 LEAKCANARY-ssh-key-pub molecule@test
     iobroker_states_redis_port: 9000
     iobroker_objects_redis_port: 9001
-    influxdb_admin_password: LEAKCANARY-influx-admin
-    influxdb_read_password: LEAKCANARY-influx-read
-    influxdb_write_password: LEAKCANARY-influx-write
-    grafana_password: LEAKCANARY-grafana
-    mosquitto_password: LEAKCANARY-mosquitto
-    deconz_vnc_password: LEAKCANARY-vnc
     nodered_github_user: test-user
     nodered_github_email: test@example.com
-    opencloud_admin_password: LEAKCANARY-opencloud-admin
     # No Docker daemon runs inside the test container.
     certificate_check_reload_nginx: false
     docker_restart_daemon: false
