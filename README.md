@@ -24,7 +24,7 @@ python3 -m venv .venv
 ```
 
 | What | Command (from the repo root) | Needs |
-|---|---|---|
+| --- | --- | --- |
 | Unit tests for the KeePass lookup plugin | `.venv/bin/pytest ansible/tests/unit` | nothing |
 | Role tests in a Debian trixie container (converge, idempotence, verify) | `(cd ansible && ../.venv/bin/molecule test)` | Docker |
 | Real integration test on the testbench Pi | `ansible-playbook bootstrap.yaml --limit testbench --check --diff`, then a real run, then a second run that must report `changed=0` | testbench |

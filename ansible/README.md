@@ -72,8 +72,9 @@ You also need:
 Every host reads its secrets from its own KeePass database (host variable `keepass_database`: `raspberry` by default,
 `dungeon` for dungeon, `testbench` for testbench). The root CA for `check-certificates.yaml` always comes from
 `keepass_ca_database` (`raspberry`), so `check-certificates.yaml` and `setup-pihole.yaml` (which also needs the root CA)
-with `--limit dungeon` or `--limit testbench` open raspi's database as well: both master passwords are needed (`bin/with-keepass --store` stores one per database). The CA stays there until it gets a database of its
-own (#10); then only `keepass_ca_database` changes.
+with `--limit dungeon` or `--limit testbench` open raspi's database as well: both master passwords are needed
+(`bin/with-keepass --store` stores one per database). The CA stays there until it gets a database of its own (#10);
+then only `keepass_ca_database` changes.
 
 The paths depend on your machine, so they aren't in the repo. Set them once in a local file that git ignores, one
 entry per database in `local_keepass_databases`:
@@ -159,8 +160,8 @@ the host. A rebuilt host has the same key, so dungeon's `authorized_keys` (`back
   database and delete the copies. Check that the public key equals `backup_target_clients.raspi`.
 - testbench: keep its existing key as well. Copy `id_ed25519` and `id_ed25519.pub` from
   `/etc/docker/infrastructure/resticprofile/.ssh/` on testbench exactly as for raspi, attach both to
-  `Backup/Resticprofile SSH` in the `testbench` database and check that the public key equals `backup_target_clients.testbench`. A new pair
-  (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbench -f ./id_ed25519`) needs its public key in
+  `Backup/Resticprofile SSH` in the `testbench` database and check that the public key equals
+  `backup_target_clients.testbench`. A new pair (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbench -f ./id_ed25519`) needs its public key in
   `host_vars/dungeon.yaml` and a dungeon run first. Delete the copies after attaching them.
 
 The `secrets` role compares the public key of the entry with `backup_target_clients.<host>` before it writes the key
