@@ -2,11 +2,14 @@
 import base64
 import json
 import os
+import pty
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from secret_values import AWKWARD
 
 ANSIBLE_DIR = Path(__file__).parents[2]
 WRAPPER = ANSIBLE_DIR / "bin" / "with-keepass"
@@ -228,3 +231,36 @@ def test_without_a_command_prints_usage(fake):
     result = run(fake)
     assert result.returncode != 0
     assert b"Usage" in result.stderr
+
+
+@pytest.mark.parametrize("password", AWKWARD)
+def test_awkward_passwords_survive_store_and_run(fake, password):
+    assert run(fake, "--store", stdin=password + "\n").returncode == 0
+    result = run(fake, *PRINT_PASSWORD)
+    assert result.stdout.decode("utf-8") == password
+
+
+def store_on_a_terminal(fake, typed):
+    """--store on a terminal: type the password twice, as at the prompt."""
+    pid, fd = pty.fork()
+    if pid == 0:  # pragma: no cover - the child
+        os.execve(str(WRAPPER), [str(WRAPPER), "--store"], fake.env)
+    output = b""
+    for _ in range(2):
+        while b": " not in output.rsplit(b"\n", 1)[-1]:
+            output += os.read(fd, 1024)
+        os.write(fd, typed.encode("utf-8") + b"\r")
+        output = b""
+    while True:
+        try:
+            if not os.read(fd, 1024):
+                break
+        except OSError:
+            break
+    return os.waitpid(pid, 0)[1]
+
+
+def test_store_on_a_terminal_keeps_leading_and_trailing_blanks(fake):
+    password = "  blanks \\ around $x  "
+    assert store_on_a_terminal(fake, password) == 0
+    assert fake.stored() == {"raspberry-keepass": password}

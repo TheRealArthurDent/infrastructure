@@ -2,10 +2,51 @@
   hosts: all
   become: true
   gather_facts: false
+  vars_files:
+    - vars/secrets.yaml
   vars:
     # dungeon-trixie runs the backup target and no Pi-hole, rsnapshot, fan or smart-home .env; raspi-trixie runs the
     # defaults (bootstrap.yaml's raspi). Checks of the other kind are gated, not removed.
     is_dungeon: "{{ backup_target_enabled | default(false) | bool }}"
+    # What each .env file must hand to the containers (vars/secrets.yaml, converge.yaml)
+    env_expectations_all:
+      - file: /etc/docker/infrastructure/.env
+        hosts: pihole
+        keys:
+          FTLCONF_webserver_api_password: "{{ pihole_password }}"
+          WEBPASSWORD: "{{ pihole_password }}"
+          VIRTUAL_HOST: pihole
+      - file: /etc/docker/infrastructure/.outbound.env
+        keys:
+          FTLCONF_webserver_api_password: "{{ outbound_password }}"
+          WEBPASSWORD: "{{ outbound_password }}"
+          VIRTUAL_HOST: outbound
+      - file: /etc/docker/infrastructure/.healthmonitor.env
+        keys:
+          CONTAINERMON_NOTIFICATION_URL: "{{ containermonitor_notification_url }}"
+      - file: /etc/docker/smart-home/.env
+        hosts: pihole
+        keys:
+          IOBROKER_STATES_REDIS_PORT: "9000"
+          IOBROKER_OBJECTS_REDIS_PORT: "9001"
+          INFLUXDB_ADMIN_PASSWORD: "{{ influxdb_admin_password }}"
+          INFLUXDB_READ_PASSWORD: "{{ influxdb_read_password }}"
+          INFLUXDB_WRITE_PASSWORD: "{{ influxdb_write_password }}"
+          GRAFANA_PASSWORD: "{{ grafana_password }}"
+          MOSQUITTO_PASSWD: "{{ mosquitto_password }}"
+          DECONZ_VNC_PASSWORD: "{{ deconz_vnc_password }}"
+          DECONZ_DEVICE_TYPE: ttyACM0
+          GITHUB_USER: test-user
+          GITHUB_EMAIL: test@example.com
+      - file: /etc/docker/opencloud/.env
+        hosts: dungeon
+        keys:
+          OPENCLOUD_ADMIN_PASSWORD: "{{ opencloud_admin_password }}"
+    # pihole: raspi-trixie only, dungeon: dungeon-trixie only
+    env_expectations: >-
+      {{ env_expectations_all | rejectattr('hosts', 'defined')
+         + env_expectations_all | selectattr('hosts', 'defined')
+           | selectattr('hosts', 'equalto', 'dungeon' if is_dungeon else 'pihole') }}
   tasks:
     - name: Check no secret was printed (-v and --diff, see molecule.yml)
       vars:
@@ -258,20 +299,6 @@
         - /etc/docker/infrastructure/pihole
       when: is_dungeon
 
-    # Read by private-cloud's opencloud role (OPENCLOUD_ADMIN_PASSWORD, its opencloud/.env.example)
-    - name: Read the OpenCloud .env
-      ansible.builtin.slurp:
-        src: /etc/docker/opencloud/.env
-      register: opencloud_env
-      when: is_dungeon
-
-    - name: Check the OpenCloud admin password is rendered
-      ansible.builtin.assert:
-        that: >-
-          'OPENCLOUD_ADMIN_PASSWORD=LEAKCANARY-opencloud-admin' in (opencloud_env.content | b64decode).splitlines()
-        fail_msg: /etc/docker/opencloud/.env lacks OPENCLOUD_ADMIN_PASSWORD
-      when: is_dungeon
-
     - name: Stat the OpenCloud .env on a host without OpenCloud
       ansible.builtin.stat:
         path: /etc/docker/opencloud
@@ -293,16 +320,75 @@
         label: "{{ item.item }}"
       when: is_dungeon
 
-    - name: Read infrastructure .env
-      ansible.builtin.slurp:
-        src: /etc/docker/infrastructure/.env
-      register: infra_env
-      when: not is_dungeon
+    # Compose must read every awkward dummy secret (vars/secrets.yaml) back unchanged, from env_file: as well as from
+    # the project's .env through ${KEY}. private-cloud's opencloud role reads OPENCLOUD_ADMIN_PASSWORD
+    # (its .env.example).
+    - name: Ensure a Compose probe directory per .env file
+      ansible.builtin.file:
+        path: "/tmp/env-probe/{{ env_index }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop: "{{ env_expectations | map(attribute='file') }}"
+      loop_control:
+        index_var: env_index
 
-    - name: Check pihole password is rendered
+    - name: Write a Compose probe for each .env file
+      vars:
+        keys: "{{ item['keys'] | list }}"
+        references: "{{ keys | map('regex_replace', '^', '${') | map('regex_replace', '$', '}') }}"
+      ansible.builtin.copy:
+        content: >-
+          {{ {'services': {
+                'from_file': {'image': 'alpine', 'env_file': [item.file]},
+                'interpolated': {'image': 'alpine', 'environment': dict(keys | zip(references))}}}
+             | to_nice_json }}
+        dest: "/tmp/env-probe/{{ env_index }}/compose.yaml"
+        owner: root
+        group: root
+        mode: '0600'
+      loop: "{{ env_expectations }}"
+      loop_control:
+        index_var: env_index
+      # The loop items hold the expected secrets.
+      no_log: true
+
+    - name: Read each .env file with Docker Compose
+      ansible.builtin.command:
+        argv: [docker, compose, --project-directory, "/tmp/env-probe/{{ env_index }}", --env-file, "{{ item.file }}",
+               config, --format, json]
+      register: env_probe
+      changed_when: false
+      loop: "{{ env_expectations }}"
+      loop_control:
+        index_var: env_index
+      no_log: true
+
+    # Compose's output escapes every literal $ as $$. The template renders a JSON list of the mismatching keys' names,
+    # never their values.
+    - name: Find the .env values Compose reads differently
+      ansible.builtin.set_fact:
+        env_mismatches: >-
+          [{%- for probe in env_probe.results -%}
+             {%- set services = (probe.stdout | replace('$$', '$') | from_json).services -%}
+             {%- for key, value in probe.item['keys'].items() -%}
+               {%- for service in ['from_file', 'interpolated'] -%}
+                 {%- if services[service].environment[key] | default(none) != value | string -%}
+                   {{ (probe.item.file ~ ' ' ~ key ~ ' (' ~ service ~ ')') | to_json }},
+                 {%- endif -%}
+               {%- endfor -%}
+             {%- endfor -%}
+           {%- endfor -%}""]
+      no_log: true
+
+    - name: Check Compose reads every awkward secret back unchanged
+      vars:
+        mismatches: "{{ env_mismatches | from_json | select | list }}"
       ansible.builtin.assert:
-        that: "'FTLCONF_webserver_api_password=LEAKCANARY-pihole' in (infra_env.content | b64decode)"
-      when: not is_dungeon
+        that: mismatches | length == 0
+        fail_msg: "Compose reads these values differently from KeePass: {{ mismatches | join(', ') }}"
+        quiet: true
 
     - name: Read the kernel command line
       ansible.builtin.slurp:
