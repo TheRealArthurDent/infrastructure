@@ -95,7 +95,8 @@
                  or resticprofile_restore_config_file is changed
                  or resticprofile_restore_items_file is changed
                  or stack_compose_file is changed
-                 or resticprofile_config_files is changed) }}
+                 or resticprofile_config_files is changed
+                 or resticprofile_known_hosts_file is changed) }}
 
 # A missing backup SSD must not read as "no snapshot, new host": the helper would see the empty mount point directory
 # and restore nothing. The marker exists only while the SSD is mounted (backup_target). Read-only, so it runs in check
@@ -166,6 +167,12 @@
       11: >-
         If this is a new host with nothing to restore, run the playbook again with
         -e skip_infrastructure_restore=true.
+      12: >-
+        ssh in the resticprofile container doesn't trust {{ resticprofile_backup_host }}'s host key: it isn't in
+        {{ stack_dir }}/resticprofile/.ssh/known_hosts, or {{ resticprofile_backup_host }} has a new one (reinstalled).
+        Compare ssh-keyscan -p {{ dungeon_ssh_port }} -t ed25519 {{ resticprofile_backup_host_ip }} with
+        ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub on {{ resticprofile_backup_host }}, put the key into
+        resticprofile_backup_host_keys (inventory/group_vars/all/backup.yaml) and run the playbook again.
   when: resticprofile_restore is not skipped and resticprofile_restore.rc != 0
 
 - name: Report the restore
