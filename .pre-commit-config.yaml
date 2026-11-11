@@ -31,7 +31,7 @@ repos:
 
   - repo: https://github.com/ansible/ansible-lint
     # Renovate updates rev and additional_dependencies together with requirements.txt (see renovate.json).
-    rev: v26.10.1
+    rev: v26.11.0
     hooks:
       - id: ansible-lint
         # Renovate only updates additional_dependencies when the language is set explicitly.
