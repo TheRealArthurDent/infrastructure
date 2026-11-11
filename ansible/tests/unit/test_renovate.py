@@ -41,3 +41,20 @@ def test_compose_fragments_are_valid_yaml(fragment):
     # silently stops finding the images. Conditions go into YAML comments ("# {% if ... +%}").
     compose = yaml.safe_load((REPO_DIR / fragment).read_text())
     assert compose["services"]
+
+
+def test_renovate_updates_the_ansible_dev_tools_in_one_group():
+    # ansible-lint (pip and its pre-commit hook), molecule and molecule-plugins are usually released together.
+    config = json.loads((REPO_DIR / "renovate.json").read_text())
+
+    def group_of(package):
+        groups = [
+            rule["groupName"]
+            for rule in config.get("packageRules", [])
+            if "groupName" in rule and package in rule.get("matchPackageNames", [])
+        ]
+        return groups[-1] if groups else None
+
+    groups = {p: group_of(p) for p in ("ansible-lint", "ansible/ansible-lint", "molecule", "molecule-plugins")}
+    assert None not in groups.values(), groups
+    assert len(set(groups.values())) == 1, groups
