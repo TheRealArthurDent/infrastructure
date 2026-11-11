@@ -19,9 +19,9 @@
       "automergeType": "branch"
     },
     {
-      "description": "Update ansible-lint in requirements.txt and .pre-commit-config.yaml together, so local runs, pre-commit and CI use the same version.",
-      "groupName": "ansible-lint",
-      "matchPackageNames": ["ansible-lint", "ansible/ansible-lint"]
+      "description": "Update the Ansible dev tools together: ansible-lint in requirements.txt and .pre-commit-config.yaml (so local runs, pre-commit and CI use the same version), and molecule and molecule-plugins, which are usually released alongside it.",
+      "groupName": "ansible-devtools",
+      "matchPackageNames": ["ansible-lint", "ansible/ansible-lint", "molecule", "molecule-plugins"]
     },
     {
       "description": "Update ansible-core in requirements.txt and the ansible-lint pre-commit hook together.",
