@@ -4,6 +4,31 @@ Ansible sets up the Pi hosts: SSH port and hardening, sudoers, base packages, rs
 the nginx certificate, the Pi-hole DNS configuration, the backup SSD of `dungeon`, and the Docker stack itself (`stack`
 role plus its component roles, see [Stack components](#stack-components)).
 
+Contents:
+
+- [Hosts](#hosts)
+- [Control node setup (once)](#control-node-setup-once)
+  - [KeePass](#keepass)
+- [Daily business](#daily-business)
+- [Stack components](#stack-components)
+- [Set up a host (new install or after a crash)](#set-up-a-host-new-install-or-after-a-crash)
+  - [1. Flash the SSD](#1-flash-the-ssd)
+  - [2. First boot](#2-first-boot)
+  - [3. Bootstrap the host](#3-bootstrap-the-host)
+  - [4. Backup access](#4-backup-access)
+  - [5. Certificate and stack (restores the infrastructure state)](#5-certificate-and-stack-restores-the-infrastructure-state)
+  - [6. Pi-hole](#6-pi-hole)
+  - [7. smart-home (restores its volumes)](#7-smart-home-restores-its-volumes)
+- [dungeon](#dungeon)
+  - [Takeover of dungeon](#takeover-of-dungeon)
+- [Restore](#restore)
+  - [Targeted restore (host running)](#targeted-restore-host-running)
+  - [Clean slate restore](#clean-slate-restore)
+  - [Other stacks](#other-stacks)
+  - [Monthly drill (every host)](#monthly-drill-every-host)
+  - [Restore drill (testbed only)](#restore-drill-testbed-only)
+- [Tests](#tests)
+
 | Playbook | What it does |
 | --- | --- |
 | `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `backup_target` (dungeon only), `stack`: SSH port and key-only login, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
