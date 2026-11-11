@@ -5,3 +5,10 @@
 resticprofile_backup_stacks:
   - "{{ stack_project_name }}"
   - smart-home
+
+# The ssh host key of the backup host (dungeon), for known_hosts of the sftp clients' resticprofile container. Public,
+# nothing secret. After reinstalling dungeon, replace it with the output of
+# ssh-keyscan -p <ssh port> -t ed25519 192.168.1.5 (compare its fingerprint with ssh-keygen -lf
+# /etc/ssh/ssh_host_ed25519_key.pub on dungeon first).
+resticprofile_backup_host_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMwoOx91BPOyMYT0DW2eReS6Zcipw19ZBqFNM/rPLTSe

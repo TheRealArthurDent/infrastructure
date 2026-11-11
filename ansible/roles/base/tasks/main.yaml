@@ -15,6 +15,8 @@
 - name: Ensure the kernel command line enables the memory cgroup
   ansible.builtin.import_tasks: kernel_cmdline.yaml
 
+# 4096 bits take about an hour on a Pi. Run in the background and poll, so the ssh connection isn't silent for an
+# hour: a dropped connection made Ansible wait forever although the task had finished on the host.
 - name: "Generate Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
   community.crypto.openssl_dhparam:
     path: /etc/ssl/certs/dhparam.pem
@@ -22,6 +24,8 @@
     group: root
     mode: '0644'
     size: "{{ dhparameter_bits }}"
+  async: 7200
+  poll: 30
 
 # Package upgrades are update.yaml's job: here they'd change something on every run once Debian has published
 # updates (raspberry#237). The cache is only refreshed when it's older than a day. Every host refreshes it, because
