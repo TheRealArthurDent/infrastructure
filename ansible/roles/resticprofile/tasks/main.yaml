@@ -49,3 +49,29 @@
     {{ ['config/profiles.yaml', 'config/excludes']
        + (['ssh_config'] if resticprofile_repository_is_sftp | bool else []) }}
   register: resticprofile_config_files
+
+# A fresh host has no known_hosts, and the backup leaves out resticprofile/.ssh: without it, ssh in the container
+# refuses the backup host and the clean-slate restore fails with "Host key verification failed". Ansible owns the file,
+# so a changed key of the backup host is fixed in the inventory, never by accepting it blindly.
+- name: Ensure the backup host's ssh host key is configured
+  ansible.builtin.assert:
+    that: resticprofile_backup_host_keys | length > 0
+    fail_msg: >-
+      resticprofile_backup_host_keys is empty: put {{ resticprofile_backup_host }}'s public ssh host key into
+      inventory/group_vars/all/backup.yaml.
+    quiet: true
+  when: resticprofile_repository_is_sftp | bool
+
+# ssh looks up a host on a port other than 22 as [host]:port
+- name: Ensure the backup host is in resticprofile's known_hosts
+  ansible.builtin.copy:
+    content: |
+      {% for key in resticprofile_backup_host_keys %}
+      [{{ resticprofile_backup_host }}]:{{ dungeon_ssh_port }} {{ key | trim }}
+      {% endfor %}
+    dest: "{{ stack_dir }}/resticprofile/.ssh/known_hosts"
+    owner: root
+    group: root
+    mode: '0644'
+  register: resticprofile_known_hosts_file
+  when: resticprofile_repository_is_sftp | bool

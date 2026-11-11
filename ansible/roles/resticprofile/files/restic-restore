@@ -22,7 +22,8 @@ by hand. --from rsnapshot takes the local rsnapshot copy (fast, no network); its
 Without a local copy, stage --from rsnapshot falls back to the latest restic snapshot.
 
 clean-slate writes /var/lib/restic-restore/STACK.done; resticprofile schedules backups only once every stack it
-waits for has its marker. It exits with 10 if restic can't reach the repository and 11 if there is no snapshot.
+waits for has its marker. It exits with 10 if restic can't reach the repository, 12 if ssh
+refuses the backup host's key (known_hosts) and 11 if there is no snapshot.
 
 drill runs monthly from cron: restic check reads one part of the pack data (a different part each month, so all of
 it over a year), then every item of every stack is staged from the latest snapshot and removed again; nothing is
@@ -58,6 +59,11 @@ class NoRepositoryAccess(RestoreError):
 
 class NoSnapshot(RestoreError):
     exit_code = 11
+
+
+# ssh refuses the backup host: its key isn't in known_hosts, or it has changed (a reinstalled backup host)
+class UnknownHostKey(NoRepositoryAccess):
+    exit_code = 12
 
 
 def snapshot_path(host_path, mounts):
@@ -402,6 +408,8 @@ def clean_slate(config, runner, stack, skip=False, snapshot="latest", dry_run=Fa
     try:
         snapshot_id = resolve_snapshot(config, runner, snapshot)
     except RestoreError as e:
+        if "Host key verification failed" in str(e):
+            raise UnknownHostKey(str(e)) from e
         raise NoRepositoryAccess(str(e)) from e
     if snapshot_id is None:
         raise NoSnapshot(f"no snapshot {snapshot} to restore {stack} from")
