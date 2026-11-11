@@ -21,7 +21,7 @@ Defined in `inventory/hosts.yaml`, which only says how to reach each host. Setti
 | --- | --- | --- | --- |
 | `raspi` | 192.168.1.2 | 1357 | `smarthome` (production) |
 | `dungeon` | 192.168.1.5 | 1359 | `dragon` (production: private cloud and backup target) |
-| `testbed` | 192.168.1.7 | 4242 | `testuser` |
+| `testbench` | 192.168.1.7 | 4242 | `testuser` |
 
 > All playbooks target `hosts: all` and refuse to run without `--limit <host>`, so a forgotten `--limit`
 > never reaches `raspi` by accident.
@@ -45,10 +45,9 @@ You also need:
 ### KeePass
 
 Every host reads its secrets from its own KeePass database (host variable `keepass_database`: `raspberry` by default,
-`dungeon` for dungeon). raspi and testbed share the `raspberry` database. The root CA for `check-certificates.yaml`
-always comes from `keepass_ca_database` (`raspberry`), so `check-certificates.yaml --limit dungeon` and
-`setup-pihole.yaml --limit dungeon` (which also needs the root CA) open raspi's database as well: both master passwords
-are needed (`bin/with-keepass --store` stores one per database). The CA stays there until it gets a database of its
+`dungeon` for dungeon, `testbench` for testbench). The root CA for `check-certificates.yaml` always comes from
+`keepass_ca_database` (`raspberry`), so `check-certificates.yaml` and `setup-pihole.yaml` (which also needs the root CA)
+with `--limit dungeon` or `--limit testbench` open raspi's database as well: both master passwords are needed (`bin/with-keepass --store` stores one per database). The CA stays there until it gets a database of its
 own (#10); then only `keepass_ca_database` changes.
 
 The paths depend on your machine, so they aren't in the repo. Set them once in a local file that git ignores, one
@@ -56,7 +55,7 @@ entry per database in `local_keepass_databases`:
 
 ```sh
 cp inventory/group_vars/all/local.example.yaml inventory/group_vars/all/local.yaml
-# then edit the db and key paths of raspberry and dungeon in local_keepass_databases
+# then edit the db and key paths of raspberry, dungeon and testbench in local_keepass_databases
 ```
 
 Database names are lowercase letters, digits and `_` (`my-db` fails with a message). `KEEPASS_DB` / `KEEPASS_KEY` win
@@ -69,14 +68,16 @@ desktop, either mirror My Drive, or stream it into a folder on `C:` and make the
 available offline (right click in Explorer).
 
 The master password of each database is asked for at the start of each run, unless it is set in the environment:
-`KEEPASS_PASSWORD` for `raspberry`, `KEEPASS_PASSWORD_<NAME>` for the others (`KEEPASS_PASSWORD_DUNGEON`). On WSL,
+`KEEPASS_PASSWORD` for `raspberry`, `KEEPASS_PASSWORD_<NAME>` for the others (`KEEPASS_PASSWORD_DUNGEON`,
+`KEEPASS_PASSWORD_TESTBENCH`). On WSL,
 `bin/with-keepass` sets them from Windows Credential Manager, so runs need no prompt. Variables that are already set
 stay as they are.
 
 ```sh
 bin/with-keepass --store            # raspberry; once, and again after changing the master password
 bin/with-keepass --store dungeon    # the dungeon database
-bin/with-keepass ansible-playbook bootstrap.yaml --limit testbed --check --diff
+bin/with-keepass --store testbench  # the testbench database
+bin/with-keepass ansible-playbook bootstrap.yaml --limit testbench --check --diff
 bin/with-keepass --forget dungeon   # remove one again (default: raspberry)
 ```
 
@@ -93,24 +94,28 @@ Group/title, with the fields the roles read:
 
 | Database | Entry | Content |
 | --- | --- | --- |
+| `raspberry`, `testbench` | `Pihole/pihole`, `Pihole/outbound` | passwords of the host's two Pi-holes |
+| `raspberry`, `testbench` | `Discord/Docker Webhook` | fields `id` and `token` (a webhook per host, so Discord shows which host wrote) |
+| `raspberry`, `testbench` | `Backup/Resticprofile` | password: the passphrase of the host's restic repository (testbench's is throwaway) |
+| `raspberry`, `testbench` | `Backup/Resticprofile SSH` | attachments `id_ed25519` and `id_ed25519.pub`: the host's restic key pair |
+| `raspberry`, `testbench` | `Backup/Dungeon` | field `ssh-port`: dungeon's ssh port for the sftp backup target |
+| `raspberry`, `testbench` | `smart-home/ioBroker/States Redis`, `smart-home/ioBroker/Objects Redis` | field `port` |
+| `raspberry`, `testbench` | `smart-home/Influx DB/Influx admin`, `.../Influx read`, `.../Influx write` | passwords of the InfluxDB users |
+| `raspberry`, `testbench` | `smart-home/Grafana`, `smart-home/mosquitto` | passwords |
+| `raspberry`, `testbench` | `smart-home/deconz - Phoscon-GW/Deconz VNC` | password of deCONZ' VNC |
+| `raspberry`, `testbench` | `GitHub/NodeRed` | fields `username` and `email` |
+| `raspberry` | `Domain/rootCA` | the root CA (`keepass_ca_database`): password, attachments `rootCA.pem` and `rootCA.key` |
+| `testbench`, `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository |
-| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (a webhook of its own, so Discord shows which host wrote) |
-| `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
+| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
-| `raspberry` | `Backup/Resticprofile SSH` | attachments `id_ed25519` and `id_ed25519.pub`: raspi's restic key pair |
-| `raspberry` | `Backup/Resticprofile SSH testbed` | the same for testbed |
-| `raspberry` | `Discord/Docker Webhook testbed` | fields `id` and `token` of testbed's webhook |
-| `raspberry` | `OpenCloud/admin testbed` | the same for testbed's OpenCloud |
 
-| `raspberry` | `Backup/Resticprofile` | password: the passphrase of raspi's restic repository |
-| `raspberry` | `Backup/Resticprofile testbed` | password: the passphrase of testbed's restic repository (throwaway) |
-| `raspberry` | `Pihole/pihole`, `Pihole/outbound` | passwords of raspi's and testbed's Pi-holes |
-
-raspi's other entries (`Discord/Docker Webhook`, `smart-home/...` for the smart-home stack, `Backup/Dungeon` with the
-field `ssh-port`) are the existing ones. dungeon's database holds nothing of the smart-home stack. The entry titles
-are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`,
-`opencloud_admin_title`; testbed sets its own in `host_vars/testbed.yaml`). The OpenCloud entries are only read on hosts
-with `secrets_opencloud_env` (dungeon, testbed).
+Every host reads the same entry names from its own database, and only the entries of the parts it runs
+(`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`). dungeon's database holds nothing of the
+smart-home stack and no restic key pair (its repository is local). The titles of the Discord, restic and OpenCloud
+entries are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`,
+`resticprofile_passphrase_title`, `opencloud_admin_title`, defaults in `roles/secrets/defaults/main.yaml`); no host
+overrides them.
 
 Passwords may hold any printable character (`$`, `{{ }}`, quotes, backslashes, `#`, blanks, umlauts): the secrets role
 quotes every `.env` value for Compose (`dotenv_quote`). It refuses, before writing anything, line breaks and other
@@ -119,7 +124,7 @@ init script can't create the user then) and `\` in the deCONZ VNC password (deCO
 
 #### Put the restic key pairs into KeePass
 
-The sftp clients (raspi, testbed) back up to dungeon with a key pair from KeePass, which the `secrets` role writes to
+The sftp clients (raspi, testbench) back up to dungeon with a key pair from KeePass, which the `secrets` role writes to
 the host. A rebuilt host has the same key, so dungeon's `authorized_keys` (`backup_target_clients` in
 `host_vars/dungeon.yaml`) never changes. Nothing is generated on the host any more (`init-restic.sh` is gone).
 
@@ -127,10 +132,10 @@ the host. A rebuilt host has the same key, so dungeon's `authorized_keys` (`back
   `/etc/docker/infrastructure/resticprofile/.ssh/` on raspi to your machine (they are root-owned, so copy them with
   `sudo`; the private key is mode 0600), attach both to the entry `Backup/Resticprofile SSH` in the `raspberry`
   database and delete the copies. Check that the public key equals `backup_target_clients.raspi`.
-- testbed: keep its existing key as well. Copy `id_ed25519` and `id_ed25519.pub` from
-  `/etc/docker/infrastructure/resticprofile/.ssh/` on testbed exactly as for raspi, attach both to
-  `Backup/Resticprofile SSH testbed` and check that the public key equals `backup_target_clients.testbed`. A new pair
-  (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbed -f ./id_ed25519`) needs its public key in
+- testbench: keep its existing key as well. Copy `id_ed25519` and `id_ed25519.pub` from
+  `/etc/docker/infrastructure/resticprofile/.ssh/` on testbench exactly as for raspi, attach both to
+  `Backup/Resticprofile SSH` in the `testbench` database and check that the public key equals `backup_target_clients.testbench`. A new pair
+  (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbench -f ./id_ed25519`) needs its public key in
   `host_vars/dungeon.yaml` and a dungeon run first. Delete the copies after attaching them.
 
 The `secrets` role compares the public key of the entry with `backup_target_clients.<host>` before it writes the key
@@ -141,29 +146,29 @@ uses public keys only.
 
 ```sh
 # Check a host is reachable
-ansible testbed -m ping
+ansible testbench -m ping
 
 # Dry run first, always
-ansible-playbook bootstrap.yaml --limit testbed --check --diff
+ansible-playbook bootstrap.yaml --limit testbench --check --diff
 
 # Apply: config, Docker, secrets
-ansible-playbook bootstrap.yaml --limit testbed
+ansible-playbook bootstrap.yaml --limit testbench
 
 # OS updates (apt dist-upgrade); tells you when a reboot is needed
-ansible-playbook update.yaml --limit testbed
+ansible-playbook update.yaml --limit testbench
 
 # Check / renew the nginx certificate
-ansible-playbook check-certificates.yaml --limit testbed
+ansible-playbook check-certificates.yaml --limit testbench
 
 # Change DNS records, block lists, groups, clients or domains of a Pi-hole (pihole or outbound):
 # edit configs/pihole.yaml, then
-ansible-playbook setup-pihole.yaml --limit testbed
-# Each instance is reached at <name>.<host> (pihole.testbed, outbound.testbed); set host in its config entry to override
+ansible-playbook setup-pihole.yaml --limit testbench
+# Each instance is reached at <name>.<host> (pihole.testbench, outbound.testbench); set host in its config entry to override
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
-bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbed
+bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbench
 
 # Redeploy / update only the Docker stack (config, networks, compose up; reloads nginx on config changes)
-ansible-playbook bootstrap.yaml --limit testbed --tags stack
+ansible-playbook bootstrap.yaml --limit testbench --tags stack
 ```
 
 A second run of `bootstrap.yaml` should end with `changed=0`.
@@ -182,7 +187,7 @@ lists the enabled ones and defaults to all seven. To run fewer on a host, set it
 
 | Host | Components |
 | --- | --- |
-| `raspi`, `testbed` | all seven |
+| `raspi`, `testbench` | all seven |
 | `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole) |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
@@ -193,7 +198,7 @@ nginx serves the vhosts `portainer` and `outbound`, and its resticprofile backs 
 
 The same steps for a new Pi and for one rebuilt after a crash or reinstall. On a host with a backup, the state that
 isn't IaC comes back from restic by itself in steps 5 and 7, before the stacks start
-([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `dungeon` or `testbed`); `<user>`,
+([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `dungeon` or `testbench`); `<user>`,
 `<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node. Where
 dungeon differs, the step says so; [dungeon](#dungeon) has the details.
 
@@ -205,8 +210,8 @@ In Raspberry Pi Imager:
    SSD (USB adapter); on dungeon the NVMe drive. **dungeon: unplug the backup SSD first**, so it can't be picked as
    the target.
 2. Edit settings (OS customisation):
-   - Hostname: `raspi`, `dungeon` or `testbed`
-   - Username: `smarthome` (raspi), `dragon` (dungeon) or `testuser` (testbed), with a password
+   - Hostname: `raspi`, `dungeon` or `testbench`
+   - Username: `smarthome` (raspi), `dragon` (dungeon) or `testuser` (testbench), with a password
    - Services: enable SSH, **public-key authentication only**, paste the content of `~/.ssh/id_ed25519.pub`
 3. Write.
 
@@ -256,7 +261,7 @@ ssh -p <port> <user>@<ip> sudo reboot
 
 ### 4. Backup access
 
-raspi and testbed: the `secrets` role wrote the host's restic key pair from its KeePass entry
+raspi and testbench: the `secrets` role wrote the host's restic key pair from its KeePass entry
 (`Backup/Resticprofile SSH`, attachments `id_ed25519` and `id_ed25519.pub`; `resticprofile_ssh_key_title` names another
 entry, see [KeePass](#put-the-restic-key-pairs-into-keepass)). The backup host `dungeon` must accept the public key: it
 is in `backup_target_clients` in `host_vars/dungeon.yaml`, applied by dungeon's playbook.
@@ -268,7 +273,7 @@ dungeon: nothing to do, its repository is local on the SSD.
 ### 5. Certificate and stack (restores the infrastructure state)
 
 The stack needs the nginx certificate (the `reverse_proxy` role stops with a message if it is missing). On raspi and
-testbed it also needs `dungeon` to resolve on the Pi (the role looks up its IP at every run); dungeon resolves
+testbench it also needs `dungeon` to resolve on the Pi (the role looks up its IP at every run); dungeon resolves
 through raspi's Pi-hole, so raspi must be up. `--tags stack` also runs the `secrets` role, so a changed KeePass
 entry reaches its file; a running container only sees it after a restart (`docker restart resticprofile` for the
 restic passphrase).
@@ -307,7 +312,7 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 
 ### 7. smart-home (restores its volumes)
 
-raspi and testbed only; dungeon has no smart-home stack and no apps in this repo (OpenCloud and the like come from
+raspi and testbench only; dungeon has no smart-home stack and no apps in this repo (OpenCloud and the like come from
 their own repo later).
 
 Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
@@ -328,12 +333,12 @@ ssh -p <port> <user>@<ip> docker logs resticprofile
 
 ## dungeon
 
-The Pi 5 in the Argon NEO 5 case: private cloud and the backup target of raspi and testbed. It is production like
+The Pi 5 in the Argon NEO 5 case: private cloud and the backup target of raspi and testbench. It is production like
 raspi: the user runs everything against it, and Claude's guard hook blocks it once the patch from #15 is applied
 (treat it as blocked already).
 
 - **Backup SSD**: ext4, UUID `eeeb6563-1a18-4941-a7bd-72ec86622fa7`, mounted at `/media/backup`
-  (`defaults,noatime,nofail`), marker `/media/backup/.backup-ssd`. raspi and testbed back up to
+  (`defaults,noatime,nofail`), marker `/media/backup/.backup-ssd`. raspi and testbench back up to
   `/media/backup/restic/<host>` over sftp as the `restic` user (a locked account with a shell for sftp, UID/GID 1002,
   `/media/backup/restic` is `0700`). dungeon's own repository is `/media/backup/restic/dungeon`, seen from the
   container as `local:/backup/restic/dungeon` (`/media/backup` is bind-mounted as `/backup` with propagation
@@ -360,14 +365,14 @@ database and `bin/with-keepass --store dungeon` has stored its master password. 
 
 Order after merging this change, because the new key and DNS entries are prerequisites of the later steps:
 
-1. KeePass: the entries for all three hosts, including the restic key pairs of raspi and testbed (see
+1. KeePass: the entries for all three hosts, including the restic key pairs of raspi and testbench (see
    [Put the restic key pairs into KeePass](#put-the-restic-key-pairs-into-keepass)). Every raspi run needs
-   `Backup/Resticprofile SSH` first, `--tags stack` included, and testbed needs its two new entries.
+   `Backup/Resticprofile SSH` first, `--tags stack` included, and testbench needs its two new entries.
 2. `setup-pihole.yaml --limit raspi` (the CNAME `outbound.dungeon`).
 3. raspi: `bootstrap.yaml --limit raspi --check --diff`. Expect `init-restic.sh` to be removed and the key files
    unchanged. Then the real run.
 4. The takeover of dungeon (below).
-5. testbed.
+5. testbench.
 
 ```sh
 # 1. The CA-signed certificate replaces the self-signed one (opens raspi's database for the root CA)
@@ -535,14 +540,14 @@ sudo restic-restore drill --read-data-subset 1/1           # read all of the dat
 ```
 
 The schedule and the number of parts are in `resticprofile_restore_drill` (resticprofile role defaults). On a host
-that is often switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbed has it in
-`inventory/host_vars/testbed.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
+that is often switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbench has it in
+`inventory/host_vars/testbench.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
 still works there by hand, without recording a result.
 
-### Restore drill (testbed only)
+### Restore drill (testbench only)
 
-Run the drill on testbed against testbed's own repository, never on raspi, e.g. after changes to the helper or
-the restore tasks, and now and then to know the backup restores. It needs at least one testbed snapshot
+Run the drill on testbench against testbench's own repository, never on raspi, e.g. after changes to the helper or
+the restore tasks, and now and then to know the backup restores. It needs at least one testbench snapshot
 (`sudo restic-restore snapshots`).
 
 Targeted, on the Pi:
@@ -567,9 +572,9 @@ sudo mv /etc/docker/infrastructure/pihole/pihole /var/tmp/drill/pihole
 sudo mv /var/lib/restic-restore/infrastructure.done /var/tmp/drill/
 
 # On the control node, in ansible/
-ansible-playbook bootstrap.yaml --limit testbed --tags stack --check --diff   # "would restore ..."
-ansible-playbook bootstrap.yaml --limit testbed --tags stack                  # "restored ..."
-ansible-playbook bootstrap.yaml --limit testbed --tags stack                  # changed=0
+ansible-playbook bootstrap.yaml --limit testbench --tags stack --check --diff   # "would restore ..."
+ansible-playbook bootstrap.yaml --limit testbench --tags stack                  # "restored ..."
+ansible-playbook bootstrap.yaml --limit testbench --tags stack                  # changed=0
 
 # On the Pi: log in to Portainer and the Pi-hole, check the marker, compare with what was there before (files
 # changed since the last backup and pihole-FTL.db differ), then clean up
@@ -578,7 +583,7 @@ sudo diff -rq /var/tmp/drill/portainer-data /etc/docker/infrastructure/portainer
 sudo rm -rf /var/tmp/drill
 ```
 
-The full drill reflashes testbed and follows [Set up a host](#set-up-a-host-new-install-or-after-a-crash); only it
+The full drill reflashes testbench and follows [Set up a host](#set-up-a-host-new-install-or-after-a-crash); only it
 covers the restic key pair from KeePass and the one-off container on a host without a running stack.
 
 ## Tests

@@ -4,7 +4,7 @@
 # resticprofile backs up the whole host, so the helper is a host service: other stacks put
 # their own items into /etc/restic-restore/stacks/ and call it themselves. The helper decides and works
 # (ansible/tests/unit/test_restic_restore.py); a marker makes every later run a no-op. A host that already has
-# data (raspi, testbed) only gets the marker.
+# data (raspi, testbench) only gets the marker.
 
 # apply and diff run rsync; hosts without rsnapshot (dungeon) don't have it otherwise.
 - name: Ensure rsync is installed for the restore helper
@@ -86,7 +86,7 @@
 
 # In check mode the files above, the compose file (stack role) and resticprofile config (main.yaml) aren't written: on a
 # fresh host the helper doesn't exist yet, and where one of them is due for an update, the dry run would run the old
-# helper, config or one-off container (it did on testbed, and on raspi with an old IPv6 address for dungeon).
+# helper, config or one-off container (it did on testbench, and on raspi with an old IPv6 address for dungeon).
 - name: Check whether the dry run can use the deployed helper
   ansible.builtin.set_fact:
     resticprofile_restore_dry_run_possible: >-

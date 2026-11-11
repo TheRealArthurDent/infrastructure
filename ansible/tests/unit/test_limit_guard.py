@@ -33,11 +33,11 @@ def test_refuses_to_run_without_limit(playbook):
     assert "Run with --limit <host>" in result.stdout
     # The guard fails before any real host is contacted or a secret is asked for.
     assert "raspi" not in result.stdout
-    assert "testbed" not in result.stdout
+    assert "testbench" not in result.stdout
 
 
 @pytest.mark.parametrize("playbook", PLAYBOOKS)
-@pytest.mark.parametrize("limit", ["all", "*", "testbed,raspi", "testbed:raspi"])
+@pytest.mark.parametrize("limit", ["all", "*", "testbench,raspi", "testbench:raspi"])
 def test_refuses_a_limit_that_matches_several_hosts(playbook, limit):
     # With any --limit, the localhost guard play matches no host and is skipped, so a limit that selects every
     # host would otherwise run straight against production too.
@@ -68,7 +68,7 @@ def test_refuses_with_tags(playbook, limit):
 
 @pytest.mark.parametrize("playbook", PLAYBOOKS)
 def test_limit_selects_only_that_host(playbook):
-    result = run_playbook(playbook, "--limit", "testbed", "--list-hosts")
+    result = run_playbook(playbook, "--limit", "testbench", "--list-hosts")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "testbed" in result.stdout
+    assert "testbench" in result.stdout
     assert "raspi" not in result.stdout

@@ -24,7 +24,7 @@ BLOCKED_COMMANDS = [
     "cd ansible && ansible-playbook bootstrap.yaml --limit raspi",
     "ansible-playbook bootstrap.yaml -l raspi --check",
     "ansible-playbook bootstrap.yaml --limit=all",
-    "ansible-playbook bootstrap.yaml --limit 'testbed,raspi'",
+    "ansible-playbook bootstrap.yaml --limit 'testbench,raspi'",
     "cd ansible && ../.venv/bin/ansible-playbook bootstrap.yaml",
     "bin/with-keepass ansible-playbook bootstrap.yaml --limit raspi",
     "KEEPASS_DB=x ansible-playbook setup-pihole.yaml -l raspi",
@@ -56,8 +56,8 @@ BLOCKED_COMMANDS = [
 ]
 
 ALLOWED_COMMANDS = [
-    "ansible-playbook bootstrap.yaml --limit testbed --check --diff",
-    "bin/with-keepass ansible-playbook bootstrap.yaml --limit testbed",
+    "ansible-playbook bootstrap.yaml --limit testbench --check --diff",
+    "bin/with-keepass ansible-playbook bootstrap.yaml --limit testbench",
     "ANSIBLE_ROLES_PATH=roles ansible-playbook -i localhost, --syntax-check --limit localhost converge.yaml",
     ".venv/bin/ansible-lint --strict ansible/",
     "cd ansible && ../.venv/bin/ansible-lint --strict",

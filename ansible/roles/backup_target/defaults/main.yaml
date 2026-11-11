@@ -1,5 +1,5 @@
 ---
-# Dungeon is the restic sftp target of raspi and testbed (clients connect as
+# Dungeon is the restic sftp target of raspi and testbench (clients connect as
 # sftp:restic@dungeon:/media/backup/restic/<host>).
 backup_target_mount: /media/backup
 backup_target_uuid: ""

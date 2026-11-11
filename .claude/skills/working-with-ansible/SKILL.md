@@ -1,13 +1,13 @@
 ---
 name: working-with-ansible
-description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on raspi, dungeon or testbed, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
+description: Use when a task in this repo involves running, dry-running, testing, verifying or rolling out Ansible playbooks (bootstrap.yaml, check-certificates.yaml, setup-pihole.yaml, update.yaml) or the Docker stack (`stack` role and its components), on raspi, dungeon or testbench, or when deciding what can be checked from a cloud container and what the user has to run on their own machine. Writing role code itself is covered by ansible-role.
 ---
 
 # Working with Ansible in this repo
 
 ## Overview
 
-Ansible here changes a real smart home (DNS, SSH, Docker, backups) on three Pis (`raspi`, `dungeon`, `testbed`)
+Ansible here changes a real smart home (DNS, SSH, Docker, backups) on three Pis (`raspi`, `dungeon`, `testbench`)
 that only machines in the home network can reach. Know before you start what you can verify yourself, what only CI
 can, and what only the user can run on their developer machine.
 How to *write* roles, tasks and Molecule checks is in **ansible-role**; read it too when you touch `ansible/`.
@@ -22,7 +22,7 @@ First find out where you run: a cloud container (claude.ai/code) or a local sess
 | pytest (`ansible/tests/unit`, incl. `--limit` guard) | yes | yes | yes |
 | `ansible-playbook --syntax-check`, `ansible-lint` | yes | yes | yes (lint `--strict`, raspberry#240) |
 | Molecule converge/idempotence/verify | **no**: test containers have no network, Galaxy is blocked | yes, if Docker runs | yes, on every PR and on pushes to `main` touching `ansible/**` |
-| Anything against testbed | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | **only after asking**, every time, `--check --diff` first | no |
+| Anything against testbench | **no**: the 192.168.1.x LAN is only reachable from the home network, SSH key and KeePass DB are on the user's machine | **only after asking**, every time, `--check --diff` first | no |
 | Anything against raspi or dungeon | no | **no**: hand the user the commands (dungeon is production: private cloud and the backup SSD holding every host's backups) | no |
 
 In a local session the LAN, the SSH key and `with-keepass` are all reachable, so the only things between you and
@@ -41,9 +41,9 @@ into chat, a command line you write, or `KEEPASS_PASSWORD` in a command you hand
 
 ```sh
 cd ansible                                               # ansible.cfg + inventory live here
-ansible-playbook <play>.yaml --limit testbed --check --diff
-ansible-playbook <play>.yaml --limit testbed             # real run
-ansible-playbook <play>.yaml --limit testbed             # must end with changed=0
+ansible-playbook <play>.yaml --limit testbench --check --diff
+ansible-playbook <play>.yaml --limit testbench             # real run
+ansible-playbook <play>.yaml --limit testbench             # must end with changed=0
 # raspi and dungeon only after the user says so, same three steps with --limit raspi / dungeon
 # stack only: ansible-playbook bootstrap.yaml --limit <host> --tags stack (same three steps)
 ```
@@ -55,7 +55,7 @@ something, hand the user the command instead of looking for another way to run i
 
 ## Things that look wrong but aren't (and traps)
 
-- **`setup-pihole.yaml` has no dry run**: `uri` doesn't support check mode, so `--check` aborts. The testbed
+- **`setup-pihole.yaml` has no dry run**: `uri` doesn't support check mode, so `--check` aborts. The testbench
   run is the dry run; read its "to delete / to add" debug lines before running on raspi.
 - **The Pi-hole sync deletes** every record or list not in `configs/pihole.yaml`. Ask whether raspi has
   hand-made entries before a first sync.
@@ -86,4 +86,4 @@ something, hand the user the command instead of looking for another way to run i
 ## Reporting back
 
 End with: what changed (files, PR link), what you ran and its result, what CI showed on the head commit,
-and the rollout commands the user still has to run, testbed before raspi.
+and the rollout commands the user still has to run, testbench before raspi.

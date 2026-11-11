@@ -209,7 +209,7 @@ def test_resticprofile_schedules_backups_only_after_every_stack_is_restored():
 
 
 def test_stage_copes_with_resticprofile_output_around_the_json(env):
-    # resticprofile prints its own lines on stdout, before and after restic's JSON (seen on testbed)
+    # resticprofile prints its own lines on stdout, before and after restic's JSON (seen on testbench)
     noisy = env.tmp / "bin" / "noisy-restic"
     noisy.write_text('#!/bin/sh\necho "[INFO] profile default"\n"$@"\nrc=$?\necho "[INFO] done"\nexit $rc\n')
     noisy.chmod(0o755)

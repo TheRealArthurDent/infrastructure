@@ -14,7 +14,7 @@ default:
   force-inactive-lock: true
   # No overlapping resticprofile runs inside the container
   lock: /tmp/resticprofile-default.lock
-  repository: sftp:restic@dungeon:/media/backup/restic/testbed
+  repository: sftp:restic@dungeon:/media/backup/restic/testbench
   initialize: true
   prometheus-save-to-file: /metrics/backup.prom
   backup:

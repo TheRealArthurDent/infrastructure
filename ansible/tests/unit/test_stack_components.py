@@ -218,19 +218,19 @@ def test_raspi_has_no_opencloud_vhost(tmp_path):
     assert "opencloud." not in tree["nginx/nginx.conf"]
 
 
-def test_testbed_keeps_the_default_vhosts_and_sans_plus_opencloud():
-    """testbed lists them in full to add opencloud; a vhost added to a default must reach testbed too."""
+def test_testbench_keeps_the_default_vhosts_and_sans_plus_opencloud():
+    """testbench lists them in full to add opencloud; a vhost added to a default must reach testbench too."""
     import yaml
     from pathlib import Path
 
     ansible = Path(__file__).resolve().parents[2]
-    testbed = yaml.safe_load((ansible / "inventory/host_vars/testbed.yaml").read_text())
+    testbench = yaml.safe_load((ansible / "inventory/host_vars/testbench.yaml").read_text())
     for role, var in (("reverse_proxy", "reverse_proxy_vhosts"), ("certificate_check", "certificate_check_subdomains")):
         default = yaml.safe_load((ansible / f"roles/{role}/defaults/main.yaml").read_text())[var]
-        assert sorted(testbed[var]) == sorted(default + ["opencloud"]), var
+        assert sorted(testbench[var]) == sorted(default + ["opencloud"]), var
 
 
-@pytest.mark.parametrize("host", ["dungeon", "testbed"])
+@pytest.mark.parametrize("host", ["dungeon", "testbench"])
 def test_containers_reach_opencloud_through_nginx_without_dns(tmp_path, host):
     """OpenCloud fetches its own OIDC discovery from https://opencloud.<host>; Docker resolves it to nginx in siz."""
     compose = yaml.safe_load(rendered_tree(tmp_path, host)["docker-compose.yaml"])

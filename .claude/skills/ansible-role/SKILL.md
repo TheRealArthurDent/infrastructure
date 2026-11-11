@@ -7,7 +7,7 @@ description: Conventions and checklist for writing, changing or reviewing Ansibl
 
 The goal of the Ansible code here is **idempotent, testable deployments of a Raspberry Pi smart home**. A run
 against an already-configured Pi must report `changed=0`, and every role should be provable in a container
-before it touches the testbed Pi, and the testbed before production (`raspi`). The conventions below all serve
+before it touches the testbench Pi, and the testbench before production (`raspi`). The conventions below all serve
 that goal; when in doubt, ask "does this keep a second run at changed=0, and could Molecule verify it?"
 
 ## Where things go
@@ -142,7 +142,7 @@ from bash continues.
 4. **Lint**: `../.venv/bin/ansible-lint --strict` (from `ansible/`) must report 0 findings; CI blocks the PR
    otherwise.
 5. **Things a container can't test** (sshd port switching, real Docker daemon behavior, Pi hardware, Pi-hole API
-   against a live instance) go to the testbed Pi: `ansible-playbook <playbook> --limit testbed --check --diff`,
+   against a live instance) go to the testbench Pi: `ansible-playbook <playbook> --limit testbench --check --diff`,
    then a real run, then a second run that must report `changed=0`. Ask the user before running against
    any real host, and never target `raspi` without explicit instruction.
 
@@ -156,4 +156,4 @@ Mention in your answer:
 - which roles/files changed and why,
 - which Molecule checks were added,
 - what you actually ran and the result (Molecule idempotence and verify, lint), or exactly what you couldn't run,
-- anything that still needs a testbed run.
+- anything that still needs a testbench run.

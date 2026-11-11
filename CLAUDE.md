@@ -1,7 +1,7 @@
 # infrastructure – smart home infrastructure (Raspberry Pi)
 
 Docker-based smart home stack (nginx reverse proxy, Pi-hole ×2, unbound, portainer, resticprofile backups,
-container health monitoring) for the Raspberry Pis `raspi`, `dungeon` and `testbed`, running Debian/Raspberry Pi OS
+container health monitoring) for the Raspberry Pis `raspi`, `dungeon` and `testbench`, running Debian/Raspberry Pi OS
 trixie (arm64).
 
 ## State of the repo
@@ -33,7 +33,7 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
   stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile` and
   `healthmonitor`, each with its compose fragment (`templates/docker-compose.yaml.j2`); `stack` merges them, restores
   and runs `docker compose up`. `stack_components` (default: all seven) switches them per host in `host_vars`:
-  raspi and testbed run all seven, dungeon all but `pihole`. The host role `backup_target` (dungeon only) mounts the
+  raspi and testbench run all seven, dungeon all but `pihole`. The host role `backup_target` (dungeon only) mounts the
   backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,
@@ -46,8 +46,8 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
 | Host | Purpose |
 | --- | --- |
 | `raspi` (192.168.1.2) | **Production** smart home. Only the user runs anything against it; hand them the commands. |
-| `dungeon` (192.168.1.5, ssh port 1359, user `dragon`) | **Production** private cloud and backup target (the SSD at `/media/backup` holds the restic repositories of raspi, dungeon and testbed). Only the user runs anything against it; hand them the commands. |
-| `testbed` (192.168.1.7) | Test Pi for real integration runs, done by the user from the home network: propose the commands (`--check --diff`, real run, second run with `changed=0`). |
+| `dungeon` (192.168.1.5, ssh port 1359, user `dragon`) | **Production** private cloud and backup target (the SSD at `/media/backup` holds the restic repositories of raspi, dungeon and testbench). Only the user runs anything against it; hand them the commands. |
+| `testbench` (192.168.1.7) | Test Pi for real integration runs, done by the user from the home network: propose the commands (`--check --diff`, real run, second run with `changed=0`). |
 
 Always pass `--limit <host>`. Before a real run, do `--check --diff` first.
 

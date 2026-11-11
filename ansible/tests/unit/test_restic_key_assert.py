@@ -16,11 +16,11 @@ TESTBED = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bco
 PRIVATE = "LEAKCANARY-private-key"
 
 
-def run_assert(tmp_path, host, public_key, backup_host_listed=True, key_title="Resticprofile SSH testbed"):
+def run_assert(tmp_path, host, public_key, backup_host_listed=True, key_title="Resticprofile SSH testbench"):
     local = {"ansible_connection": "local", "ansible_python_interpreter": "auto_silent"}
     hosts = {host: local}
     if backup_host_listed:
-        hosts["dungeon"] = {**local, "backup_target_clients": {"raspi": RASPI, "testbed": TESTBED}}
+        hosts["dungeon"] = {**local, "backup_target_clients": {"raspi": RASPI, "testbench": TESTBED}}
     inventory = tmp_path / "inventory.yaml"
     inventory.write_text(yaml.safe_dump({"all": {"hosts": hosts}}))
     playbook = tmp_path / "play.yaml"
@@ -52,10 +52,10 @@ def test_the_matching_key_passes_whatever_the_comment_and_trailing_newline(tmp_p
 
 
 def test_a_different_key_fails_with_the_next_step(tmp_path):
-    run = run_assert(tmp_path, "raspi", TESTBED + " root@testbed")
+    run = run_assert(tmp_path, "raspi", TESTBED + " root@testbench")
     assert run.returncode != 0, run.stdout
     out = " ".join((run.stdout + run.stderr).split())
-    assert "Resticprofile SSH testbed" in out
+    assert "Resticprofile SSH testbench" in out
     assert "backup_target_clients.raspi" in out
     assert "Replace the attachments" in out
     assert PRIVATE not in out

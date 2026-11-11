@@ -9,7 +9,7 @@ Infrastructure of the smart home hosts. Everything is deployed per host from one
 | --- | --- |
 | `raspi` | Raspberry Pi 4, production smart home |
 | `dungeon` | Raspberry Pi 5, private cloud and backup target (SSD at `/media/backup`) |
-| `testbed` | Test Pi for real integration runs |
+| `testbench` | Test Pi for real integration runs |
 
 Moved from the private `raspberry` repo on 2026-11-08; older issues and PRs (`raspberry#…`) live there.
 Everything, from the host to the Docker stack, is deployed with Ansible; see [ansible/README.md](ansible/README.md).
@@ -27,10 +27,10 @@ python3 -m venv .venv
 |---|---|---|
 | Unit tests for the KeePass lookup plugin | `.venv/bin/pytest ansible/tests/unit` | nothing |
 | Role tests in a Debian trixie container (converge, idempotence, verify) | `(cd ansible && ../.venv/bin/molecule test)` | Docker |
-| Real integration test on the testbed Pi | `ansible-playbook bootstrap.yaml --limit testbed --check --diff`, then a real run, then a second run that must report `changed=0` | testbed |
+| Real integration test on the testbench Pi | `ansible-playbook bootstrap.yaml --limit testbench --check --diff`, then a real run, then a second run that must report `changed=0` | testbench |
 
 Molecule covers the `base`, `docker` and `secrets` roles. The `ssh` role (port switching) and the certificate role
-are only tested on the testbed Pi.
+are only tested on the testbench Pi.
 
 ### Developing a role with Molecule
 

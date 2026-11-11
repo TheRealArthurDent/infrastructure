@@ -12,8 +12,10 @@ LOCAL_CONFIG = "inventory/group_vars/all/local.yaml"
 LOCAL_EXAMPLE = "inventory/group_vars/all/local.example.yaml"
 
 
-# local.example.yaml is loaded as inventory vars too; the tests start from no configured databases.
+# local.example.yaml is loaded as inventory vars too; the tests start from no configured databases, with testbench
+# reading the raspberry database unless a test names another one.
 NO_DATABASES = ["-e", '{"local_keepass_databases": {}}']
+RASPBERRY = ["-e", "keepass_database=raspberry"]
 
 
 def plays(playbook):
@@ -22,7 +24,7 @@ def plays(playbook):
 
 def keepass_var(name, *args):
     result = subprocess.run(
-        ["ansible", "testbed", "-m", "ansible.builtin.debug", "-a", f"var={name}", *args],
+        ["ansible", "testbench", "-m", "ansible.builtin.debug", "-a", f"var={name}", *RASPBERRY, *args],
         cwd=ANSIBLE_DIR,
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -63,7 +65,7 @@ def test_example_documents_the_local_config():
     # The old keys stay documented as comments: the example is loaded as inventory vars too, and an active
     # local_keepass_db there would win over a user's local_keepass_databases.
     assert set(example) == {"local_keepass_databases"}
-    assert set(example["local_keepass_databases"]) == {"raspberry", "dungeon"}
+    assert set(example["local_keepass_databases"]) == {"raspberry", "dungeon", "testbench"}
 
 
 def test_keepass_paths_come_from_the_local_config(monkeypatch):
@@ -219,12 +221,18 @@ def test_restic_passphrase_is_the_entrys_password():
     assert "field=" not in value
 
 
-def test_testbed_has_its_own_restic_passphrase():
-    # testbed's repository is throwaway: its own passphrase, so changing raspi's doesn't touch it
-    testbed = yaml.safe_load((ANSIBLE_DIR / "inventory" / "host_vars" / "testbed.yaml").read_text())
+def test_testbench_has_its_own_database_with_the_default_titles():
+    # testbench reads everything from testbench.kdbx under the same entry names as raspi; nothing of it stays in raspi's
+    # database (its restic repository is throwaway, so changing raspi's passphrase doesn't touch it)
+    testbench = yaml.safe_load((ANSIBLE_DIR / "inventory" / "host_vars" / "testbench.yaml").read_text())
     defaults = yaml.safe_load((ANSIBLE_DIR / "roles" / "secrets" / "defaults" / "main.yaml").read_text())
-    assert defaults["resticprofile_passphrase_title"] == "Resticprofile"
-    assert testbed["resticprofile_passphrase_title"] == "Resticprofile testbed"
+    titles = {name for name in defaults if name.endswith("_title")}
+    assert titles == {
+        "discord_docker_webhook_title", "resticprofile_ssh_key_title", "resticprofile_passphrase_title",
+        "opencloud_admin_title",
+    }
+    assert testbench["keepass_database"] == "testbench"
+    assert titles.isdisjoint(testbench)
 
 
 def test_the_stack_tag_also_writes_the_secrets():

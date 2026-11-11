@@ -1,14 +1,11 @@
 ---
-# Test Pi. Smaller DH parameters, so a fresh testbed doesn't spend an hour generating them.
+# Test Pi. Smaller DH parameters, so a fresh testbench doesn't spend an hour generating them.
 dhparameter_bits: 2048
 # Often switched off on the 1st: a missed monthly restore drill would turn resticprofile unhealthy (raspberry#288)
 resticprofile_restore_drill_enabled: false
-# Its own entries in raspi's database, so a Discord message and a backup key show which host they belong to, and its
-# throwaway repository has a passphrase of its own
-discord_docker_webhook_title: Docker Webhook testbed
-resticprofile_ssh_key_title: Resticprofile SSH testbed
-resticprofile_passphrase_title: Resticprofile testbed
-opencloud_admin_title: admin testbed
+# Its own KeePass database (testbench) with raspi's entry names, so a Discord message and a backup key show which host
+# they belong to, and its throwaway repository has a passphrase of its own. The root CA still comes from raspberry.
+keepass_database: testbench
 
 # private-cloud's OpenCloud, for its integration runs: its .env, and the default vhosts and SANs plus opencloud
 # (opencloud isn't in the roles' defaults, raspi doesn't run it)
