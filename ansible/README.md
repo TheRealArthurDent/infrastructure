@@ -161,7 +161,8 @@ the host. A rebuilt host has the same key, so dungeon's `authorized_keys` (`back
 - testbench: keep its existing key as well. Copy `id_ed25519` and `id_ed25519.pub` from
   `/etc/docker/infrastructure/resticprofile/.ssh/` on testbench exactly as for raspi, attach both to
   `Backup/Resticprofile SSH` in the `testbench` database and check that the public key equals
-  `backup_target_clients.testbench`. A new pair (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbench -f ./id_ed25519`) needs its public key in
+  `backup_target_clients.testbench`. A new pair
+  (`ssh-keygen -t ed25519 -N '' -C resticprofile@testbench -f ./id_ed25519`) needs its public key in
   `host_vars/dungeon.yaml` and a dungeon run first. Delete the copies after attaching them.
 
 The `secrets` role compares the public key of the entry with `backup_target_clients.<host>` before it writes the key
@@ -224,9 +225,9 @@ nginx serves the vhosts `portainer` and `outbound`, and its resticprofile backs 
 
 The same steps for a new Pi and for one rebuilt after a crash or reinstall. On a host with a backup, the state that
 isn't IaC comes back from restic by itself in steps 5 and 7, before the stacks start
-([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `dungeon` or `testbench`); `<user>`,
-`<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node. Where
-dungeon differs, the step says so; [dungeon](#dungeon) has the details.
+([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `dungeon` or `testbench`);
+`<user>`, `<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node.
+Where dungeon differs, the step says so; [dungeon](#dungeon) has the details.
 
 ### 1. Flash the SSD
 
