@@ -37,7 +37,7 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
   backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,
-  repo hygiene, README TOC)
+  repo hygiene)
 - `.claude/` – Claude Code settings, the guard hook (`hooks/guard.py`) and skills
 - `.github/rulesets/` + `scripts/rulesets.sh` – rulesets for `main`, applied by the user (`rulesets.sh apply`)
 
@@ -96,7 +96,7 @@ When writing or changing Ansible roles, follow the `ansible-role` skill in `.cla
 - Work test-driven, unless something speaks against it (then say why). Write the test first and watch it fail
   for the right reason before changing the code: pytest for Python, `verify.yaml` checks for Ansible roles,
   run against the old role. Since a Molecule run takes minutes, one red/green cycle may cover a group of
-  related checks.
+  related checks. Documentation (READMEs, CLAUDE.md, skills) gets no tests.
 - YAML files use the `.yaml` extension, not `.yml`. Exceptions only where a tool requires a fixed name
   (e.g. Molecule's `molecule.yml`).
 - Everything in the repo is written in English (code, comments, docs, commit messages), even when the user
