@@ -70,6 +70,25 @@
         fail_msg: "{{ item }} is not installed"
       loop: "{{ ['docker-ce', 'docker-compose-plugin'] + ([] if is_dungeon else ['rsnapshot']) }}"
 
+    - name: Check atop is installed
+      ansible.builtin.assert:
+        that: "'atop' in ansible_facts.packages"
+        fail_msg: atop is not installed
+
+    - name: Read atop's settings
+      ansible.builtin.slurp:
+        src: /etc/default/atop
+      register: atop_defaults
+
+    - name: Check atop samples every two minutes and keeps two weeks
+      vars:
+        atop_lines: "{{ (atop_defaults.content | b64decode).splitlines() }}"
+      ansible.builtin.assert:
+        that:
+          - atop_lines | select('match', '^LOGINTERVAL=') | list == ['LOGINTERVAL=120']
+          - atop_lines | select('match', '^LOGGENERATIONS=') | list == ['LOGGENERATIONS=14']
+        fail_msg: "/etc/default/atop has the wrong interval or retention: {{ atop_lines }}"
+
     - name: Check dungeon has no rsnapshot
       ansible.builtin.assert:
         that: "'rsnapshot' not in ansible_facts.packages"
