@@ -37,9 +37,10 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
   backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,
-  repo hygiene)
+  repo settings, repo hygiene)
 - `.claude/` – Claude Code settings, the guard hook (`hooks/guard.py`) and skills
-- `.github/rulesets/` + `scripts/rulesets.sh` – rulesets for `main`, applied by the user (`rulesets.sh apply`)
+- `.github/rulesets/` (rulesets for `main`) + `.github/repo-settings.json` (auto merge, branch cleanup, secret
+  scanning) – GitHub settings, applied by the user with `scripts/github-settings.sh apply`
 
 ## Hosts
 
