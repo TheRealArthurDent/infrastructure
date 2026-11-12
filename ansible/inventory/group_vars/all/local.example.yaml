@@ -11,6 +11,9 @@ local_keepass_databases:
   dungeon:
     db: /mnt/c/Users/<you>/My Drive/KeePass/Dungeon.kdbx
     key: ~/.keepass/dungeon.key
+  testbench:
+    db: /mnt/c/Users/<you>/My Drive/KeePass/Testbench.kdbx
+    key: ~/.keepass/testbench.key
 
 # The old keys still work and mean the raspberry database (they win over local_keepass_databases.raspberry):
 # local_keepass_db: /mnt/c/Users/<you>/My Drive/KeePass/Raspberry.kdbx

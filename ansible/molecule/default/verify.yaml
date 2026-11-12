@@ -318,7 +318,7 @@
         fail_msg: "known_hosts: {{ restic_known_hosts.content | b64decode }}"
       when: not is_dungeon
 
-    # A local repository needs no key pair and no .ssh directory (the sftp client side is raspi's and testbed's)
+    # A local repository needs no key pair and no .ssh directory (the sftp client side is raspi's and testbench's)
     - name: Stat the files dungeon doesn't get
       ansible.builtin.stat:
         path: "{{ item }}"
@@ -1082,9 +1082,9 @@
           - stats['/home/restic/.ssh/authorized_keys'].pw_name == 'restic'
           - stats['/home/restic/.ssh/authorized_keys'].mode == '0600'
           - key_lines | length == 2
-          - key_lines | select('match', '^restrict ssh-ed25519 \\S+ (raspi|testbed)$') | list | length == 2
+          - key_lines | select('match', '^restrict ssh-ed25519 \\S+ (raspi|testbench)$') | list | length == 2
           - key_lines | select('search', ' raspi$') | list | length == 1
-          - key_lines | select('search', ' testbed$') | list | length == 1
+          - key_lines | select('search', ' testbench$') | list | length == 1
           # the repositories directory: only restic can enter it
           - stats['/media/backup/restic'].isdir
           - stats['/media/backup/restic'].pw_name == 'restic'

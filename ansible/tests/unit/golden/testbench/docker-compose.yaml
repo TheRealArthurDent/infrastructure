@@ -12,13 +12,13 @@ services:
     volumes:
       - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
       - /etc/docker/infrastructure/nginx:/etc/nginx:ro
-      - /etc/docker/infrastructure/nginx/testbed.pem:/etc/nginx/testbed.pem:ro
-      - /etc/docker/infrastructure/nginx/testbed.key:/etc/nginx/testbed.key:ro
+      - /etc/docker/infrastructure/nginx/testbench.pem:/etc/nginx/testbench.pem:ro
+      - /etc/docker/infrastructure/nginx/testbench.key:/etc/nginx/testbench.key:ro
     networks:
       nginx:
       siz:
         aliases:
-          - opencloud.testbed
+          - opencloud.testbench
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
   # portainer
@@ -31,7 +31,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/docker/infrastructure/portainer/data:/data  # TODO move to storage
     environment:
-      - TRUSTED_ORIGINS=https://portainer.testbed
+      - TRUSTED_ORIGINS=https://portainer.testbench
     networks:
       - siz
     healthcheck:

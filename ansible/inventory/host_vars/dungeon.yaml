@@ -12,13 +12,13 @@ base_rsnapshot_enabled: false
 secrets_smart_home_env: false
 # private-cloud's OpenCloud: its .env, vhost and SAN
 secrets_opencloud_env: true
-# Restic sftp target for raspi and testbed (sftp:restic@dungeon:/media/backup/restic/<host>)
+# Restic sftp target for raspi and testbench (sftp:restic@dungeon:/media/backup/restic/<host>)
 backup_target_enabled: true
 backup_target_mount: /media/backup
 backup_target_uuid: eeeb6563-1a18-4941-a7bd-72ec86622fa7
 backup_target_clients:
   raspi: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICc/eKct+1gtT9eqDeH8IBIi8XMjArF5mpxWommghE55
-  testbed: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bcoVarIiZLnsDk
+  testbench: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bcoVarIiZLnsDk
 
 # Stack: the components without Pi-hole (raspi's Pi-hole resolves for dungeon); the restic repository is on the
 # local backup SSD

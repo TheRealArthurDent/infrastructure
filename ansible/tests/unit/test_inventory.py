@@ -24,7 +24,7 @@ EXPECTED = {
         "ansible_become": True,
         "dhparameter_bits": 4096,
     },
-    "testbed": {
+    "testbench": {
         "ansible_host": "192.168.1.7",
         "ansible_port": 4242,
         "ansible_user": "testuser",
@@ -32,6 +32,7 @@ EXPECTED = {
         "ansible_become": True,
         "dhparameter_bits": 2048,
         "resticprofile_restore_drill_enabled": False,
+        "keepass_database": "testbench",
     },
     "dungeon": {
         "ansible_host": "192.168.1.5",

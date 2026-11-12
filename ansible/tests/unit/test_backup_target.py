@@ -23,7 +23,7 @@ CHECK_TASKS = (
 )
 KEYS = {
     "raspi": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICc/eKct+1gtT9eqDeH8IBIi8XMjArF5mpxWommghE55",
-    "testbed": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bcoVarIiZLnsDk",
+    "testbench": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDhOThOZGl1G7FFAY2HUFIrMzi/wK+bcoVarIiZLnsDk",
 }
 UUID = "eeeb6563-1a18-4941-a7bd-72ec86622fa7"
 

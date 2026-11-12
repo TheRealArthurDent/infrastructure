@@ -130,7 +130,7 @@
     - ssh
     - base
     - docker
-    # dungeon: the restic sftp target of raspi and testbed
+    # dungeon: the restic sftp target of raspi and testbench
     - role: backup_target
       when: backup_target_enabled | default(false) | bool
     # Also under --tags stack: the stack mounts the files it writes, so a changed secret reaches them

@@ -5,7 +5,7 @@
 # Usage:
 #   bin/with-keepass --store [name]    save the master password of a database (asks for it; replaces a stored one)
 #   bin/with-keepass --forget [name]   remove the stored master password of a database
-#   bin/with-keepass <command>         run <command>, e.g. ansible-playbook bootstrap.yaml --limit testbed
+#   bin/with-keepass <command>         run <command>, e.g. ansible-playbook bootstrap.yaml --limit testbench
 #
 # The name of a database is lowercase letters, digits and '_' (default: raspberry); the password is stored as the
 # Windows credential '<name>-keepass' (user 'keepass'). <command> gets KEEPASS_PASSWORD for 'raspberry' and

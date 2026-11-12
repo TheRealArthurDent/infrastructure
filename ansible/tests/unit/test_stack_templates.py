@@ -9,7 +9,7 @@ from render import ANSIBLE_DIR, COMPONENTS, rendered_tree
 ROLES_DIR = ANSIBLE_DIR / "roles"
 
 
-@pytest.mark.parametrize("host", ["raspi", "testbed"])
+@pytest.mark.parametrize("host", ["raspi", "testbench"])
 def test_templates_leave_no_placeholders(tmp_path, host):
     # %HOSTNAME% and ${...} were the bash scripts' placeholders; nothing may survive the rendering.
     for name, content in rendered_tree(tmp_path, host).items():
