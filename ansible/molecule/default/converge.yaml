@@ -17,6 +17,8 @@
     base_sysctl_reload: false
     # No NetworkManager runs in the test container.
     base_networkmanager_reload: false
+    # No systemd runs in the test container.
+    base_atop_manage_service: false
     stack_manage_containers: false
     # No systemd and no I2C in the test container
     argon_fan_manage_service: false

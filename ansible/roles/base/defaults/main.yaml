@@ -27,3 +27,14 @@ base_kernel_cmdline_params:
   - cgroup_enable=cpuset
   - cgroup_enable=memory
   - cgroup_memory=1
+
+# atop records what every process reads, writes and holds in memory, independent of the monitoring stack, so a load
+# spike can be looked at afterwards (atop -r /var/log/atop/atop_YYYYMMDD, t and T step through the samples). When
+# off, the role leaves all of it alone (neither installs nor removes it).
+base_atop_enabled: true
+# Seconds between two samples (Debian's default is 600, too coarse to see a spike build up)
+base_atop_interval: 120
+# Days a daily log file is kept
+base_atop_generations: 14
+# Start, enable and restart the atop service. Molecule turns this off: no systemd runs in the test container.
+base_atop_manage_service: true
