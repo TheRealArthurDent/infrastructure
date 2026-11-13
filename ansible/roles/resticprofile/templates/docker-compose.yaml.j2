@@ -3,7 +3,7 @@ services:
   resticprofile:
     hostname: resticprofile
     container_name: resticprofile
-    image: creativeprojects/resticprofile:0.33.1
+    image: creativeprojects/resticprofile:0.34.0
     # On stop, let a running backup shut down cleanly so restic removes its repository lock (raspberry#250)
     init: true
     stop_grace_period: 2m
