@@ -213,9 +213,7 @@ expired on 2026-11-02). `check-certificates.yaml` stops on an expired root and w
 replace it:
 
 1. **Create the new root on the control node**, in a RAM-only directory, so the key never touches a disk unencrypted
-   (it is encrypted with the passphrase anyway). `nameConstraints` limits the CA to the host names and their
-   subdomains, so a leaked key can't sign certificates for other sites; add a host there before it gets a certificate
-   (that needs a new root), or drop the line.
+   (it is encrypted with the passphrase anyway).
 
    ```sh
    umask 077 && cd "$(mktemp -d /dev/shm/rootca.XXXXXX)"
@@ -223,8 +221,7 @@ replace it:
    openssl req -x509 -new -key rootCA.key -sha256 -days 3650 -out rootCA.pem \
      -subj "/C=DE/ST=BY/O=Home/CN=Home Root CA 2026" \
      -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
-     -addext "keyUsage=critical,keyCertSign,cRLSign" \
-     -addext "nameConstraints=critical,permitted;DNS:raspi,permitted;DNS:dungeon,permitted;DNS:testbench"
+     -addext "keyUsage=critical,keyCertSign,cRLSign"
    openssl x509 -in rootCA.pem -noout -subject -dates -fingerprint -sha256
    ```
 
