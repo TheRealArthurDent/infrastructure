@@ -578,6 +578,20 @@
         /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
       changed_when: false
 
+    - name: Read expiry of the host certificate and the root CA
+      ansible.builtin.command: openssl x509 -noout -enddate -in {{ item }}
+      loop:
+        - /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+        - /etc/ssl/certs/rootCA.pem
+      register: cert_enddates
+      changed_when: false
+
+    # The test root CA expires in 200 days, before a host certificate's 365 (Refs #10).
+    - name: Check host certificate ends with the root CA, not after it
+      ansible.builtin.assert:
+        that: cert_enddates.results[0].stdout == cert_enddates.results[1].stdout
+        fail_msg: "host {{ cert_enddates.results[0].stdout }}, root CA {{ cert_enddates.results[1].stdout }}"
+
     - name: Read public key of the host certificate
       ansible.builtin.command: >-
         openssl x509 -noout -pubkey -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
@@ -863,6 +877,55 @@
           - restore_helper.stat.mode == '0755'
 
 # More plays: ansible-lint caps a play at 100 tasks (complexity[play])
+- name: Verify the system trust store
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read root CA in the system trust store
+      ansible.builtin.slurp:
+        src: /usr/local/share/ca-certificates/smarthome-root-ca.crt
+      register: trusted_root_ca
+
+    - name: Read root CA certificate on the host
+      ansible.builtin.slurp:
+        src: /etc/ssl/certs/rootCA.pem
+      register: host_root_ca
+
+    - name: Check the system trust store holds the current root CA
+      ansible.builtin.assert:
+        that: trusted_root_ca.content == host_root_ca.content
+
+    - name: Stat old root CA in the system trust store
+      ansible.builtin.stat:
+        path: /usr/local/share/ca-certificates/rootCA.crt
+      register: old_root_ca
+
+    - name: Check the old root CA is gone from the system trust store
+      ansible.builtin.assert:
+        that: not old_root_ca.stat.exists
+
+    - name: List the certificates in the system CA bundle
+      ansible.builtin.shell: >-
+        set -o pipefail &&
+        openssl crl2pkcs7 -nocrl -certfile /etc/ssl/certs/ca-certificates.crt
+        | openssl pkcs7 -print_certs -noout
+      args:
+        executable: /bin/bash
+      register: ca_bundle
+      changed_when: false
+
+    - name: Check the CA bundle holds the current root CA and not the old one
+      ansible.builtin.assert:
+        that:
+          - "'Molecule Test Root CA' in ca_bundle.stdout"
+          - "'Old Test Root CA' not in ca_bundle.stdout"
+
+    # Without -CAfile, openssl uses the system store, like any client on the host.
+    - name: Verify host certificate against the system trust store
+      ansible.builtin.command: openssl verify /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+      changed_when: false
+
 - name: Verify the restore helper
   hosts: all
   become: true

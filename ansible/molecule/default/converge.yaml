@@ -23,6 +23,8 @@
     # No systemd and no I2C in the test container
     argon_fan_manage_service: false
     certificate_check_root_ca_passphrase: test-ca-passphrase
+    # The old root CA prepare.yaml plants in the system trust store
+    certificate_check_stale_ca_files: [/usr/local/share/ca-certificates/rootCA.crt]
     # restic directly instead of the resticprofile container, on the repository from prepare.yaml
     resticprofile_restore_runners:
       exec: &test_restic [restic, -r, /srv/restic-repo, --password-file, /srv/restic-password]
@@ -72,6 +74,9 @@
             privatekey_path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/rootCA.key"
             privatekey_passphrase: "{{ certificate_check_root_ca_passphrase }}"
             provider: selfsigned
+            # Shorter than a host certificate, so the role must cap the host certificate at the root's expiry
+            # (verify checks it) and warn about the root (Refs #10).
+            selfsigned_not_after: +200d
             mode: '0644'
 
     - name: Pass the test root CA to certificate_check
