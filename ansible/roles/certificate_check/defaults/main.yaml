@@ -2,6 +2,9 @@
 certificate_check_dir: /etc/docker/infrastructure/nginx
 certificate_check_renewal_threshold_days: 30
 certificate_check_validity_days: 365
+# Warn this many days before the root CA expires. More than a host certificate's validity, so the last renewal of
+# every host before the root's expiry already warns.
+certificate_check_root_ca_warning_days: 400
 certificate_check_key_size: 2048
 certificate_check_nginx_container: nginx
 # Set to false where no Docker daemon runs (Molecule).

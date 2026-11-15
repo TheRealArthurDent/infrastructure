@@ -10,6 +10,49 @@
     fail_msg: certificate_check_root_ca_cert and certificate_check_root_ca_key must be set by the playbook
     quiet: true
 
+# The root CA is checked before anything on the host changes. An expired root makes every host certificate it signs
+# worthless, and nothing else noticed when "Raspi Root" ran out on 2026-11-02 (Refs #10). The certificate is public,
+# so its info may be printed.
+- name: Read validity of the root CA
+  community.crypto.x509_certificate_info:
+    content: "{{ certificate_check_root_ca_cert }}"
+    valid_at:
+      now: "+0s"
+      warning: "+{{ certificate_check_root_ca_warning_days }}d"
+      host_certificate: "+{{ certificate_check_validity_days }}d"
+  register: certificate_check_root_ca_info
+  delegate_to: localhost
+  become: false
+
+- name: Check the root CA has not expired
+  ansible.builtin.assert:
+    that: certificate_check_root_ca_info.valid_at.now
+    fail_msg: >-
+      The root CA expired on {{ certificate_check_root_ca_expiry }}. Create a new one
+      and replace the Domain/rootCA entry in KeePass, see "Renewing the root CA" in ansible/README.md.
+    quiet: true
+  vars:
+    certificate_check_root_ca_expiry: &root_ca_expiry >-
+      {{ (certificate_check_root_ca_info.not_after | to_datetime('%Y%m%d%H%M%SZ')).strftime('%Y-%m-%d') }}
+
+- name: Warn that the root CA expires soon
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: The root CA expires on {{ certificate_check_root_ca_expiry }}. Host certificates
+      end with it. Renew it before then, see "Renewing the root CA" in ansible/README.md.
+  when: not certificate_check_root_ca_info.valid_at.warning
+  vars:
+    certificate_check_root_ca_expiry: *root_ca_expiry
+
+# A host certificate that outlives its root is invalid from the root's expiry on, so it ends with the root at the
+# latest. x509_certificate_pipe takes the root's not_after (ASN.1 time, e.g. 20361115120000Z) as it is.
+- name: Cap the host certificate at the expiry of the root CA
+  ansible.builtin.set_fact:
+    certificate_check_not_after: >-
+      {{ ('+' ~ certificate_check_validity_days ~ 'd')
+         if certificate_check_root_ca_info.valid_at.host_certificate
+         else certificate_check_root_ca_info.not_after }}
+
 # check-certificates.yaml can be the first playbook on a host (before base), so it refreshes the cache itself.
 # cryptography for community.crypto, requests for the community.docker calls in the nginx reload handler
 - name: Ensure Python libraries for the crypto and Docker modules are installed
@@ -97,7 +140,7 @@
     ownca_content: "{{ certificate_check_root_ca_cert }}"
     ownca_privatekey_content: "{{ certificate_check_root_ca_key }}"
     ownca_privatekey_passphrase: "{{ certificate_check_root_ca_passphrase or omit }}"
-    ownca_not_after: "+{{ certificate_check_validity_days }}d"
+    ownca_not_after: "{{ certificate_check_not_after }}"
     ownca_digest: sha256
     force: "{{ certificate_check_cert_stat.stat.exists and not certificate_check_cert_info.valid_at.renewal }}"
   register: certificate_check_cert

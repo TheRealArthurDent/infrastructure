@@ -578,6 +578,20 @@
         /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
       changed_when: false
 
+    - name: Read expiry of the host certificate and the root CA
+      ansible.builtin.command: openssl x509 -noout -enddate -in {{ item }}
+      loop:
+        - /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt
+        - /etc/ssl/certs/rootCA.pem
+      register: cert_enddates
+      changed_when: false
+
+    # The test root CA expires in 200 days, before a host certificate's 365 (Refs #10).
+    - name: Check host certificate ends with the root CA, not after it
+      ansible.builtin.assert:
+        that: cert_enddates.results[0].stdout == cert_enddates.results[1].stdout
+        fail_msg: "host {{ cert_enddates.results[0].stdout }}, root CA {{ cert_enddates.results[1].stdout }}"
+
     - name: Read public key of the host certificate
       ansible.builtin.command: >-
         openssl x509 -noout -pubkey -in /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.crt

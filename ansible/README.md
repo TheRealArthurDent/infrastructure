@@ -10,6 +10,7 @@ Contents:
 - [Control node setup (once)](#control-node-setup-once)
   - [KeePass](#keepass)
 - [Daily business](#daily-business)
+  - [Renewing the root CA](#renewing-the-root-ca)
 - [Stack components](#stack-components)
 - [Set up a host (new install or after a crash)](#set-up-a-host-new-install-or-after-a-crash)
   - [1. Flash the SSD](#1-flash-the-ssd)
@@ -33,7 +34,7 @@ Contents:
 | --- | --- |
 | `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `backup_target` (dungeon only), `stack`: SSH port and key-only login, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, the `atop` recorder (`sudo atop -r /var/log/atop/atop_YYYYMMDD` replays a day, `t`/`T` step through the samples, `b` jumps to a time), Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
 | `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (raspberry#237) |
-| `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days, restarts nginx |
+| `check-certificates.yaml` | Copies the root CA from KeePass to the host, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days or the root CA changed, restarts nginx. Stops on an expired root CA, warns 400 days before it expires, and never issues a host certificate that outlives the root |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
 
 ## Hosts
@@ -203,6 +204,57 @@ A second run of `bootstrap.yaml` should end with `changed=0`.
 When an image tag changed (a Renovate update), the dry run can't pull the new image, so Compose can't simulate
 recreating its containers. "Ensure the stack is up" then reports `changed`, and "Note the image that check mode
 couldn't pull" names the image; the real run pulls it. Any other Compose error still fails the dry run.
+
+### Renewing the root CA
+
+The root CA signs every host certificate; browsers, phones and tools trust the hosts only through it. When it expires,
+every internal HTTPS service is invalid at once, even with fresh host certificates (the first root, "Raspi Root",
+expired on 2026-11-02). `check-certificates.yaml` stops on an expired root and warns 400 days before the expiry. To
+replace it:
+
+1. **Create the new root on the control node**, in a RAM-only directory, so the key never touches a disk unencrypted
+   (it is encrypted with the passphrase anyway). `nameConstraints` limits the CA to the host names and their
+   subdomains, so a leaked key can't sign certificates for other sites; add a host there before it gets a certificate
+   (that needs a new root), or drop the line.
+
+   ```sh
+   umask 077 && cd "$(mktemp -d /dev/shm/rootca.XXXXXX)"
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -aes256 -out rootCA.key   # asks for the passphrase
+   openssl req -x509 -new -key rootCA.key -sha256 -days 3650 -out rootCA.pem \
+     -subj "/C=DE/ST=BY/O=Home/CN=Home Root CA 2026" \
+     -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
+     -addext "keyUsage=critical,keyCertSign,cRLSign" \
+     -addext "nameConstraints=critical,permitted;DNS:raspi,permitted;DNS:dungeon,permitted;DNS:testbench"
+   openssl x509 -in rootCA.pem -noout -subject -dates -fingerprint -sha256
+   ```
+
+2. **KeePass** (`keepass_ca_database`): rename the old entry `Domain/rootCA` (e.g. to `rootCA 2021`), create a new
+   `Domain/rootCA` with the passphrase as password and the attachments `rootCA.pem` and `rootCA.key`. Copy
+   `rootCA.pem` somewhere for step 4 (it is public), then delete the directory: `cd && rm -rf /dev/shm/rootca.*`.
+
+3. **Hosts**, testbench first. The role sees that the host certificate isn't signed by the new root, issues a new one
+   and reloads nginx:
+
+   ```sh
+   bin/with-keepass ansible-playbook check-certificates.yaml --limit testbench
+   bin/with-keepass ansible-playbook check-certificates.yaml --limit raspi
+   bin/with-keepass ansible-playbook check-certificates.yaml --limit dungeon
+   ```
+
+   Containers that bind-mount `/etc/ssl/certs/rootCA.pem` (OpenCloud on dungeon) keep seeing the old file until they
+   are restarted, because the role replaces the file: `docker restart opencloud`.
+
+4. **Clients**: install the new `rootCA.pem` as a trusted root and remove the old one.
+   - Windows: `certutil -user -addstore Root rootCA.pem` (or `certmgr.msc`, *Trusted Root Certification
+     Authorities*). Firefox uses Windows' roots only with `security.enterprise_roots.enabled`; otherwise import it
+     under *Settings → Privacy & Security → Certificates*.
+   - Android: *Settings → Security → More security settings → Encryption & credentials → Install a certificate →
+     CA certificate* (the names differ by vendor); remove the old one under *Trusted credentials → User*.
+   - Linux and WSL (curl, rclone and other Go tools): copy it to `/usr/local/share/ca-certificates/home-root-ca.crt`,
+     run `sudo update-ca-certificates`.
+
+5. **Check** from a client: `openssl s_client -connect opencloud.dungeon:443 -servername opencloud.dungeon
+   -CAfile rootCA.pem </dev/null | grep 'Verify return code'` must print `0 (ok)`.
 
 ## Stack components
 
