@@ -14,3 +14,7 @@
     - certificate_check_reload_nginx | bool
     - certificate_check_nginx_info.exists
     - certificate_check_nginx_info.container.State.Running
+
+- name: Update CA certificates
+  ansible.builtin.command: update-ca-certificates --fresh
+  changed_when: true
