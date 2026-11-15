@@ -54,6 +54,19 @@
         group: root
         mode: '0600'
 
+    # Simulates a host that still trusts an old root CA in the system store, so verify can check the role replaces
+    # it with the current one.
+    - name: Plant an old root CA in the system trust store
+      ansible.builtin.command: >-
+        openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=Old Test Root CA"
+        -keyout /tmp/old-root-ca.key -out /usr/local/share/ca-certificates/rootCA.crt
+      args:
+        creates: /usr/local/share/ca-certificates/rootCA.crt
+
+    - name: Trust the old root CA like a host set up by hand
+      ansible.builtin.command: update-ca-certificates
+      changed_when: true
+
     # Simulates a host set up before raspberry#231: Docker key in trusted.gpg.d (trusted for every repo)
     # and a one-line docker.list, so verify can check the role migrates both.
     - name: Download the Docker signing key like the old docker role did

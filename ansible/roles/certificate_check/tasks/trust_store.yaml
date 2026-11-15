@@ -1,0 +1,22 @@
+# Clients on the host (curl, Python, other hosts' services) trust the system store, not
+# certificate_check_root_ca_cert_path, so the root CA goes into it and replaces older ones.
+
+- name: Ensure superseded root CA certificates are absent from the system trust store
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ certificate_check_stale_ca_files }}"
+  notify: Update CA certificates
+
+- name: Ensure root CA certificate is in the system trust store
+  ansible.builtin.copy:
+    content: "{{ certificate_check_root_ca_cert }}"
+    dest: "{{ certificate_check_trusted_ca_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Update CA certificates
+
+# A later task or play may already need the new trust (e.g. a client calling another host).
+- name: Rebuild the system CA bundle before the next task
+  ansible.builtin.meta: flush_handlers
