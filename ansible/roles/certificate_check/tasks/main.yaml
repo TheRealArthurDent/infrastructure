@@ -11,12 +11,14 @@
     quiet: true
 
 # check-certificates.yaml can be the first playbook on a host (before base), so it refreshes the cache itself.
-# cryptography for community.crypto, requests for the community.docker calls in the nginx reload handler
+# cryptography for community.crypto, requests for the community.docker calls in the nginx reload handler,
+# ca-certificates for the system trust store
 - name: Ensure Python libraries for the crypto and Docker modules are installed
   ansible.builtin.apt:
     name:
       - python3-cryptography
       - python3-requests
+      - ca-certificates
     state: present
     update_cache: true
     cache_valid_time: 86400
@@ -33,6 +35,9 @@
     owner: root
     group: root
     mode: '0644'
+
+- name: Ensure root CA is trusted by the host
+  ansible.builtin.import_tasks: trust_store.yaml
 
 - name: Ensure certificate directory exists
   ansible.builtin.file:

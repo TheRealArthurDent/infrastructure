@@ -24,6 +24,12 @@ certificate_check_subdomains:
 # Root CA certificate on the host, for clients and `openssl verify`. Public, so it's fine on the host.
 certificate_check_root_ca_cert_path: /etc/ssl/certs/rootCA.pem
 
+# Root CA in the system trust store (update-ca-certificates builds /etc/ssl/certs/ca-certificates.crt from it).
+certificate_check_trusted_ca_path: /usr/local/share/ca-certificates/smarthome-root-ca.crt
+
+# Root CA certificates from earlier setups in the system trust store that the host must stop trusting.
+certificate_check_stale_ca_files: []
+
 # Root CA as PEM strings on the control node, set by the playbook. The private key only ever lives
 # in memory on the control node; the leaf certificate is signed there and never on the host (raspberry#229).
 certificate_check_root_ca_cert: ""
