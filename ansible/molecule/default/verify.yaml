@@ -621,14 +621,15 @@
           - "is_dungeon or 'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
 
     # certificate_check_subdomains of the platform: just the vhosts dungeon runs
-    - name: Check dungeon's certificate covers portainer, outbound and opencloud only
+    - name: Check dungeon's certificate covers portainer, outbound, opencloud and grafana only
       ansible.builtin.assert:
         that:
           - "'DNS:portainer.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:outbound.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:opencloud.' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:grafana.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:pihole.' ~ inventory_hostname not in cert_san.stdout"
-          - "'DNS:grafana.' ~ inventory_hostname not in cert_san.stdout"
+          - "'DNS:iobroker.' ~ inventory_hostname not in cert_san.stdout"
         fail_msg: "Unexpected SANs: {{ cert_san.stdout }}"
       when: is_dungeon
 
