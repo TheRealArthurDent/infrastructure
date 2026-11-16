@@ -19,6 +19,9 @@
     base_networkmanager_reload: false
     # No systemd runs in the test container.
     base_atop_manage_service: false
+    # The container sees the swap of the machine it runs on (WSL, CI runner), not a Pi's; test_swap_check.py
+    # covers the check.
+    base_swap_min_mb: 0
     stack_manage_containers: false
     # No systemd and no I2C in the test container
     argon_fan_manage_service: false
