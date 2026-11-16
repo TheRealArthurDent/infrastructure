@@ -148,9 +148,10 @@ entries are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_k
 Passwords may hold any printable character (`$`, `{{ }}`, quotes, backslashes, `#`, blanks, umlauts): the secrets role
 quotes every `.env` value for Compose (`dotenv_quote`). New components get their passwords as Compose secrets instead
 (files in `/etc/docker/infrastructure/secrets/`, read by the container from `/run/secrets/<name>`), like the restic
-passphrase and Grafana's admin password; Compose neither interpolates nor quotes them. It refuses, before writing anything, line breaks and other
-control characters in any entry, `'` and `\` in the InfluxDB passwords (`smart-home/Influx DB`; the influxdb image's
-init script can't create the user then) and `\` in the deCONZ VNC password (deCONZ' start script changes it).
+passphrase and Grafana's admin password; Compose neither interpolates nor quotes them. The secrets role refuses, before
+writing anything, line breaks and other control characters in any entry, `'` and `\` in the InfluxDB passwords
+(`smart-home/Influx DB`; the influxdb image's init script can't create the user then) and `\` in the deCONZ VNC password
+(deCONZ' start script changes it).
 
 #### Put the restic key pairs into KeePass
 
@@ -261,9 +262,10 @@ replace it:
 The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,
 `pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor` and `monitoring` (the central part of
 the monitoring: VictoriaMetrics and Grafana, #39). Each brings its compose fragment and config; `stack` merges the
-fragments, runs the clean-slate restore and `docker compose up`. `stack_components` lists the enabled ones and
-defaults to the first seven; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml`
-(components must be listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts).
+fragments, runs the clean-slate restore and `docker compose up`. `stack_components` lists the enabled ones and defaults
+to the first seven; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in
+`inventory/host_vars/<host>.yaml` (components must be listed with the dependencies they need, e.g. `reverse_proxy` for
+the vhosts).
 
 | Host | Components |
 | --- | --- |
