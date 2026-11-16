@@ -1,5 +1,15 @@
 {
     "items": {
+        "grafana": {
+            "containers": [
+                "grafana"
+            ],
+            "note": "Grafana's users, preferences, favourites and alert state. Data source, dashboards and alerting come from the repo.",
+            "paths": [
+                "/etc/docker/infrastructure/grafana/data"
+            ],
+            "preserve": []
+        },
         "portainer": {
             "containers": [
                 "portainer"

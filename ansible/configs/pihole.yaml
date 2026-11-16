@@ -59,6 +59,8 @@ pihole_instances:
         target: "dungeon"
       - domain: "opencloud.dungeon"
         target: "dungeon"
+      - domain: "grafana.dungeon"
+        target: "dungeon"
       - domain: "nextcloud.erika"
         target: "erika"
       - domain: "portainer.erika"

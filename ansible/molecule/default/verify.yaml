@@ -741,7 +741,7 @@
           /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
         portainer_names: "portainer.{{ inventory_hostname }} portainer.{{ inventory_hostname }}.*;"
         outbound_names: "outbound.{{ inventory_hostname }} outbound.{{ inventory_hostname }}.*;"
-        dungeon_services: [healthmonitor, nginx, outbound, portainer, resticprofile, unbound]
+        dungeon_services: [grafana, healthmonitor, nginx, outbound, portainer, resticprofile, unbound, victoriametrics]
         resticprofile_volumes: "{{ compose.services.resticprofile.volumes }}"
         backup_mount: "{{ resticprofile_volumes | select('mapping') | selectattr('target', 'eq', '/backup') | list }}"
       ansible.builtin.assert:
@@ -762,6 +762,10 @@
           - "'extra_hosts' not in compose.services.resticprofile"
           # Backups wait for infrastructure's restore marker only (smart-home isn't on dungeon)
           - "'for stack in infrastructure; do' in compose.services.resticprofile.command[-1]"
+          # The monitoring's Grafana behind nginx, its admin password as a Compose secret
+          - "'server_name         grafana.' ~ inventory_hostname ~ ' ' in nginx_conf"
+          - compose.services.grafana.secrets == ['grafana_admin_password']
+          - compose.secrets.grafana_admin_password.file == '/etc/docker/infrastructure/secrets/grafana_admin_password'
           # private-cloud's OpenCloud reaches its own URL through nginx without DNS
           - compose.services.nginx.networks.siz.aliases == ['opencloud.' ~ inventory_hostname]
         fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
@@ -1155,3 +1159,57 @@
           - stats['/media/backup/restic'].mode == '0700'
         fail_msg: "Backup target: {{ restic_account.results | map(attribute='stdout') | list }} keys: {{ key_lines }}"
       when: is_dungeon
+
+# monitoring component (dungeon): Grafana's admin password as a Compose secret and its data directory
+- name: Verify the monitoring component
+  hosts: all
+  become: true
+  gather_facts: false
+  vars_files:
+    - vars/secrets.yaml
+  tasks:
+    - name: Run the checks on the host with the monitoring component
+      when: "'monitoring' in stack_components | default([])"
+      block:
+        - name: Stat the Grafana admin password secret
+          ansible.builtin.stat:
+            path: /etc/docker/infrastructure/secrets/grafana_admin_password
+          register: grafana_admin_secret_file
+
+        # Compose bind-mounts the file as it is; Grafana runs as uid 472
+        - name: Check only Grafana's user can read the Grafana admin password secret
+          ansible.builtin.assert:
+            that:
+              - grafana_admin_secret_file.stat.exists
+              - grafana_admin_secret_file.stat.uid == 472
+              - grafana_admin_secret_file.stat.gid == 0
+              - grafana_admin_secret_file.stat.mode == '0400'
+            fail_msg: "grafana_admin_password: uid {{ grafana_admin_secret_file.stat.uid | default('-') }},
+              mode {{ grafana_admin_secret_file.stat.mode | default('-') }}"
+
+        # The secret reaches Grafana as the file's content, unchanged (no quoting as in a .env file)
+        - name: Read the Grafana admin password secret
+          ansible.builtin.slurp:
+            src: /etc/docker/infrastructure/secrets/grafana_admin_password
+          register: grafana_admin_secret
+          no_log: true
+
+        - name: Check the Grafana admin password secret holds the KeePass value as is
+          ansible.builtin.assert:
+            that: grafana_admin_secret.content | b64decode == monitoring_grafana_admin_password
+            fail_msg: The Grafana admin password secret differs from the KeePass value (the value isn't shown)
+            quiet: true
+          no_log: true
+
+        - name: Stat the Grafana data directory
+          ansible.builtin.stat:
+            path: /etc/docker/infrastructure/grafana/data
+          register: grafana_data_dir
+
+        - name: Check the Grafana data directory belongs to the grafana image's user
+          ansible.builtin.assert:
+            that:
+              - grafana_data_dir.stat.isdir
+              - grafana_data_dir.stat.uid == 472
+              - grafana_data_dir.stat.mode == '0750'
+            fail_msg: "/etc/docker/infrastructure/grafana/data: {{ grafana_data_dir.stat }}"

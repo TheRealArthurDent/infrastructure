@@ -52,7 +52,10 @@ def undefined_references(compose):
             if secret not in compose.get("secrets", {}):
                 problems.append(f"{name}: secret {secret}")
         for volume in service.get("volumes", []):
-            source = volume.split(":")[0]
+            if isinstance(volume, dict):  # the long syntax
+                source = volume["source"] if volume.get("type") == "volume" else "/"
+            else:
+                source = volume.split(":")[0]
             if not source.startswith("/") and source not in compose.get("volumes", {}):
                 problems.append(f"{name}: volume {source}")
     return problems
@@ -135,11 +138,14 @@ def secrets_tasks():
 # The files the secrets role writes for a component -> the component whose host needs them (the ssh key pair only
 # with an sftp repository)
 SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
+# The directory of the Compose secrets, for every component that has one
+SECRETS_DIR = "['resticprofile', 'monitoring'] | intersect(stack_components) | length > 0"
 SECRET_FILES = {
     "/etc/docker/infrastructure/.env": "pihole",
     "/etc/docker/infrastructure/.outbound.env": "outbound",
     "/etc/docker/infrastructure/.healthmonitor.env": "healthmonitor",
-    "/etc/docker/infrastructure/secrets": "resticprofile",
+    "/etc/docker/infrastructure/secrets": SECRETS_DIR,
+    "/etc/docker/infrastructure/secrets/grafana_admin_password": "monitoring",
     "/etc/docker/infrastructure/secrets/restic_passphrase": "resticprofile",
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
     "/etc/docker/infrastructure/resticprofile/.ssh": SFTP,
@@ -158,7 +164,7 @@ def test_secrets_are_written_only_for_enabled_components():
                     found[target] = task
     assert sorted(found) == sorted(SECRET_FILES)
     for target, component in SECRET_FILES.items():
-        condition = component if component == SFTP else f"'{component}' in stack_components"
+        condition = component if component in (SFTP, SECRETS_DIR) else f"'{component}' in stack_components"
         assert found[target].get("when") == condition, target
 
 
@@ -175,7 +181,7 @@ def test_old_restic_init_script_and_generated_key_are_gone():
 def test_dungeon_renders_only_its_vhosts(tmp_path):
     tree = rendered_tree(tmp_path, "dungeon")
     names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
-    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon", "opencloud.dungeon"}
+    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon", "opencloud.dungeon", "grafana.dungeon"}
     assert "listen              8443" not in tree["nginx/nginx.conf"]
     assert "location /health" in tree["nginx/nginx.conf"]
 
@@ -242,3 +248,55 @@ def test_containers_reach_opencloud_through_nginx_without_dns(tmp_path, host):
 def test_raspi_nginx_gets_no_network_alias(tmp_path):
     compose = yaml.safe_load(rendered_tree(tmp_path, "raspi")["docker-compose.yaml"])
     assert compose["services"]["nginx"]["networks"] == {"nginx": None, "siz": None}
+
+
+@pytest.fixture(scope="module")
+def dungeon_compose(tmp_path_factory):
+    tree = rendered_tree(tmp_path_factory.mktemp("dungeon"), "dungeon")
+    return yaml.safe_load(tree["docker-compose.yaml"])
+
+
+def test_dungeon_runs_the_monitoring_component(dungeon_compose):
+    """The central part of the monitoring (#39): VictoriaMetrics and a Grafana behind nginx."""
+    services = dungeon_compose["services"]
+    assert {"victoriametrics", "grafana"} <= set(services)
+    assert undefined_references(dungeon_compose) == []
+
+
+def test_grafana_reads_its_admin_password_from_a_compose_secret(dungeon_compose):
+    grafana = dungeon_compose["services"]["grafana"]
+    assert grafana["secrets"] == ["grafana_admin_password"]
+    assert dungeon_compose["secrets"]["grafana_admin_password"] == {
+        "file": "/etc/docker/infrastructure/secrets/grafana_admin_password"}
+    environment = grafana["environment"]
+    assert environment["GF_SECURITY_ADMIN_PASSWORD__FILE"] == "/run/secrets/grafana_admin_password"
+    # No password as a plain variable, and no env file
+    assert "GF_SECURITY_ADMIN_PASSWORD" not in environment
+    assert "env_file" not in grafana
+    assert environment["GF_SERVER_ROOT_URL"] == "https://grafana.dungeon"
+
+
+def test_grafana_is_reachable_through_nginx_only(dungeon_compose):
+    grafana = dungeon_compose["services"]["grafana"]
+    assert grafana["networks"] == ["siz"]
+    assert "ports" not in grafana
+    assert "ports" not in dungeon_compose["services"]["victoriametrics"]
+
+
+def test_victoriametrics_keeps_twelve_months_in_a_named_volume(dungeon_compose):
+    victoriametrics = dungeon_compose["services"]["victoriametrics"]
+    assert "-retentionPeriod=12M" in victoriametrics["command"]
+    assert "-storageDataPath=/storage" in victoriametrics["command"]
+    assert victoriametrics["volumes"] == ["victoriametrics_data:/storage"]
+    assert dungeon_compose["volumes"]["victoriametrics_data"] == {"name": "victoriametrics_data"}
+
+
+def test_monitoring_has_memory_limits(dungeon_compose):
+    for name in ("victoriametrics", "grafana"):
+        assert dungeon_compose["services"][name]["deploy"]["resources"]["limits"]["memory"], name
+
+
+def test_raspi_runs_no_monitoring(tmp_path):
+    tree = rendered_tree(tmp_path, "raspi")
+    services = yaml.safe_load(tree["docker-compose.yaml"])["services"]
+    assert not {"victoriametrics"} & set(services)

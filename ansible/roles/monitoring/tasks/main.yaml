@@ -1,0 +1,9 @@
+---
+# Needs secrets/grafana_admin_password from the secrets role. VictoriaMetrics keeps its data in a named volume.
+- name: Ensure the Grafana data directory exists
+  ansible.builtin.file:
+    path: "{{ monitoring_grafana_data_dir }}"
+    state: directory
+    owner: "{{ monitoring_grafana_uid }}"
+    group: root
+    mode: '0750'

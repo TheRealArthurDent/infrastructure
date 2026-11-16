@@ -1,0 +1,64 @@
+services:
+  # Monitoring, central part (#39): the time-series database the agents write to
+  victoriametrics:
+    hostname: victoriametrics
+    container_name: victoriametrics
+    image: victoriametrics/victoria-metrics:v1.156.0
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod={{ monitoring_retention_period }}
+      - -httpListenAddr=:8428
+    volumes:
+      - victoriametrics_data:/storage
+    deploy:
+      resources:
+        limits:
+          memory: "{{ monitoring_victoriametrics_memory_limit }}"
+    restart: unless-stopped
+    networks:
+      - siz
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8428/health" ]
+      interval: 1m
+      start_period: 1m
+      start_interval: 5s
+
+  # Monitoring, central part: starts with an empty data directory, configured through its HTTP API
+  # (setup-grafana.yaml), reached through nginx at grafana.<host>
+  grafana:
+    hostname: grafana
+    container_name: grafana
+    image: grafana/grafana:13.3.1
+    secrets:
+      - grafana_admin_password
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SERVER_ROOT_URL: "https://grafana.{{ inventory_hostname }}"
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+    volumes:
+      - "{{ monitoring_grafana_data_dir }}:/var/lib/grafana"
+    deploy:
+      resources:
+        limits:
+          memory: "{{ monitoring_grafana_memory_limit }}"
+    restart: unless-stopped
+    depends_on:
+      - victoriametrics
+    networks:
+      - siz
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health" ]
+      interval: 1m
+      start_period: 2m
+      start_interval: 5s
+
+volumes:
+  victoriametrics_data:
+    name: victoriametrics_data
+
+secrets:
+  grafana_admin_password:
+    file: /etc/docker/infrastructure/secrets/grafana_admin_password

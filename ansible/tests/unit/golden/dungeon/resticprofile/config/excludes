@@ -10,6 +10,8 @@
 /source/etc/docker/infrastructure/pihole/pihole/pihole-FTL.db*
 # Docker volumes that are only a cache: Ansible provisions their content (raspberry#293)
 /source/docker-volumes/outbound_pihole
+# The metrics of the monitoring may be lost (#39)
+/source/docker-volumes/victoriametrics_data
 # Exclude iobroker's npm cache
 /source/docker-volumes/smart-home_iobroker-storage/_data/.npm
 # Python
