@@ -11,7 +11,6 @@ reverse_proxy_vhosts:
   - node-red
   - deconz
   - deconz-ui
-  - roomba
   - grafana
   - chronograf
   - portainer
