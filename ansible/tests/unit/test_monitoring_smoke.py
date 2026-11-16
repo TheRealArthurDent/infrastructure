@@ -140,3 +140,4 @@ def test_the_agent_delivers_container_metrics_without_labels(stack):
     result = query_until(stack, "docker_container_mem_usage", "victoriametrics")
     assert "victoriametrics" in result
     assert "com.docker.compose" not in result
+    assert "org.opencontainers" not in result

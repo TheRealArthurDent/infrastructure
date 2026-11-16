@@ -354,6 +354,8 @@ def test_the_agent_collects_host_container_and_disk_metrics(dungeon_tree):
 def test_the_agent_keeps_the_container_labels_out(dungeon_tree):
     """Compose puts a dozen labels on each container; as tags they would multiply the series."""
     conf = dungeon_tree["telegraf/telegraf.conf"]
-    assert "docker_label_include = []" in conf
+    # An empty docker_label_include would keep them all
+    assert 'docker_label_exclude = ["*"]' in conf
+    assert "docker_label_include" not in conf
     assert "perdevice_include = []" in conf
     assert 'endpoint = "unix:///var/run/docker.sock"' in conf
