@@ -1201,6 +1201,17 @@
             quiet: true
           no_log: true
 
+        # The clean-slate restore brought Grafana's data back from the snapshot of prepare.yaml
+        - name: Read the restored Grafana database
+          ansible.builtin.slurp:
+            src: /etc/docker/infrastructure/grafana/data/grafana.db
+          register: restored_grafana
+
+        - name: Check the Grafana data came back from the backup
+          ansible.builtin.assert:
+            that: restored_grafana.content | b64decode == 'grafana from backup\n'
+            fail_msg: "grafana.db: {{ restored_grafana.content | b64decode }}"
+
         - name: Stat the Grafana data directory
           ansible.builtin.stat:
             path: /etc/docker/infrastructure/grafana/data
