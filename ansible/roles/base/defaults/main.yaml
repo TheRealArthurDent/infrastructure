@@ -28,6 +28,12 @@ base_kernel_cmdline_params:
   - cgroup_enable=memory
   - cgroup_memory=1
 
+# Swap (MB) the host must have, or the role fails (#50). How it's provided doesn't matter (rpi-swap, zram,
+# dphys-swapfile, a swap file); the role only checks. Without swap, memory pressure makes the kernel drop the code of
+# running programs and read it right back: raspi ran at load 5-8, mostly iowait, after an in-place upgrade to trixie
+# had lost its swap. 0 turns the check off.
+base_swap_min_mb: 1024
+
 # atop records what every process reads, writes and holds in memory, independent of the monitoring stack, so a load
 # spike can be looked at afterwards (atop -r /var/log/atop/atop_YYYYMMDD, t and T step through the samples). When
 # off, the role leaves all of it alone (neither installs nor removes it).

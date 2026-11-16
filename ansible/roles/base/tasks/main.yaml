@@ -1,3 +1,16 @@
+# Before anything changes on the host: one without swap thrashes under memory pressure (#50). The facts come from
+# the ssh role's deferred setup.
+- name: Ensure the host has enough swap
+  ansible.builtin.assert:
+    that: ansible_facts['swaptotal_mb'] | int >= base_swap_min_mb | int
+    fail_msg: >-
+      {{ inventory_hostname }} has {{ ansible_facts['swaptotal_mb'] }} MB of swap, base_swap_min_mb asks for
+      {{ base_swap_min_mb }} MB. On Raspberry Pi OS trixie, install rpi-swap (a fresh install has it; an in-place
+      upgrade from bookworm may leave dphys-swapfile disabled and no swap at all), or run
+      `systemctl enable --now dphys-swapfile`; check with `swapon --show`.
+    quiet: true
+  when: base_swap_min_mb | int > 0
+
 # Before anything downloads: on a freshly installed Pi, the network's DNS server (Pi-hole on this very host) doesn't
 # exist yet, and apt couldn't resolve deb.debian.org.
 - name: Ensure the host falls back to another DNS server while Pi-hole is down
