@@ -71,12 +71,12 @@ def exec_in(base, service, *command):
 
 def test_victoriametrics_stores_and_returns_a_metric(stack):
     write = exec_in(stack, "victoriametrics", "wget", "-qO-", "--post-data", "smoke,host=test value=42",
-                    "http://localhost:8428/write")
+                    "http://127.0.0.1:8428/write")
     assert write.returncode == 0, write.stderr
-    exec_in(stack, "victoriametrics", "wget", "-qO-", "http://localhost:8428/internal/force_flush")
+    exec_in(stack, "victoriametrics", "wget", "-qO-", "http://127.0.0.1:8428/internal/force_flush")
     for _ in range(30):
         query = exec_in(stack, "victoriametrics", "wget", "-qO-",
-                        "http://localhost:8428/api/v1/query?query=smoke_value")
+                        "http://127.0.0.1:8428/api/v1/query?query=smoke_value")
         if '"42"' in query.stdout:
             break
         time.sleep(1)

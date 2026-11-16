@@ -228,7 +228,7 @@ services:
       - wget
       - -q
       - --spider
-      - http://localhost:8428/health
+      - http://127.0.0.1:8428/health
     hostname: victoriametrics
     image: victoriametrics/victoria-metrics:v1.156.0
     networks:

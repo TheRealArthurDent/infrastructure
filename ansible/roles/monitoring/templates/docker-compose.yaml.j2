@@ -17,8 +17,9 @@ services:
     restart: unless-stopped
     networks:
       - siz
+    # 127.0.0.1, not localhost: VictoriaMetrics listens on IPv4 only (-enableTCP6 is off), and localhost is ::1 first
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8428/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:8428/health" ]
       interval: 1m
       start_period: 1m
       start_interval: 5s
