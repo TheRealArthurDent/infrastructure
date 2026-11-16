@@ -16,7 +16,8 @@ import yaml
 ANSIBLE_DIR = Path(__file__).parents[2]
 ROLES_DIR = ANSIBLE_DIR / "roles"
 # The stack's components, in the order of the component map (#14)
-COMPONENTS = ["reverse_proxy", "portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor"]
+COMPONENTS = ["reverse_proxy", "portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor",
+              "monitoring"]
 DUNGEON_IP = "192.0.2.10"
 DUNGEON_SSH_PORT = 1359
 

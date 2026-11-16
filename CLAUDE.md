@@ -30,10 +30,11 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
   `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`,
   `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
 - `ansible/roles/` – besides host roles (`ssh`, `base`, `docker`, `secrets`, `argon_fan`, `certificate_check`), the
-  stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile` and
-  `healthmonitor`, each with its compose fragment (`templates/docker-compose.yaml.j2`); `stack` merges them, restores
-  and runs `docker compose up`. `stack_components` (default: all seven) switches them per host in `host_vars`:
-  raspi and testbench run all seven, dungeon all but `pihole`. The host role `backup_target` (dungeon only) mounts the
+  stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile`,
+  `healthmonitor` and `monitoring` (VictoriaMetrics and Grafana, #39), each with its compose fragment
+  (`templates/docker-compose.yaml.j2`); `stack` merges them, restores and runs `docker compose up`.
+  `stack_components` (default: the first seven) switches them per host in `host_vars`: raspi and testbench run the
+  first seven, dungeon all but `pihole`, plus `monitoring`. The host role `backup_target` (dungeon only) mounts the
   backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,

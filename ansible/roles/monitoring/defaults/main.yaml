@@ -1,0 +1,26 @@
+---
+# The central part of the monitoring (#39): VictoriaMetrics stores the metrics the agents send, Grafana shows them.
+# Enabled on one host through stack_components (for now dungeon). Nothing here may assume that host, so the
+# component can move to a dedicated host by changing host_vars.
+
+# How long VictoriaMetrics keeps the metrics (its -retentionPeriod)
+monitoring_retention_period: 12M
+# Memory limits of the containers (Compose deploy.resources.limits.memory)
+monitoring_victoriametrics_memory_limit: 1g
+monitoring_grafana_memory_limit: 512m
+# Grafana's data directory on the host (users, preferences, alert state; dashboards and alerting come from the repo)
+monitoring_grafana_data_dir: "{{ stack_dir }}/grafana/data"
+# The grafana image runs as this user (and group root). The secrets role gives it the admin password secret too.
+monitoring_grafana_uid: 472
+
+# Restored from the backup on a fresh host; the format is described at stack_restore_items (stack role defaults).
+# The metrics in the volume victoriametrics_data aren't backed up: they can be lost.
+monitoring_restore_items:
+  grafana:
+    paths:
+      - /etc/docker/infrastructure/grafana/data
+    containers: [grafana]
+    preserve: []
+    note: >-
+      Grafana's users, preferences, favourites and alert state. Data source, dashboards and alerting come from the
+      repo.

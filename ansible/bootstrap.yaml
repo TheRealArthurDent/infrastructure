@@ -119,6 +119,10 @@
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='GitHub', title='NodeRed', field='email')
              if secrets_smart_home_env | bool else '' }}
+        monitoring_grafana_admin_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Monitoring', title=monitoring_grafana_admin_title)
+             if 'monitoring' in stack_components else '' }}
         opencloud_admin_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='OpenCloud', title=opencloud_admin_title)

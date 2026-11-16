@@ -58,6 +58,12 @@
     tasks_from: main
   when: "'healthmonitor' in stack_components"
 
+- name: Set up the central part of the monitoring
+  ansible.builtin.import_role:
+    name: monitoring
+    tasks_from: main
+  when: "'monitoring' in stack_components"
+
 - name: Ensure the compose directory exists
   ansible.builtin.file:
     path: "{{ stack_compose_dir }}"

@@ -9,9 +9,45 @@ networks:
     external: true
     name: siz
 secrets:
+  grafana_admin_password:
+    file: /etc/docker/infrastructure/secrets/grafana_admin_password
   restic_passphrase:
     file: /etc/docker/infrastructure/secrets/restic_passphrase
 services:
+  grafana:
+    container_name: grafana
+    depends_on:
+    - victoriametrics
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    environment:
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SERVER_ROOT_URL: https://grafana.dungeon
+    healthcheck:
+      interval: 1m
+      start_interval: 5s
+      start_period: 2m
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://localhost:3000/api/health
+    hostname: grafana
+    image: grafana/grafana:13.3.1
+    networks:
+    - siz
+    restart: unless-stopped
+    secrets:
+    - grafana_admin_password
+    volumes:
+    - /etc/docker/infrastructure/grafana/data:/var/lib/grafana
   healthmonitor:
     container_name: healthmonitor
     dns:
@@ -173,6 +209,35 @@ services:
       siz:
         ipv4_address: 172.30.2.52
     restart: unless-stopped
+  victoriametrics:
+    command:
+    - -storageDataPath=/storage
+    - -retentionPeriod=12M
+    - -httpListenAddr=:8428
+    container_name: victoriametrics
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    healthcheck:
+      interval: 1m
+      start_interval: 5s
+      start_period: 1m
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8428/health
+    hostname: victoriametrics
+    image: victoriametrics/victoria-metrics:v1.156.0
+    networks:
+    - siz
+    restart: unless-stopped
+    volumes:
+    - victoriametrics_data:/storage
 volumes:
   outbound_pihole:
     name: outbound_pihole
+  victoriametrics_data:
+    name: victoriametrics_data

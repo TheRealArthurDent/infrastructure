@@ -19,7 +19,7 @@ EXCLUDES = ROLES_DIR / "resticprofile" / "templates" / "resticprofile" / "config
 RESTICPROFILE_COMPOSE = ROLES_DIR / "resticprofile" / "templates" / "docker-compose.yaml.j2"
 OUTBOUND_COMPOSE = ROLES_DIR / "outbound" / "templates" / "docker-compose.yaml.j2"
 # Components whose state comes back from the backup
-RESTORED_COMPONENTS = ["portainer", "pihole"]
+RESTORED_COMPONENTS = ["portainer", "pihole", "monitoring"]
 
 
 def read(path):
@@ -111,6 +111,12 @@ def test_outbound_keeps_its_runtime_data_in_a_named_volume():
 
     assert compose["services"]["outbound"]["volumes"] == ["outbound_pihole:/etc/pihole"]
     assert compose["volumes"]["outbound_pihole"] == {"name": "outbound_pihole"}
+
+
+def test_metrics_are_not_backed_up():
+    """The metrics can be lost (#39); only Grafana's own state (users, preferences) comes back from the backup."""
+    assert excluded(to_source("/var/lib/docker/volumes/victoriametrics_data/_data/data/small/x"))
+    assert "grafana" in ITEMS
 
 
 def test_cache_volumes_are_not_backed_up():

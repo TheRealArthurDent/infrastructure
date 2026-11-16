@@ -121,6 +121,15 @@
         mode: '0755'
       loop: [portainer/data, pihole/pihole]
 
+    # Grafana's data directory (monitoring component, dungeon) as the monitoring role creates it: the image's user 472
+    - name: Create the backed up Grafana data directory
+      ansible.builtin.file:
+        path: /source/etc/docker/infrastructure/grafana/data
+        state: directory
+        owner: '472'
+        group: root
+        mode: '0750'
+
     - name: Create backed up item data owned by a container user
       ansible.builtin.copy:
         content: "{{ item.content }}\n"
@@ -131,6 +140,7 @@
       loop:
         - {path: portainer/data/portainer.db, content: portainer from backup}
         - {path: pihole/pihole/gravity.db, content: pihole from backup}
+        - {path: grafana/data/grafana.db, content: grafana from backup}
       loop_control:
         label: "{{ item.path }}"
 
