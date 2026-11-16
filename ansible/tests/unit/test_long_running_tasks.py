@@ -40,11 +40,28 @@ def test_ssh_args_keep_the_existing_options():
     assert options.get("StrictHostKeyChecking") == "accept-new"
 
 
-def test_dhparam_generation_runs_async_and_is_polled():
+def dhparam_tasks():
     tasks = yaml.safe_load(BASE_TASKS.read_text())
-    dhparam = next(task for task in tasks if "community.crypto.openssl_dhparam" in task)
+    dhparam = [task for task in tasks if "community.crypto.openssl_dhparam" in task]
+    check = next(task for task in dhparam if task.get("check_mode"))
+    generate = next(task for task in dhparam if not task.get("check_mode"))
+    return check, generate
+
+
+def test_dhparam_generation_runs_async_and_is_polled():
+    _, dhparam = dhparam_tasks()
 
     # Polling opens a new short connection every 30 s, so a dropped connection can't hang the run.
     assert dhparam.get("poll") == 30
     # 4096 bits take about an hour on raspi; leave room for a slower Pi.
     assert dhparam.get("async") == 7200
+
+
+def test_dhparam_generation_only_starts_when_the_check_finds_a_change():
+    # Even with nothing to do, an async task waits for its first poll, so a quick dry run decides first.
+    check, generate = dhparam_tasks()
+
+    assert check["community.crypto.openssl_dhparam"] == generate["community.crypto.openssl_dhparam"]
+    assert check.get("register") == "base_dhparam_check"
+    assert "changed_when" not in check
+    assert generate.get("when") == ["base_dhparam_check.changed", "not ansible_check_mode"]
