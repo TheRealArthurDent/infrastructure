@@ -10,7 +10,7 @@ keepass_database: testbench
 # private-cloud's OpenCloud, for its integration runs: its .env, and the default vhosts and SANs plus opencloud
 # (opencloud isn't in the roles' defaults, raspi doesn't run it)
 secrets_opencloud_env: true
-reverse_proxy_vhosts: [iobroker, ui, node-red, deconz, deconz-ui, roomba, grafana, chronograf, portainer, nextcloud,
+reverse_proxy_vhosts: [iobroker, ui, node-red, deconz, deconz-ui, grafana, chronograf, portainer, nextcloud,
                        pihole, outbound, opencloud]
 certificate_check_subdomains: [pihole, portainer, nextcloud, iobroker, node-red, grafana, chronograf, outbound, deconz,
                                deconz-ui, ui, opencloud]
