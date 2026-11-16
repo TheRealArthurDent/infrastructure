@@ -150,8 +150,9 @@ quotes every `.env` value for Compose (`dotenv_quote`). New components get their
 (files in `/etc/docker/infrastructure/secrets/`, read by the container from `/run/secrets/<name>`), like the restic
 passphrase and Grafana's admin password; Compose neither interpolates nor quotes them. The secrets role refuses, before
 writing anything, line breaks and other control characters in any entry, `'` and `\` in the InfluxDB passwords
-(`smart-home/Influx DB`; the influxdb image's init script can't create the user then) and `\` in the deCONZ VNC password
-(deCONZ' start script changes it).
+(`smart-home/Influx DB`; the influxdb image's init script can't create the user then), `\` in the deCONZ VNC password
+(deCONZ' start script changes it) and, in the Grafana admin password, `${...}`, `$__name{...}` and blanks at either
+end (Grafana trims and expands them when it reads the password).
 
 #### Put the restic key pairs into KeePass
 

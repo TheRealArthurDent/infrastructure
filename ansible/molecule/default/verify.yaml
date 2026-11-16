@@ -873,7 +873,7 @@
       ansible.builtin.assert:
         that: >-
           (restore_stack_items.content | b64decode | from_json)['items'].keys() | sort
-          == (['portainer'] if is_dungeon else ['pihole', 'portainer'])
+          == (['grafana', 'portainer'] if is_dungeon else ['pihole', 'portainer'])
 
     - name: Check the restore helper is installed and executable
       ansible.builtin.assert:

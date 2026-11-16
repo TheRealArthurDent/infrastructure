@@ -15,8 +15,8 @@ import yaml
 
 from render import rendered_tree
 
-# Characters Compose would interpolate or a .env file would need quoted
-PASSWORD = 'smoke $x ${y} {{ z }} "q" \'s\' \\b #c'
+# Characters Compose would interpolate or a .env file would need quoted; ${...} is ruled out by the secrets role
+PASSWORD = 'smoke $x {{ z }} "q" \'s\' \\b #c'
 
 
 def docker_available():
