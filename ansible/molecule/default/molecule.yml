@@ -83,6 +83,7 @@ provisioner:
           - resticprofile
           - healthmonitor
           - monitoring
+          - monitoring_agent
         resticprofile_repository: local:/backup/restic/dungeon
         resticprofile_backup_mount: /media/backup
         resticprofile_backup_stacks: ["{{ stack_project_name }}"]

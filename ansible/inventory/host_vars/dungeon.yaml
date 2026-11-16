@@ -31,6 +31,8 @@ stack_components:
   - healthmonitor
   # The central part of the monitoring (#39): VictoriaMetrics and Grafana
   - monitoring
+  # The agent part (#39): Telegraf with the metrics of the host and its containers
+  - monitoring_agent
 resticprofile_repository: local:/backup/restic/dungeon
 resticprofile_backup_mount: /media/backup
 resticprofile_backup_stacks: ["{{ stack_project_name }}"]

@@ -1,0 +1,13 @@
+---
+# The agent part of the monitoring (#39): Telegraf collects the metrics of its host and its containers and sends them
+# to the central part (the monitoring component). Enabled per host through stack_components.
+
+# Where the agent sends the metrics (InfluxDB line protocol). The default reaches VictoriaMetrics in the network siz of
+# the same host; an agent on another host needs the central part's address.
+monitoring_agent_url: http://victoriametrics:8428
+# How often the agent collects, and how often it sends
+monitoring_agent_interval: 60s
+# Memory limit of the container (Compose deploy.resources.limits.memory)
+monitoring_agent_memory_limit: 256m
+# telegraf.conf on the host, mounted read-only; Telegraf reloads it when it changes (--watch-config poll)
+monitoring_agent_config_dir: "{{ stack_dir }}/telegraf"

@@ -742,7 +742,8 @@
           /etc/docker/infrastructure/nginx/{{ inventory_hostname }}.pem:/etc/nginx/{{ inventory_hostname }}.pem:ro
         portainer_names: "portainer.{{ inventory_hostname }} portainer.{{ inventory_hostname }}.*;"
         outbound_names: "outbound.{{ inventory_hostname }} outbound.{{ inventory_hostname }}.*;"
-        dungeon_services: [grafana, healthmonitor, nginx, outbound, portainer, resticprofile, unbound, victoriametrics]
+        dungeon_services:
+          [grafana, healthmonitor, nginx, outbound, portainer, resticprofile, telegraf-agent, unbound, victoriametrics]
         resticprofile_volumes: "{{ compose.services.resticprofile.volumes }}"
         backup_mount: "{{ resticprofile_volumes | select('mapping') | selectattr('target', 'eq', '/backup') | list }}"
       ansible.builtin.assert:
@@ -1225,3 +1226,32 @@
               - grafana_data_dir.stat.uid == 472
               - grafana_data_dir.stat.mode == '0750'
             fail_msg: "/etc/docker/infrastructure/grafana/data: {{ grafana_data_dir.stat }}"
+
+    - name: Run the checks on the host with the monitoring agent
+      when: "'monitoring_agent' in stack_components | default([])"
+      block:
+        - name: Read the Telegraf config
+          ansible.builtin.slurp:
+            src: /etc/docker/infrastructure/telegraf/telegraf.conf
+          register: telegraf_conf
+
+        - name: Read the docker group
+          ansible.builtin.getent:
+            database: group
+            key: docker
+
+        - name: Read the merged compose file for the agent
+          ansible.builtin.slurp:
+            src: /etc/docker/infrastructure/compose/docker-compose.yaml
+          register: agent_compose_file
+
+        - name: Check the agent writes to VictoriaMetrics as its host, with the host's docker group
+          vars:
+            conf: "{{ telegraf_conf.content | b64decode }}"
+            agent: "{{ (agent_compose_file.content | b64decode | from_yaml).services['telegraf-agent'] }}"
+          ansible.builtin.assert:
+            that:
+              - "'hostname = \"' ~ inventory_hostname ~ '\"' in conf"
+              - "'urls = [\"http://victoriametrics:8428\"]' in conf"
+              - agent.user == 'telegraf:' ~ ansible_facts.getent_group.docker[1]
+            fail_msg: "{{ conf }} {{ agent.user }}"

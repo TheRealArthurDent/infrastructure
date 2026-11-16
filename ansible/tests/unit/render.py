@@ -17,9 +17,10 @@ ANSIBLE_DIR = Path(__file__).parents[2]
 ROLES_DIR = ANSIBLE_DIR / "roles"
 # The stack's components, in the order of the component map (#14)
 COMPONENTS = ["reverse_proxy", "portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor",
-              "monitoring"]
+              "monitoring", "monitoring_agent"]
 DUNGEON_IP = "192.0.2.10"
 DUNGEON_SSH_PORT = 1359
+DOCKER_GID = 990
 
 
 # Role tasks the render reuses: (task file, task name, module) -> what the render keeps of them
@@ -104,6 +105,8 @@ def rendered_tree(tmp_path, host, extra_vars=None):
         "vars": {
             "resticprofile_backup_host_ip": DUNGEON_IP,
             "dungeon_ssh_port": DUNGEON_SSH_PORT,
+            # Read from the host's group database by the monitoring_agent role
+            "monitoring_agent_docker_gid": DOCKER_GID,
             "ansible_python_interpreter": "auto_silent",
         },
         "tasks": [

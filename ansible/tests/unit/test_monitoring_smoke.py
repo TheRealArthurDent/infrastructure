@@ -1,10 +1,12 @@
 """Smoke test of the monitoring component (#39) with the real images: what Molecule can't do without a Docker daemon.
 
-Starts VictoriaMetrics and Grafana as rendered for dungeon, with a throwaway password as the Compose secret, and
-checks that VictoriaMetrics stores and returns a metric, Grafana takes the password from the secret unchanged and
-reaches VictoriaMetrics. Runs where Docker runs (CI), skipped elsewhere.
+Starts VictoriaMetrics, Grafana and the Telegraf agent as rendered for dungeon, with a throwaway password as the
+Compose secret, and checks that VictoriaMetrics stores and returns a metric, Grafana takes the password from the
+secret unchanged and reaches VictoriaMetrics, and the agent delivers the host's and the containers' metrics. Runs
+where Docker runs (CI), skipped elsewhere.
 """
 import base64
+import os
 import shutil
 import subprocess
 import time
@@ -31,9 +33,11 @@ pytestmark = pytest.mark.skipif(not docker_available(), reason="no Docker daemon
 @pytest.fixture(scope="module")
 def stack(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("monitoring-smoke")
-    compose = yaml.safe_load(rendered_tree(tmp_path, "dungeon")["docker-compose.yaml"])
+    # The agent's interval shortened, so its first metrics arrive within the test
+    tree = rendered_tree(tmp_path, "dungeon", {"monitoring_agent_interval": "5s"})
+    compose = yaml.safe_load(tree["docker-compose.yaml"])
     project = f"smoke-{uuid.uuid4().hex[:8]}"
-    services = {name: dict(compose["services"][name]) for name in ("victoriametrics", "grafana")}
+    services = {name: dict(compose["services"][name]) for name in ("victoriametrics", "grafana", "telegraf-agent")}
     for service in services.values():
         # The project's default network and generated names, so nothing collides with a running stack
         service.pop("networks")
@@ -43,6 +47,14 @@ def stack(tmp_path_factory):
     grafana_data.mkdir()
     grafana_data.chmod(0o777)
     services["grafana"]["volumes"] = [f"{grafana_data}:/var/lib/grafana"]
+    telegraf_dir = tmp_path / "telegraf"
+    telegraf_dir.mkdir()
+    (telegraf_dir / "telegraf.conf").write_text(tree["telegraf/telegraf.conf"])
+    agent = services["telegraf-agent"]
+    agent["volumes"] = [f"{telegraf_dir}:/etc/telegraf:ro" if str(v).endswith(":/etc/telegraf:ro") else v
+                        for v in agent["volumes"]]
+    # The group of this machine's Docker socket instead of the render's placeholder
+    agent["user"] = f"telegraf:{os.stat('/var/run/docker.sock').st_gid}"
     secret = tmp_path / "grafana_admin_password"
     secret.write_text(PASSWORD)
     # On the host the file belongs to Grafana's user 472 (secrets role); here the runner's user owns it
@@ -101,3 +113,30 @@ def test_grafana_rejects_a_wrong_password(stack):
 def test_grafana_reaches_victoriametrics(stack):
     health = exec_in(stack, "grafana", "wget", "-qO-", "http://victoriametrics:8428/health")
     assert health.stdout.strip() == "OK", health.stdout + health.stderr
+
+
+def query_until(base, promql, expected, attempts=60):
+    """The VictoriaMetrics query result once expected is in it, or the last one."""
+    for _ in range(attempts):
+        exec_in(base, "victoriametrics", "wget", "-qO-", "http://127.0.0.1:8428/internal/force_flush")
+        query = exec_in(base, "victoriametrics", "wget", "-qO-",
+                        f"http://127.0.0.1:8428/api/v1/query?query={promql}")
+        if expected in query.stdout:
+            break
+        time.sleep(2)
+    return query.stdout + query.stderr
+
+
+def test_the_agent_delivers_host_metrics_tagged_with_its_host(stack):
+    assert '"host":"dungeon"' in query_until(stack, "cpu_usage_idle", '"host":"dungeon"')
+
+
+def test_the_agent_reports_the_host_disks_by_their_host_path(stack):
+    """HOST_MOUNT_PREFIX strips /hostfs: the root file system shows up as /, as on the host."""
+    assert '"path":"/"' in query_until(stack, "disk_used_percent", '"path":"/"')
+
+
+def test_the_agent_delivers_container_metrics_without_labels(stack):
+    result = query_until(stack, "docker_container_mem_usage", "victoriametrics")
+    assert "victoriametrics" in result
+    assert "com.docker.compose" not in result

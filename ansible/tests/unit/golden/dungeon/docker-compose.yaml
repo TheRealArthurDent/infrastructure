@@ -191,6 +191,36 @@ services:
       source: /media/backup
       target: /backup
       type: bind
+  telegraf-agent:
+    command:
+    - telegraf
+    - --watch-config
+    - poll
+    container_name: telegraf-agent
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    environment:
+      HOST_ETC: /hostfs/etc
+      HOST_MOUNT_PREFIX: /hostfs
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+    hostname: telegraf-agent
+    image: telegraf:1.40.3-alpine
+    networks:
+    - siz
+    restart: unless-stopped
+    user: telegraf:990
+    volumes:
+    - /etc/docker/infrastructure/telegraf:/etc/telegraf:ro
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - bind:
+        propagation: rslave
+      read_only: true
+      source: /
+      target: /hostfs
+      type: bind
   unbound:
     container_name: unbound
     dns:
