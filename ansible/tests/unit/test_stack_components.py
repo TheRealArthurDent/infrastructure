@@ -299,4 +299,63 @@ def test_monitoring_has_memory_limits(dungeon_compose):
 def test_raspi_runs_no_monitoring(tmp_path):
     tree = rendered_tree(tmp_path, "raspi")
     services = yaml.safe_load(tree["docker-compose.yaml"])["services"]
-    assert not {"victoriametrics"} & set(services)
+    assert not {"victoriametrics", "grafana", "telegraf-agent"} & set(services)
+    assert "telegraf/telegraf.conf" not in tree
+
+
+@pytest.fixture(scope="module")
+def dungeon_tree(tmp_path_factory):
+    return rendered_tree(tmp_path_factory.mktemp("dungeon-agent"), "dungeon")
+
+
+def test_dungeon_runs_the_monitoring_agent(dungeon_compose):
+    """The agent part of the monitoring (#39): Telegraf collects the host's and the containers' metrics."""
+    agent = dungeon_compose["services"]["telegraf-agent"]
+    assert agent["image"].startswith("telegraf:")
+    assert agent["networks"] == ["siz"]
+    assert "ports" not in agent
+    assert agent["deploy"]["resources"]["limits"]["memory"]
+    assert undefined_references(dungeon_compose) == []
+
+
+def test_the_agent_reads_the_host_and_docker_read_only(dungeon_compose):
+    agent = dungeon_compose["services"]["telegraf-agent"]
+    assert "/var/run/docker.sock:/var/run/docker.sock:ro" in agent["volumes"]
+    assert {"type": "bind", "source": "/", "target": "/hostfs", "read_only": True,
+            "bind": {"propagation": "rslave"}} in agent["volumes"]
+    assert "/etc/docker/infrastructure/telegraf:/etc/telegraf:ro" in agent["volumes"]
+    environment = agent["environment"]
+    assert environment["HOST_PROC"] == "/hostfs/proc"
+    assert environment["HOST_SYS"] == "/hostfs/sys"
+    assert environment["HOST_MOUNT_PREFIX"] == "/hostfs"
+    # Not root: the image's user, plus the docker group of the host for the socket
+    assert re.fullmatch(r"telegraf:\d+", agent["user"])
+    # Reloads its config when the playbook changes it
+    assert agent["command"] == ["telegraf", "--watch-config", "poll"]
+
+
+def test_the_agent_writes_to_victoriametrics(dungeon_tree):
+    conf = dungeon_tree["telegraf/telegraf.conf"]
+    assert '[[outputs.influxdb]]' in conf
+    assert 'urls = ["http://victoriametrics:8428"]' in conf
+    assert "skip_database_creation = true" in conf
+    assert 'hostname = "dungeon"' in conf
+
+
+def test_the_agent_collects_host_container_and_disk_metrics(dungeon_tree):
+    conf = dungeon_tree["telegraf/telegraf.conf"]
+    for plugin in ("cpu", "mem", "swap", "disk", "diskio", "system", "temp", "net", "docker"):
+        assert f"[[inputs.{plugin}]]" in conf, plugin
+    # The disk input covers every mount, the backup SSD at /media/backup too; pseudo file systems are left out
+    assert "mount_points" not in conf
+    assert '"overlay"' in conf and '"tmpfs"' in conf
+
+
+def test_the_agent_keeps_the_container_labels_out(dungeon_tree):
+    """Compose puts a dozen labels on each container; as tags they would multiply the series."""
+    conf = dungeon_tree["telegraf/telegraf.conf"]
+    # An empty docker_label_include would keep them all
+    assert 'docker_label_exclude = ["*"]' in conf
+    assert "docker_label_include" not in conf
+    assert "perdevice_include = []" in conf
+    assert 'endpoint = "unix:///var/run/docker.sock"' in conf

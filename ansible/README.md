@@ -261,17 +261,18 @@ replace it:
 ## Stack components
 
 The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,
-`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor` and `monitoring` (the central part of
-the monitoring: VictoriaMetrics and Grafana, #39). Each brings its compose fragment and config; `stack` merges the
-fragments, runs the clean-slate restore and `docker compose up`. `stack_components` lists the enabled ones and defaults
-to the first seven; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in
+`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor`, `monitoring` (the central part of
+the monitoring: VictoriaMetrics and Grafana, #39) and `monitoring_agent` (Telegraf with the metrics of the host and its
+containers, sent to `monitoring_agent_url`). Each brings its compose fragment and config; `stack` merges the fragments,
+runs the clean-slate restore and `docker compose up`. `stack_components` lists the enabled ones and defaults to the
+first seven; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in
 `inventory/host_vars/<host>.yaml` (components must be listed with the dependencies they need, e.g. `reverse_proxy` for
 the vhosts).
 
 | Host | Components |
 | --- | --- |
 | `raspi`, `testbench` | the first seven |
-| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole), `monitoring` |
+| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
 nginx serves the vhosts `portainer`, `outbound`, `opencloud` and `grafana`, and its resticprofile backs up to a local

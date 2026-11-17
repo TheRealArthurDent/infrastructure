@@ -1,0 +1,31 @@
+services:
+  # The agent part of the monitoring (#39): the metrics of the host and its containers
+  telegraf-agent:
+    hostname: telegraf-agent
+    container_name: telegraf-agent
+    image: telegraf:1.40.3-alpine
+    command: [telegraf, --watch-config, poll]
+    # The image's user, with the host's docker group for the socket
+    user: "telegraf:{{ monitoring_agent_docker_gid }}"
+    environment:
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+      HOST_ETC: /hostfs/etc
+      HOST_MOUNT_PREFIX: /hostfs
+    volumes:
+      - "{{ monitoring_agent_config_dir }}:/etc/telegraf:ro"
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # rslave: mounts made after the start (the backup SSD) show up too
+      - type: bind
+        source: /
+        target: /hostfs
+        read_only: true
+        bind:
+          propagation: rslave
+    deploy:
+      resources:
+        limits:
+          memory: "{{ monitoring_agent_memory_limit }}"
+    restart: unless-stopped
+    networks:
+      - siz
