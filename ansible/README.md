@@ -663,7 +663,8 @@ Set up once (in this order):
 3. dungeon reads raspi's repository with its own passphrase, as a key of its own there (not raspi's passphrase):
 
    ```sh
-   # On raspi; restic asks for raspi's passphrase, then for the new one: dungeon's (Backup/Resticprofile, dungeon)
+   # On raspi; restic reads raspi's passphrase from the file and asks for the new one twice: dungeon's
+   # (Backup/Resticprofile in the dungeon database)
    docker exec -it resticprofile restic -r sftp:restic@dungeon:/media/backup/restic/raspi \
      --password-file /run/secrets/restic_passphrase key add
    ```
