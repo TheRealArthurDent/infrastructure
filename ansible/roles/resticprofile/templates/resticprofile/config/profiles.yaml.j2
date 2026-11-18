@@ -80,12 +80,19 @@ offsite-copy-{{ source }}:
     schedule-permission: system
     schedule-priority: background
     schedule-lock-wait: 2h
+    # For the duration in offsite-metrics.sh
+    run-before:
+      - date +%s > /tmp/offsite-copy-{{ source }}.start
     run-after:
       - resticprofile --name offsite-{{ source }} forget
       - >-
         echo "resticprofile_offsite_last_success_timestamp_seconds{source=\"{{ source }}\"} $(date +%s)"
         > /metrics/offsite_{{ source }}_last_success.prom.tmp
         && mv /metrics/offsite_{{ source }}_last_success.prom.tmp /metrics/offsite_{{ source }}_last_success.prom
+      - >-
+        sh /etc/resticprofile/offsite-metrics.sh {{ source }}
+        sftp:{{ resticprofile_offsite_alias }}:{{ resticprofile_offsite_path }}/{{ source }}
+        "$(cat /tmp/offsite-copy-{{ source }}.start)"
 
 # The offsite repository of {{ source }}: its retention runs after each copy, its check once a month
 offsite-{{ source }}:

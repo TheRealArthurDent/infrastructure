@@ -3,6 +3,8 @@ to an sftp target outside the house, applies the local retention there and check
 
 The target's host and user come from KeePass (render.py stands in for them), so the repo only knows the ssh alias.
 """
+import os
+import stat
 import subprocess
 import time
 
@@ -62,6 +64,19 @@ def test_copy_is_followed_by_the_retention_and_then_the_success_metric(profiles,
     metric = next(i for i, c in enumerate(run_after) if f"/metrics/offsite_{source}_last_success.prom" in c)
     assert forget < metric
     assert f'resticprofile_offsite_last_success_timestamp_seconds{{source=\\"{source}\\"}}' in run_after[metric]
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_copy_records_its_start_and_writes_the_offsite_metrics_last(profiles, source):
+    copy = profiles[f"offsite-copy-{source}"]["copy"]
+    assert any(f"> /tmp/offsite-copy-{source}.start" in c for c in copy["run-before"]), copy["run-before"]
+    run_after = copy["run-after"]
+    script = next(i for i, c in enumerate(run_after) if "/etc/resticprofile/offsite-metrics.sh" in c)
+    success = next(i for i, c in enumerate(run_after) if f"offsite_{source}_last_success.prom" in c)
+    # The metrics need the finished retention; a failing restic stats must not cost the success metric
+    assert success < script
+    assert f"sh /etc/resticprofile/offsite-metrics.sh {source} " in run_after[script]
+    assert f"/tmp/offsite-copy-{source}.start" in run_after[script]
 
 
 def test_copies_run_one_after_the_other(profiles):
@@ -210,3 +225,83 @@ def test_healthcheck_is_unhealthy_when_the_monthly_check_is_overdue(tmp_path):
 
 def test_healthcheck_ignores_offsite_without_sources(tmp_path):
     assert Healthcheck(tmp_path, []).healthy()
+
+
+class OffsiteMetrics:
+    """Runs the rendered offsite-metrics.sh with stand-ins for restic and ssh on its PATH."""
+
+    STATS = ('{"total_size":5368709120,"total_uncompressed_size":6442450944,"compression_ratio":1.2,'
+             '"total_blob_count":1234,"snapshots_count":42}')
+
+    def __init__(self, tmp_path, script):
+        self.bin = tmp_path / "bin"
+        self.bin.mkdir()
+        self.metrics = tmp_path / "metrics"
+        self.metrics.mkdir()
+        self.script = tmp_path / "offsite-metrics.sh"
+        self.script.write_text(script)
+        self.calls = tmp_path / "calls"
+        self.fake("restic", f"echo \"restic $*\" >> {self.calls}; echo '{self.STATS}'")
+        self.fake("ssh", "exit 255")
+
+    def fake(self, name, body):
+        path = self.bin / name
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+    def run(self, source="raspi", started=None):
+        started = int(time.time()) - 600 if started is None else started
+        env = {"PATH": f"{self.bin}:/usr/bin:/bin", "METRICS_DIR": str(self.metrics)}
+        return subprocess.run(["sh", str(self.script), source, f"sftp:offsite:restic/{source}", str(started)],
+                              env=env, capture_output=True, text=True)
+
+    def lines(self, name):
+        return (self.metrics / name).read_text().splitlines()
+
+
+@pytest.fixture
+def offsite_metrics(tmp_path, dungeon):
+    return OffsiteMetrics(tmp_path, dungeon["resticprofile/config/offsite-metrics.sh"])
+
+
+def test_offsite_metrics_hold_duration_size_and_snapshots(offsite_metrics):
+    result = offsite_metrics.run("raspi")
+    assert result.returncode == 0, result.stderr
+    lines = offsite_metrics.lines("offsite_raspi.prom")
+    assert 'resticprofile_offsite_size_bytes{source="raspi"} 5368709120' in lines
+    assert 'resticprofile_offsite_snapshots{source="raspi"} 42' in lines
+    duration = next(line for line in lines if line.startswith('resticprofile_offsite_duration_seconds{source="raspi"}'))
+    assert 599 <= int(duration.split()[-1]) <= 660
+    calls = (offsite_metrics.calls).read_text()
+    assert "-r sftp:offsite:restic/raspi" in calls
+    assert f"--password-file {OFFSITE}" in calls
+    assert "stats --mode raw-data --json" in calls
+    # No half-written file left behind
+    assert sorted(p.name for p in offsite_metrics.metrics.iterdir()) == ["offsite_raspi.prom"]
+
+
+def test_offsite_metrics_hold_the_targets_disk_usage(offsite_metrics):
+    # The provider's shell answers df in 1K blocks
+    offsite_metrics.fake("ssh", '[ "$1" = offsite ] && [ "$2" = df ] || exit 1\n'
+                                'echo "Filesystem 1K-blocks Used Available Use% Mounted on"\n'
+                                'echo "u123456 1073741824 268435456 805306368 25% /home"')
+    assert offsite_metrics.run().returncode == 0
+    assert offsite_metrics.lines("offsite_disk.prom") == [
+        "resticprofile_offsite_disk_size_bytes 1099511627776",
+        "resticprofile_offsite_disk_used_bytes 274877906944",
+    ]
+
+
+def test_offsite_metrics_skip_the_disk_when_the_target_has_no_df(offsite_metrics):
+    assert offsite_metrics.run().returncode == 0
+    assert not (offsite_metrics.metrics / "offsite_disk.prom").exists()
+
+
+def test_offsite_metrics_fail_when_restic_stats_fails(offsite_metrics):
+    offsite_metrics.fake("restic", "echo 'Fatal: unable to open repository' >&2; exit 1")
+    assert offsite_metrics.run().returncode != 0
+    assert not (offsite_metrics.metrics / "offsite_raspi.prom").exists()
+
+
+def test_without_offsite_sources_there_is_no_metrics_script(tmp_path):
+    assert "resticprofile/config/offsite-metrics.sh" not in rendered_tree(tmp_path, "raspi")

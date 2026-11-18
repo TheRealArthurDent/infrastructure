@@ -125,9 +125,12 @@ def rendered_tree(tmp_path, host, extra_vars=None):
                     "dest": f"{out}/{{{{ item.path | regex_replace('\\.j2$', '') }}}}",
                 },
                 "loop": templates,
-                # The resticprofile role deploys ssh_config only for an sftp repository or an offsite copy
+                # The resticprofile role deploys ssh_config only for an sftp repository or an offsite copy, the
+                # offsite metrics script only for an offsite copy
                 "when": "item.component in stack_components and "
                         "(item.path != 'resticprofile/ssh_config.j2' or resticprofile_repository_is_sftp | bool "
+                        "or resticprofile_offsite_enabled | bool) and "
+                        "(item.path != 'resticprofile/config/offsite-metrics.sh.j2' "
                         "or resticprofile_offsite_enabled | bool)",
             },
         ] + role_tasks(out),

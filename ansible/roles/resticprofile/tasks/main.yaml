@@ -47,7 +47,8 @@
     mode: '0600'
   loop: >-
     {{ ['config/profiles.yaml', 'config/excludes']
-       + (['ssh_config'] if resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool else []) }}
+       + (['ssh_config'] if resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool else [])
+       + (['config/offsite-metrics.sh'] if resticprofile_offsite_enabled | bool else []) }}
   register: resticprofile_config_files
 
 # A fresh host has no known_hosts, and the backup leaves out resticprofile/.ssh: without it, ssh in the container
