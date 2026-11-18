@@ -54,3 +54,101 @@ default:
     keep-within-monthly: 1y12h
     keep-yearly: unlimited
     prune: true
+
+# Offsite copy of raspi's repository (#60): restic copy, then the retention on the copy, then the success metric
+offsite-copy-raspi:
+  password-file: /run/secrets/restic_passphrase
+  repository: local:/backup/restic/raspi
+  # The copies run one after the other
+  lock: /tmp/resticprofile-offsite-copy.lock
+  # Before the copy initializes the offsite repository: without the SSD there's nothing to copy
+  run-before:
+    - >-
+      [ -f /backup/.backup-ssd ]
+      || { echo "/backup/.backup-ssd is missing: the backup SSD isn't mounted"; exit 1; }
+  copy:
+    repository: sftp:offsite:restic/raspi
+    password-file: /run/secrets/restic_offsite_passphrase
+    initialize: true
+    # Same chunker parameters as the source, so the copy deduplicates and the daily upload stays small
+    initialize-copy-chunker-params: true
+    schedule: '*-*-* 05:00:00'
+    schedule-permission: system
+    schedule-priority: background
+    schedule-lock-wait: 2h
+    run-after:
+      - resticprofile --name offsite-raspi forget
+      - >-
+        echo "resticprofile_offsite_last_success_timestamp_seconds{source=\"raspi\"} $(date +%s)"
+        > /metrics/offsite_raspi_last_success.prom.tmp
+        && mv /metrics/offsite_raspi_last_success.prom.tmp /metrics/offsite_raspi_last_success.prom
+
+# The offsite repository of raspi: its retention runs after each copy, its check once a month
+offsite-raspi:
+  password-file: /run/secrets/restic_offsite_passphrase
+  repository: sftp:offsite:restic/raspi
+  forget:
+    keep-within-daily: 7d12h
+    keep-within-weekly: 1m12h
+    keep-within-monthly: 1y12h
+    keep-yearly: unlimited
+    prune: true
+  check:
+    read-data-subset: '9%'
+    schedule: '*-*-02 06:00:00'
+    schedule-permission: system
+    schedule-priority: background
+    run-after:
+      - >-
+        echo "resticprofile_offsite_check_last_success_timestamp_seconds{source=\"raspi\"} $(date +%s)"
+        > /metrics/offsite_raspi_check.prom.tmp
+        && mv /metrics/offsite_raspi_check.prom.tmp /metrics/offsite_raspi_check.prom
+
+# Offsite copy of dungeon's repository (#60): restic copy, then the retention on the copy, then the success metric
+offsite-copy-dungeon:
+  password-file: /run/secrets/restic_passphrase
+  repository: local:/backup/restic/dungeon
+  # The copies run one after the other
+  lock: /tmp/resticprofile-offsite-copy.lock
+  # Before the copy initializes the offsite repository: without the SSD there's nothing to copy
+  run-before:
+    - >-
+      [ -f /backup/.backup-ssd ]
+      || { echo "/backup/.backup-ssd is missing: the backup SSD isn't mounted"; exit 1; }
+  copy:
+    repository: sftp:offsite:restic/dungeon
+    password-file: /run/secrets/restic_offsite_passphrase
+    initialize: true
+    # Same chunker parameters as the source, so the copy deduplicates and the daily upload stays small
+    initialize-copy-chunker-params: true
+    schedule: '*-*-* 05:00:00'
+    schedule-permission: system
+    schedule-priority: background
+    schedule-lock-wait: 2h
+    run-after:
+      - resticprofile --name offsite-dungeon forget
+      - >-
+        echo "resticprofile_offsite_last_success_timestamp_seconds{source=\"dungeon\"} $(date +%s)"
+        > /metrics/offsite_dungeon_last_success.prom.tmp
+        && mv /metrics/offsite_dungeon_last_success.prom.tmp /metrics/offsite_dungeon_last_success.prom
+
+# The offsite repository of dungeon: its retention runs after each copy, its check once a month
+offsite-dungeon:
+  password-file: /run/secrets/restic_offsite_passphrase
+  repository: sftp:offsite:restic/dungeon
+  forget:
+    keep-within-daily: 7d12h
+    keep-within-weekly: 1m12h
+    keep-within-monthly: 1y12h
+    keep-yearly: unlimited
+    prune: true
+  check:
+    read-data-subset: '9%'
+    schedule: '*-*-02 06:00:00'
+    schedule-permission: system
+    schedule-priority: background
+    run-after:
+      - >-
+        echo "resticprofile_offsite_check_last_success_timestamp_seconds{source=\"dungeon\"} $(date +%s)"
+        > /metrics/offsite_dungeon_check.prom.tmp
+        && mv /metrics/offsite_dungeon_check.prom.tmp /metrics/offsite_dungeon_check.prom

@@ -134,7 +134,9 @@ Group/title, with the fields the roles read:
 | `raspberry`, `testbench` | `GitHub/NodeRed` | fields `username` and `email` |
 | `raspberry` | `Domain/rootCA` | the root CA (`keepass_ca_database`): password, attachments `rootCA.pem` and `rootCA.key` |
 | `testbench`, `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
-| `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository |
+| `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository, also a key of raspi's repository (offsite copy) |
+| `dungeon` | `Backup/Offsite` | user name, field `host`, attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
+| `dungeon` | `Backup/Resticprofile Offsite` | password: the passphrase of the offsite repositories |
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
@@ -447,8 +449,8 @@ raspi: the user runs everything against it, and Claude's guard hook blocks it on
   ("Host key verification failed"). Compare `ssh-keyscan -p <ssh port> -t ed25519 192.168.1.5` with
   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on dungeon, put the key into `resticprofile_backup_host_keys`
   (`group_vars/all/backup.yaml`) and run the stack of raspi and testbench.
-- **Lost SSD**: dungeon's and raspi's backups are gone with it; restoring dungeon would need an off-site copy, which
-  doesn't exist yet.
+- **Lost SSD**: dungeon's and raspi's local backups are gone with it; restore from the offsite copy
+  (see [Offsite copy](#offsite-copy-dungeon)).
 
 ### Takeover of dungeon
 
@@ -639,6 +641,58 @@ The schedule and the number of parts are in `resticprofile_restore_drill` (resti
 that is often switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbench has it in
 `inventory/host_vars/testbench.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
 still works there by hand, without recording a result.
+
+### Offsite copy (dungeon)
+
+dungeon copies the repositories of the hosts in `resticprofile_offsite_sources` (`raspi` and `dungeon`, not
+testbench) from its backup SSD to an sftp target outside the house (#60): daily at 05:00 the profile
+`offsite-copy-<host>` runs `restic copy` into `restic/<host>` on the target, then `forget --prune` with the local
+retention (`resticprofile_retention`), then writes `/var/lib/resticprofile/metrics/offsite_<host>_last_success.prom`.
+On the 2nd of each month the profile `offsite-<host>` checks a random 9 % of the offsite data. The resticprofile
+healthcheck turns unhealthy when a copy is older than 36 h (also before the first one) or the last successful check
+is older than 35 days, and healthmonitor alerts. The offsite repositories have their own passphrase and the chunker
+parameters of their source, so the daily upload holds only what's new.
+
+Set up once (in this order):
+
+1. On the target: a login that only reaches its own directory, ssh key only. Put its user name, host (custom field
+   `host`) and the key pair (attachments `id_ed25519`, `id_ed25519.pub`) into `Backup/Offsite` of the `dungeon`
+   database, and a new passphrase into `Backup/Resticprofile Offsite`.
+2. Its ssh host keys into `resticprofile_offsite_host_keys` in `inventory/host_vars/dungeon.yaml`: compare
+   `ssh-keyscan -p 23 <host>` with the fingerprints the provider publishes.
+3. dungeon reads raspi's repository with its own passphrase, as a key of its own there (not raspi's passphrase):
+
+   ```sh
+   # On raspi; restic asks for raspi's passphrase, then for the new one: dungeon's (Backup/Resticprofile, dungeon)
+   docker exec -it resticprofile restic -r sftp:restic@dungeon:/media/backup/restic/raspi \
+     --password-file /run/secrets/restic_passphrase key add
+   ```
+
+4. The stack of dungeon (`--check --diff`, the real run, a second run with `changed=0`). The first copy runs at 05:00;
+   to start it now: `docker exec resticprofile resticprofile --name offsite-copy-raspi copy` (and `-dungeon`).
+
+```sh
+docker exec resticprofile resticprofile --name offsite-raspi snapshots     # what's offsite
+docker exec resticprofile resticprofile --name offsite-raspi check         # check it now (9 % of the data)
+cat /var/lib/resticprofile/metrics/offsite_*.prom                          # last successes
+```
+
+To take dungeon's access to raspi's repository away: `restic key list`, then `restic key remove <id>` on raspi.
+
+**Restore from the offsite copy** (backup SSD lost): copy the offsite repository back onto a new SSD, then restore as
+usual. On dungeon, with the new SSD mounted and its marker created:
+
+```sh
+docker exec resticprofile restic -r local:/backup/restic/raspi --password-file /run/secrets/restic_offsite_passphrase \
+  init --copy-chunker-params --from-repo sftp:offsite:restic/raspi \
+  --from-password-file /run/secrets/restic_offsite_passphrase
+docker exec resticprofile restic -r local:/backup/restic/raspi --password-file /run/secrets/restic_offsite_passphrase \
+  copy --from-repo sftp:offsite:restic/raspi --from-password-file /run/secrets/restic_offsite_passphrase
+```
+
+The copied repository then has the offsite passphrase: add the host's own passphrase as a key (`restic key add`) before
+its backups and restores use it. Without dungeon at all, any machine with restic, the key pair and the passphrase from
+KeePass reads the offsite repository directly (`restic -r sftp:<user>@<host>:restic/<host> -o sftp.args='-p 23'`).
 
 ### Restore drill (testbench only)
 

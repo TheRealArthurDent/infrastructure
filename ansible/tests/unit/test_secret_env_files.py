@@ -128,6 +128,7 @@ def run_playbook(tmp_path, kdbx, tasks):
             "keepass_key": "",
             "stack_components": ["pihole", "outbound", "resticprofile", "healthmonitor"],
             "resticprofile_repository_is_sftp": False,
+            "resticprofile_offsite_enabled": False,
             "secrets_smart_home_env": True,
             "secrets_opencloud_env": True,
         },

@@ -164,6 +164,9 @@ SMART_HOME_KEYS = {
 }
 # The facts of the "Read secrets from KeePass" task -> the condition that switches their lookup on
 SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
+OFFSITE = "'resticprofile' in stack_components and resticprofile_offsite_enabled | bool"
+OFFSITE_KEYS = ["resticprofile_offsite_passphrase", "resticprofile_offsite_host", "resticprofile_offsite_user",
+                "resticprofile_offsite_ssh_private_key", "resticprofile_offsite_ssh_public_key"]
 LOOKUP_CONDITIONS = {
     "pihole_password": "'pihole' in stack_components",
     "outbound_password": "'outbound' in stack_components",
@@ -173,6 +176,7 @@ LOOKUP_CONDITIONS = {
     "resticprofile_ssh_private_key": SFTP,
     "resticprofile_ssh_public_key": SFTP,
     "dungeon_ssh_port": SFTP,
+    **{key: OFFSITE for key in OFFSITE_KEYS},
     **{key: "secrets_smart_home_env | bool" for key in SMART_HOME_KEYS},
     "opencloud_admin_password": "secrets_opencloud_env | bool",
     "monitoring_grafana_admin_password": "'monitoring' in stack_components",
@@ -209,6 +213,19 @@ def test_restic_key_pair_comes_from_the_hosts_entry():
         assert f"attachment='{attachment}'" in value, name
 
 
+def test_offsite_target_comes_from_its_entries():
+    # #60: user name, custom field host and key pair of one entry, the passphrase of another
+    facts = {name: " ".join(str(value).split()) for name, value in keepass_facts().items()}
+    for name, part in (("resticprofile_offsite_host", "field='host'"), ("resticprofile_offsite_user", "field='username'"),
+                       ("resticprofile_offsite_ssh_private_key", "attachment='id_ed25519'"),
+                       ("resticprofile_offsite_ssh_public_key", "attachment='id_ed25519.pub'")):
+        assert "group='Backup', title=resticprofile_offsite_title," in facts[name], name
+        assert part in facts[name], name
+    passphrase = facts["resticprofile_offsite_passphrase"]
+    assert "group='Backup', title=resticprofile_offsite_passphrase_title" in passphrase
+    assert "field=" not in passphrase
+
+
 def test_pihole_passwords_come_from_the_pihole_group():
     # Both Pi-hole instances belong to the infrastructure, not to the smart-home stack.
     facts = keepass_facts()
@@ -232,6 +249,7 @@ def test_testbench_has_its_own_database_with_the_default_titles():
     titles = {name for name in defaults if name.endswith("_title")}
     assert titles == {
         "discord_docker_webhook_title", "resticprofile_ssh_key_title", "resticprofile_passphrase_title",
+        "resticprofile_offsite_title", "resticprofile_offsite_passphrase_title",
         "opencloud_admin_title",
         "monitoring_grafana_admin_title",
     }

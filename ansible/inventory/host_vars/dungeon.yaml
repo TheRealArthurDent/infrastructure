@@ -38,3 +38,6 @@ resticprofile_backup_mount: /media/backup
 resticprofile_backup_stacks: ["{{ stack_project_name }}"]
 reverse_proxy_vhosts: [portainer, outbound, opencloud, grafana]
 certificate_check_subdomains: [portainer, outbound, opencloud, grafana]
+# Offsite copy (#60) of the repositories on the backup SSD; testbench's stays at home. Host, user, key pair and
+# passphrase of the target come from KeePass (ansible/README.md).
+resticprofile_offsite_sources: [raspi, dungeon]

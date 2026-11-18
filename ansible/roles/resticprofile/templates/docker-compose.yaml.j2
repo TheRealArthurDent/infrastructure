@@ -13,10 +13,17 @@ services:
           cpus: '0.50'
     secrets:
       - restic_passphrase
+      # {% if resticprofile_offsite_enabled | bool +%}
+      - restic_offsite_passphrase
+      # {% endif +%}
     environment:
       TZ: 'Europe/Berlin'
+      # {% if resticprofile_offsite_enabled | bool +%}
+      # The sources of the offsite copy (#60), for the healthcheck
+      RESTICPROFILE_OFFSITE_SOURCES: "{{ resticprofile_offsite_sources | join(' ') }}"
+      # {% endif +%}
     volumes:
-      # {% if resticprofile_repository_is_sftp | bool +%}
+      # {% if resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool +%}
       - /etc/docker/infrastructure/resticprofile/.ssh:/root/.ssh # TODO ansible
       - /etc/docker/infrastructure/resticprofile/ssh_config:/etc/ssh/ssh_config:ro
       # {% endif +%}
@@ -48,6 +55,8 @@ services:
     # alerts on a missing backup, not only on a failed one (raspberry#259). Also unhealthy before the first backup.
     # Also unhealthy when the last monthly restore drill (restic-restore drill, host cron) failed or its last
     # success is older than 35 days (raspberry#288); healthy before the first drill.
+    # With an offsite copy (#60): unhealthy when a source's last successful copy is older than 36h (also before its
+    # first copy), or its last successful monthly check is older than 35 days (healthy before the first check).
     healthcheck:
       test:
         - CMD-SHELL
@@ -60,6 +69,14 @@ services:
           $$1 == "restic_restore_drill_last_success_timestamp_seconds" { last = $$2 }
           END { exit !(ok && now - last < 35 * 86400) }'
           /metrics/restore_drill.prom; }
+          && for source in $${RESTICPROFILE_OFFSITE_SOURCES:-}; do
+          awk -v now=$$(date +%s)
+          '/^resticprofile_offsite_last_success_timestamp_seconds/ { ok = now - $$2 < 36 * 3600 } END { exit !ok }'
+          /metrics/offsite_$${source}_last_success.prom
+          && { [ ! -f /metrics/offsite_$${source}_check.prom ] || awk -v now=$$(date +%s)
+          '/^resticprofile_offsite_check_last_success_timestamp_seconds/ { ok = now - $$2 < 35 * 86400 } END { exit !ok }'
+          /metrics/offsite_$${source}_check.prom; }
+          || exit 1; done
       interval: 10m
       # Check every 10s during the first minute, so the status is known right after a deploy
       start_period: 1m
@@ -90,3 +107,7 @@ services:
 secrets:
   restic_passphrase:
     file: /etc/docker/infrastructure/secrets/restic_passphrase
+  # {% if resticprofile_offsite_enabled | bool +%}
+  restic_offsite_passphrase:
+    file: /etc/docker/infrastructure/secrets/restic_offsite_passphrase
+  # {% endif +%}

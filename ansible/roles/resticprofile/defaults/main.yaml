@@ -74,3 +74,30 @@ resticprofile_restore_runners:
     - --entrypoint
     - resticprofile
     - resticprofile
+
+# How long snapshots are kept, locally and offsite: restic forget's keep options
+resticprofile_retention:
+  keep-within-daily: 7d12h
+  keep-within-weekly: 1m12h
+  keep-within-monthly: 1y12h
+  keep-yearly: unlimited
+
+# Offsite copy (#60): this host copies the restic repositories of these hosts from its backup SSD
+# (local:/backup/restic/<host>, see resticprofile_backup_mount) to an sftp target outside the house with restic copy,
+# then applies resticprofile_retention there. Empty: no offsite copy. A source's repository must accept this host's
+# restic passphrase: for another host's repository, add it as a key there (restic key add).
+resticprofile_offsite_sources: []
+resticprofile_offsite_enabled: "{{ resticprofile_offsite_sources | length > 0 }}"
+# The target's ssh alias in the container's ssh_config. Its host and user come from KeePass (bootstrap.yaml:
+# resticprofile_offsite_host, resticprofile_offsite_user), so they stay out of the repo.
+resticprofile_offsite_alias: offsite
+resticprofile_offsite_port: 23
+# One offsite repository per source: <path>/<source>, relative to the target user's home
+resticprofile_offsite_path: restic
+# The target's public ssh host keys ("ssh-ed25519 AAAA..."), for the container's known_hosts
+resticprofile_offsite_host_keys: []
+# After the local backups at 03:00; the copies run one after the other
+resticprofile_offsite_schedule: '*-*-* 05:00:00'
+# Monthly check of a random part of the offsite data (restic check --read-data-subset); about 1/12 a month
+resticprofile_offsite_check_schedule: '*-*-02 06:00:00'
+resticprofile_offsite_check_subset: 9%
