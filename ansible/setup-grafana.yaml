@@ -1,0 +1,118 @@
+---
+- name: Require --limit
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure the run is limited to explicit hosts
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Run with --limit <host>"
+        quiet: true
+      tags: always
+
+# With --limit, the play above matches no host and is skipped. This one stops a limit that selects several hosts
+# (all, *, a list or a group), so a run never reaches production by accident. assert needs no connection.
+- name: Require --limit to select exactly one host
+  hosts: all
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Ensure the run is limited to one host
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: "Run with --limit <one host>"
+        quiet: true
+      tags: always
+
+# Sets up the Grafana of the monitoring component (#39, smart-home#11) from configs/grafana.yaml and
+# configs/grafana/dashboards/: data sources, folders and dashboards, and deletes what Grafana holds beyond them.
+# Grafana is only talked to through its HTTP API, as admin, so everything runs on the control node: nothing connects
+# to the Pi itself. Run it after the stack is up (bootstrap.yaml --tags stack).
+- name: Configure Grafana via its HTTP API
+  hosts: all
+  gather_facts: false
+  vars:
+    # Through nginx; the tests use a local port instead
+    grafana_api_url: "https://grafana.{{ inventory_hostname }}"
+    grafana_api_retries: 30
+    grafana_api_delay: 2
+    keepass_credentials_databases: "{{ [keepass_ca_database, keepass_database] | unique | list }}"
+    # <folder uid>/<dashboard uid> of every dashboard file: the files in the directory of each folder
+    # (tests/unit/test_grafana_config.py keeps directories outside grafana_folders out)
+    grafana_dashboards: >-
+      {%- set result = [] -%}
+      {%- for folder in grafana_folders -%}
+      {%-   for path in query('ansible.builtin.fileglob',
+                              playbook_dir ~ '/configs/grafana/dashboards/' ~ folder.uid ~ '/*.json') | sort -%}
+      {%-     set _ = result.append(folder.uid ~ '/' ~ (path | basename | splitext | first)) -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ result }}
+
+  tasks:
+    # Under names of their own, so the roles' defaults don't outrank host_vars
+    - name: Load the defaults of the stack and secrets roles
+      ansible.builtin.include_vars:
+        file: "roles/{{ item }}/defaults/main.yaml"
+        name: "grafana_{{ item }}_defaults"
+      loop: [stack, secrets]
+
+    - name: Ensure the host runs Grafana
+      ansible.builtin.assert:
+        that: "'monitoring' in stack_components | default(grafana_stack_defaults.stack_components)"
+        fail_msg: >-
+          {{ inventory_hostname }} runs no Grafana: monitoring isn't in its stack_components. Run this playbook with
+          --limit <the host running the monitoring component>.
+        quiet: true
+
+    - name: Load the Grafana configuration
+      ansible.builtin.include_vars:
+        file: configs/grafana.yaml
+
+    - name: Get the KeePass credentials
+      ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
+
+    - name: Get the root CA certificate and the Grafana admin password from KeePass
+      ansible.builtin.set_fact:
+        grafana_root_ca: "{{ lookup('keepass', db=keepass_ca_db, password=keepass_ca_password,
+                                    key=keepass_ca_key, group='Domain', title='rootCA', attachment='rootCA.pem') }}"
+        grafana_admin_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Monitoring',
+                    title=grafana_admin_title) }}
+      vars:
+        grafana_admin_title: >-
+          {{ monitoring_grafana_admin_title | default(grafana_secrets_defaults.monitoring_grafana_admin_title) }}
+      no_log: true
+
+    - name: Configure Grafana from the control node
+      delegate_to: localhost
+      become: false
+      block:
+        # uri can only verify against a CA file, so the certificate goes into a temporary file. It's needed in
+        # check mode too, where the API is read to report the changes.
+        - name: Create temporary file for the root CA certificate
+          ansible.builtin.tempfile:
+            suffix: .pem
+          register: grafana_ca_file
+          changed_when: false
+          check_mode: false
+
+        - name: Ensure the root CA certificate is in the temporary file
+          ansible.builtin.copy:
+            content: "{{ grafana_root_ca }}"
+            dest: "{{ grafana_ca_file.path }}"
+            mode: '0600'
+          changed_when: false
+          check_mode: false
+
+        - name: Apply the Grafana configuration
+          ansible.builtin.include_tasks: tasks/configure_grafana.yaml
+
+      always:
+        - name: Remove temporary root CA certificate file
+          ansible.builtin.file:
+            path: "{{ grafana_ca_file.path }}"
+            state: absent
+          when: grafana_ca_file.path is defined
+          changed_when: false
+          check_mode: false

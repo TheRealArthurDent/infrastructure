@@ -1,0 +1,225 @@
+---
+# Brings Grafana in line with configs/grafana.yaml and configs/grafana/dashboards/ (setup-grafana.yaml). Reads
+# everything first, also in check mode, and reports what it would change; only the writes are skipped there.
+#
+# Needs grafana_api_url, grafana_admin_password, grafana_ca_file, grafana_datasources, grafana_folders and
+# grafana_dashboards (<folder uid>/<dashboard uid> per file).
+- name: Talk to the Grafana API as admin
+  module_defaults:
+    ansible.builtin.uri:
+      url_username: admin
+      url_password: "{{ grafana_admin_password }}"
+      force_basic_auth: true
+      ca_path: "{{ grafana_ca_file.path }}"
+      body_format: json
+      timeout: 30
+  block:
+    # Right after the stack is (re)started, Grafana takes a moment to migrate its database.
+    - name: Wait until Grafana answers
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/health"
+        status_code: 200
+      register: grafana_health
+      until: grafana_health.status == 200
+      retries: "{{ grafana_api_retries }}"
+      delay: "{{ grafana_api_delay }}"
+      check_mode: false
+
+    # --- data sources ---------------------------------------------------------------------------------------
+
+    - name: Read the data sources
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/datasources"
+      register: grafana_existing_datasources
+      check_mode: false
+
+    # A data source differs when one of the repo's fields (or jsonData's) differs; Grafana adds more of its own.
+    - name: Compare the data sources with the repo
+      ansible.builtin.set_fact:
+        grafana_datasources_to_create: >-
+          {{ grafana_datasources | rejectattr('uid', 'in', existing | map(attribute='uid')) | list }}
+        grafana_datasources_to_update: >-
+          {%- set result = [] -%}
+          {%- for wanted in grafana_datasources -%}
+          {%-   for have in existing | selectattr('uid', 'eq', wanted.uid) -%}
+          {%-     set fields = wanted | dict2items | rejectattr('key', 'eq', 'jsonData') | items2dict -%}
+          {%-     if have | combine(fields) != have
+                     or (have.jsonData | default({})) | combine(wanted.jsonData | default({}))
+                        != (have.jsonData | default({})) -%}
+          {%-       set _ = result.append(wanted) -%}
+          {%-     endif -%}
+          {%-   endfor -%}
+          {%- endfor -%}
+          {{ result }}
+        grafana_datasources_to_delete: >-
+          {{ existing | rejectattr('uid', 'in', grafana_datasources | map(attribute='uid'))
+             | map(attribute='uid') | list }}
+      vars:
+        existing: "{{ grafana_existing_datasources.json }}"
+
+    - name: Report the data source changes
+      ansible.builtin.debug:
+        msg:
+          create: "{{ grafana_datasources_to_create | map(attribute='uid') | list }}"
+          update: "{{ grafana_datasources_to_update | map(attribute='uid') | list }}"
+          delete: "{{ grafana_datasources_to_delete }}"
+
+    - name: Create the data sources
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/datasources"
+        method: POST
+        body: "{{ item }}"
+      loop: "{{ grafana_datasources_to_create }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+
+    - name: Update the data sources
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/datasources/uid/{{ item.uid }}"
+        method: PUT
+        body: "{{ item }}"
+      loop: "{{ grafana_datasources_to_update }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+
+    - name: Delete the data sources the repo lacks
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/datasources/uid/{{ item }}"
+        method: DELETE
+      loop: "{{ grafana_datasources_to_delete }}"
+      changed_when: true
+
+    # --- folders ---------------------------------------------------------------------------------------------
+
+    - name: Read the folders
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/folders"
+      register: grafana_existing_folders
+      check_mode: false
+
+    - name: Compare the folders with the repo
+      ansible.builtin.set_fact:
+        grafana_folders_to_create: >-
+          {{ grafana_folders | rejectattr('uid', 'in', existing | map(attribute='uid')) | list }}
+        grafana_folders_to_update: >-
+          {%- set result = [] -%}
+          {%- for wanted in grafana_folders -%}
+          {%-   for have in existing | selectattr('uid', 'eq', wanted.uid) | selectattr('title', 'ne', wanted.title) -%}
+          {%-     set _ = result.append(wanted) -%}
+          {%-   endfor -%}
+          {%- endfor -%}
+          {{ result }}
+        grafana_folders_to_delete: >-
+          {{ existing | rejectattr('uid', 'in', grafana_folders | map(attribute='uid'))
+             | map(attribute='uid') | list }}
+      vars:
+        existing: "{{ grafana_existing_folders.json }}"
+
+    - name: Report the folder changes
+      ansible.builtin.debug:
+        msg:
+          create: "{{ grafana_folders_to_create | map(attribute='uid') | list }}"
+          update: "{{ grafana_folders_to_update | map(attribute='uid') | list }}"
+          delete: "{{ grafana_folders_to_delete }}"
+
+    - name: Create the folders
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/folders"
+        method: POST
+        body: "{{ item }}"
+      loop: "{{ grafana_folders_to_create }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+
+    - name: Rename the folders
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/folders/{{ item.uid }}"
+        method: PUT
+        body:
+          title: "{{ item.title }}"
+          overwrite: true
+      loop: "{{ grafana_folders_to_update }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+
+    # --- dashboards ------------------------------------------------------------------------------------------
+
+    - name: Read the dashboards of the repo from Grafana
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/dashboards/uid/{{ item | basename }}"
+        status_code: [200, 404]
+      loop: "{{ grafana_dashboards }}"
+      register: grafana_existing_dashboards
+      check_mode: false
+
+    # A dashboard differs when it is missing, in another folder or one of the file's fields differs; Grafana adds
+    # id and version.
+    - name: Compare the dashboards with the repo
+      ansible.builtin.set_fact:
+        grafana_dashboards_to_write: >-
+          {%- set result = [] -%}
+          {%- for response in grafana_existing_dashboards.results -%}
+          {%-   set wanted = lookup('ansible.builtin.file', playbook_dir ~ '/configs/grafana/dashboards/'
+                                                         ~ response.item ~ '.json') | from_json -%}
+          {%-   set folder = response.item | dirname -%}
+          {%-   set have = response.json.dashboard | default({}) if response.status == 200 else none -%}
+          {%-   if have is none
+                   or response.json.meta.folderUid | default('') != folder
+                   or have | combine(wanted) != have -%}
+          {%-     set _ = result.append({'uid': wanted.uid, 'folderUid': folder, 'dashboard': wanted}) -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {{ result }}
+
+    - name: Report the dashboards to write
+      ansible.builtin.debug:
+        msg: "{{ grafana_dashboards_to_write | map(attribute='uid') | list }}"
+
+    - name: Write the dashboards
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/dashboards/db"
+        method: POST
+        body:
+          dashboard: "{{ item.dashboard }}"
+          folderUid: "{{ item.folderUid }}"
+          overwrite: true
+          message: Written by setup-grafana.yaml
+      loop: "{{ grafana_dashboards_to_write }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+
+    - name: Read all dashboards
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/search?type=dash-db&limit=5000"
+      register: grafana_all_dashboards
+      check_mode: false
+
+    - name: Find the dashboards the repo lacks
+      ansible.builtin.set_fact:
+        grafana_dashboards_to_delete: >-
+          {{ grafana_all_dashboards.json | map(attribute='uid')
+             | reject('in', grafana_dashboards | map('basename')) | list }}
+
+    - name: Report the dashboards to delete
+      ansible.builtin.debug:
+        msg: "{{ grafana_dashboards_to_delete }}"
+
+    - name: Delete the dashboards the repo lacks
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/dashboards/uid/{{ item }}"
+        method: DELETE
+      loop: "{{ grafana_dashboards_to_delete }}"
+      changed_when: true
+
+    # Last: by now the folders hold no dashboard of the repo. Alert rules in them would go too.
+    - name: Delete the folders the repo lacks
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/folders/{{ item }}?forceDeleteRules=true"
+        method: DELETE
+      loop: "{{ grafana_folders_to_delete }}"
+      changed_when: true

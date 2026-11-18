@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 ANSIBLE_DIR = Path(__file__).parents[2]
-PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml"]
+PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml", "setup-grafana.yaml"]
 LOCAL_CONFIG = "inventory/group_vars/all/local.yaml"
 LOCAL_EXAMPLE = "inventory/group_vars/all/local.example.yaml"
 

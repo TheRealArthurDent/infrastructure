@@ -36,6 +36,7 @@ Contents:
 | `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (raspberry#237) |
 | `check-certificates.yaml` | Copies the root CA from KeePass to the host and into its system trust store, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days or isn't signed by that CA, restarts nginx. Stops on an expired root CA, warns 400 days before it expires, and never issues a host certificate that outlives the root |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
+| `setup-grafana.yaml` | Syncs the data sources and folders from `configs/grafana.yaml` and the dashboards from `configs/grafana/dashboards/<folder uid>/<dashboard uid>.json` through Grafana's HTTP API, and deletes the ones Grafana holds beyond them (only on the host running the `monitoring` component) |
 
 ## Hosts
 
@@ -199,6 +200,11 @@ ansible-playbook setup-pihole.yaml --limit testbench
 # Each instance is reached at <name>.<host> (pihole.testbench, outbound.testbench); set host in its config entry to override
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbench
+
+# Change Grafana's data sources, folders or dashboards (dungeon, the host running the monitoring component):
+# edit configs/grafana.yaml or configs/grafana/dashboards/, then (check mode reports what it would change)
+bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon --check
+bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon
 
 # Redeploy / update only the Docker stack (config, networks, compose up; reloads nginx on config changes)
 ansible-playbook bootstrap.yaml --limit testbench --tags stack
