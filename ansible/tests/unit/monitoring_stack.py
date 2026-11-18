@@ -25,6 +25,9 @@ resticprofile_backup_status{profile="default"} 2
 # HELP resticprofile_build_info resticprofile build information.
 # TYPE resticprofile_build_info gauge
 resticprofile_build_info{goversion="go1.24",version="0.33.1"} 1
+# HELP restic_build_info restic build information.
+# TYPE restic_build_info gauge
+restic_build_info{version="0.19.1"} 1
 """
 OFFSITE_PROM = 'resticprofile_offsite_last_success_timestamp_seconds{source="raspi"} 1763500000\n'
 

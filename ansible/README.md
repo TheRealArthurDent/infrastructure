@@ -653,6 +653,12 @@ healthcheck turns unhealthy when a copy is older than 36 h (also before the firs
 is older than 35 days, and healthmonitor alerts. The offsite repositories have their own passphrase and the chunker
 parameters of their source, so the daily upload holds only what's new.
 
+After each copy, `offsite-metrics.sh` writes the duration, size and snapshot count of the offsite repository to
+`offsite_<host>.prom`, and the target's disk usage (provider snapshots included, from `df` in its shell) to
+`offsite_disk.prom`. The monitoring agent reads every `.prom` file in `/var/lib/resticprofile/metrics` under the
+names resticprofile wrote; the Grafana dashboard **Backups** (folder Infrastructure) shows them with the local
+backups of each host that runs the agent.
+
 Set up once (in this order):
 
 1. On the target: a login that only reaches its own directory, ssh key only. Put its user name, host (the URL field;

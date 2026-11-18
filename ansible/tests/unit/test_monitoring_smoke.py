@@ -81,3 +81,5 @@ def test_the_agent_delivers_the_backup_metrics_under_their_own_names(stack):
     assert '"2"' in result
     timestamp = query_until(stack, "resticprofile_offsite_last_success_timestamp_seconds", '"source":"raspi"')
     assert '"source":"raspi"' in timestamp
+    # Build info is no series of its own
+    assert '"result":[]' in query_until(stack, '{__name__=~".*build_info"}', '"result":[]')

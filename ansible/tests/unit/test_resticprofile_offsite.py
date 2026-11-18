@@ -3,7 +3,7 @@ to an sftp target outside the house, applies the local retention there and check
 
 The target's host and user come from KeePass (render.py stands in for them), so the repo only knows the ssh alias.
 """
-import os
+import re
 import stat
 import subprocess
 import time
@@ -305,3 +305,19 @@ def test_offsite_metrics_fail_when_restic_stats_fails(offsite_metrics):
 
 def test_without_offsite_sources_there_is_no_metrics_script(tmp_path):
     assert "resticprofile/config/offsite-metrics.sh" not in rendered_tree(tmp_path, "raspi")
+
+
+# What resticprofile itself writes to backup.prom (prometheus-save-to-file, extended-status)
+RESTICPROFILE_BACKUP_METRICS = {
+    "resticprofile_backup_status", "resticprofile_backup_duration_seconds", "resticprofile_backup_added_bytes",
+    "resticprofile_backup_processed_bytes", "resticprofile_backup_files_new", "resticprofile_backup_files_changed",
+    "resticprofile_backup_files_unmodified", "resticprofile_backup_files_processed",
+}
+
+
+def test_the_backup_dashboard_shows_only_metrics_that_are_written(dungeon):
+    dashboard = (ROLES_DIR.parent / "configs/grafana/dashboards/infrastructure/backups.json").read_text()
+    shown = set(re.findall(r"resticprofile_\w+", dashboard))
+    assert {"resticprofile_offsite_disk_used_bytes", "resticprofile_backup_last_success_timestamp_seconds"} <= shown
+    written = dungeon["resticprofile/config/profiles.yaml"] + dungeon["resticprofile/config/offsite-metrics.sh"]
+    assert sorted(m for m in shown if m not in written and m not in RESTICPROFILE_BACKUP_METRICS) == []

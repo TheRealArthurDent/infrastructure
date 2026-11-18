@@ -381,3 +381,4 @@ def test_the_agent_reads_the_backup_metrics_of_resticprofile(dungeon_tree):
     assert 'name_override = "resticprofile"' in conf
     assert '[[processors.strings.trim_prefix]]' in conf
     assert 'prefix = "resticprofile_"' in conf
+    assert 'fieldexclude = ["resticprofile_build_info", "restic_build_info"]' in conf
