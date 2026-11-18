@@ -142,7 +142,7 @@ Group/title, with the fields the roles read:
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
 
 Every host reads the same entry names from its own database, and only the entries of the parts it runs
-(`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`, `secrets_paperless_env`). dungeon's database
+(`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`, `secrets_paperless`). dungeon's database
 holds nothing of the smart-home stack and no restic key pair (its repository is local). The titles of the Discord,
 restic, OpenCloud and Paperless entries are host variables (`discord_docker_webhook_title`,
 `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`, `monitoring_grafana_admin_title`,

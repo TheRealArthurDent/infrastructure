@@ -66,7 +66,7 @@ provisioner:
         base_rsnapshot_enabled: false
         secrets_smart_home_env: false
         secrets_opencloud_env: true
-        secrets_paperless_env: true
+        secrets_paperless: true
         backup_target_enabled: true
         # No SSD and no device to mount: the tmpfs from the platform stands in for the mounted SSD.
         backup_target_manage_mount: false

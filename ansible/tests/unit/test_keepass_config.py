@@ -175,9 +175,9 @@ LOOKUP_CONDITIONS = {
     "dungeon_ssh_port": SFTP,
     **{key: "secrets_smart_home_env | bool" for key in SMART_HOME_KEYS},
     "opencloud_admin_password": "secrets_opencloud_env | bool",
-    "paperless_secret_key": "secrets_paperless_env | bool",
-    "paperless_db_password": "secrets_paperless_env | bool",
-    "paperless_admin_password": "secrets_paperless_env | bool",
+    "paperless_secret_key": "secrets_paperless | bool",
+    "paperless_db_password": "secrets_paperless | bool",
+    "paperless_admin_password": "secrets_paperless | bool",
     "monitoring_grafana_admin_password": "'monitoring' in stack_components",
 }
 

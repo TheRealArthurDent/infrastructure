@@ -12,7 +12,7 @@ base_rsnapshot_enabled: false
 secrets_smart_home_env: false
 # private-cloud's OpenCloud and Paperless: their .env, vhosts and SANs
 secrets_opencloud_env: true
-secrets_paperless_env: true
+secrets_paperless: true
 # Restic sftp target for raspi and testbench (sftp:restic@dungeon:/media/backup/restic/<host>)
 backup_target_enabled: true
 backup_target_mount: /media/backup
