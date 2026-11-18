@@ -18,7 +18,6 @@ certificate_check_subdomains:
   - iobroker
   - node-red
   - grafana
-  - chronograf
   - outbound
   - deconz
   - deconz-ui
