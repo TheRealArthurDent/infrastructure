@@ -6,6 +6,10 @@
     - vars/secrets.yaml
   vars:
     dungeon_ssh_port: 2222
+    # The offsite target (#60), from KeePass in production
+    # A link in the URL field, as KeePass suggests: the role keeps the bare host name
+    resticprofile_offsite_host: https://offsite.example.org/
+    resticprofile_offsite_user: offsite-user
     iobroker_states_redis_port: 9000
     iobroker_objects_redis_port: 9001
     nodered_github_user: test-user

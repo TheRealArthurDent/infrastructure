@@ -318,18 +318,15 @@
         fail_msg: "known_hosts: {{ restic_known_hosts.content | b64decode }}"
       when: not is_dungeon
 
-    # A local repository needs no key pair and no .ssh directory (the sftp client side is raspi's and testbench's)
+    # A local repository needs no key pair of the backup host (the sftp client side is raspi's and testbench's)
     - name: Stat the files dungeon doesn't get
       ansible.builtin.stat:
         path: "{{ item }}"
       register: dungeon_absent_files
       loop:
         - /etc/docker/infrastructure/.env
-        - /etc/docker/infrastructure/resticprofile/.ssh
         - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519
         - /etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub
-        - /etc/docker/infrastructure/resticprofile/.ssh/known_hosts
-        - /etc/docker/infrastructure/resticprofile/ssh_config
         - /etc/docker/smart-home/.env
         - /etc/docker/smart-home
         - /etc/docker/infrastructure/pihole
@@ -347,7 +344,7 @@
         fail_msg: /etc/docker/opencloud exists on a host with secrets_opencloud_env false
       when: not is_dungeon
 
-    - name: Check dungeon has no pihole .env, no restic key pair, no ssh_config and no smart-home .env
+    - name: Check dungeon has no pihole .env, no backup host key pair and no smart-home .env
       ansible.builtin.assert:
         that: not item.stat.exists
         fail_msg: "{{ item.item }} exists on dungeon"
@@ -654,18 +651,32 @@
         - resticprofile/config/excludes
       register: stack_files
 
-    # Only an sftp repository needs the ssh client config
+    # The sftp repository (raspi) and the offsite copy (dungeon, #60) need the ssh client config
+    - name: Read the ssh client config of resticprofile
+      ansible.builtin.slurp:
+        src: /etc/docker/infrastructure/resticprofile/ssh_config
+      register: ssh_config_content
+
     - name: Stat the ssh client config of resticprofile
       ansible.builtin.stat:
         path: /etc/docker/infrastructure/resticprofile/ssh_config
       register: ssh_config_file
 
-    - name: Check the ssh client config exists with the sftp repository and not with the local one
+    - name: Check the ssh client config reaches the backup host or the offsite target
+      vars:
+        ssh_lines: "{{ ssh_config_content.content | b64decode | split('\n') | map('trim') | list }}"
       ansible.builtin.assert:
         that:
-          - ssh_config_file.stat.exists != is_dungeon
-          - is_dungeon or ssh_config_file.stat.mode == '0600'
-          - is_dungeon or ssh_config_file.stat.pw_name == 'root'
+          - ssh_config_file.stat.mode == '0600'
+          - ssh_config_file.stat.pw_name == 'root'
+          - is_dungeon or 'Port 2222' in ssh_lines
+          - is_dungeon or 'Host offsite' not in ssh_lines
+          - not is_dungeon or 'Port 2222' not in ssh_lines
+          - not is_dungeon or 'Host offsite' in ssh_lines
+          - not is_dungeon or 'HostName offsite.example.org' in ssh_lines
+          - not is_dungeon or 'User offsite-user' in ssh_lines
+          - not is_dungeon or 'IdentityFile /root/.ssh/id_offsite' in ssh_lines
+        fail_msg: "ssh_config: {{ ssh_lines }}"
 
     - name: Check stack config files exist, are owned by root and only readable by root
       ansible.builtin.assert:
@@ -754,14 +765,23 @@
           - "'ssl_certificate     /etc/nginx/' ~ inventory_hostname ~ '.pem;' in ssl_conf"
           - compose.services.keys() | sort == dungeon_services
           - "nginx_cert_mount in compose.services.nginx.volumes"
-          # Local repository on the SSD, guarded by its marker; no sftp client side at all
+          # Local repository on the SSD, guarded by its marker; no sftp repository of its own
           - "'repository: local:/backup/restic/dungeon' in profiles.splitlines() | map('trim') | list"
-          - "'sftp' not in profiles"
+          - "'sftp:restic@' not in profiles"
           - "'/backup/.backup-ssd' in profiles"
           - backup_mount | length == 1
           - backup_mount[0].source == '/media/backup'
-          - resticprofile_volumes | select('string') | select('search', '[.]ssh|ssh_config') | list | length == 0
           - "'extra_hosts' not in compose.services.resticprofile"
+          # The offsite copy of raspi's and its own repository (#60), over ssh with the offsite passphrase
+          - "'offsite-copy-raspi:' in profiles.splitlines()"
+          - "'offsite-copy-dungeon:' in profiles.splitlines()"
+          - "'repository: sftp:offsite:restic/raspi' in profiles.splitlines() | map('trim') | list"
+          - resticprofile_volumes | select('string') | select('search', '[.]ssh|ssh_config') | list | length == 2
+          - compose.services.resticprofile.secrets == ['restic_passphrase', 'restic_offsite_passphrase']
+          - compose.services.resticprofile.environment.RESTICPROFILE_OFFSITE_SOURCES == 'raspi dungeon'
+          - >-
+            compose.secrets.restic_offsite_passphrase.file
+            == '/etc/docker/infrastructure/secrets/restic_offsite_passphrase'
           # Backups wait for infrastructure's restore marker only (smart-home isn't on dungeon)
           - "'for stack in infrastructure; do' in compose.services.resticprofile.command[-1]"
           # The monitoring's Grafana behind nginx, its admin password as a Compose secret
@@ -1054,6 +1074,59 @@
           - "'0 12 1 * * /usr/local/bin/restic-restore drill 2>&1 | logger -t restic-restore-drill'
             in drill_crontab.stdout_lines"
         fail_msg: "drill: {{ helper_drill.stdout }} cron: {{ drill_crontab.stdout_lines | select('search', 'drill') }}"
+
+- name: Verify the offsite copy
+  hosts: all
+  become: true
+  gather_facts: false
+  vars_files:
+    - vars/secrets.yaml
+  vars:
+    is_dungeon: "{{ backup_target_enabled | default(false) | bool }}"
+  tasks:
+    # The offsite copy (#60): key pair, known_hosts and passphrase of the offsite target, from KeePass
+    - name: Read the offsite secrets of dungeon
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      register: offsite_secrets
+      loop:
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_offsite
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_offsite.pub
+        - /etc/docker/infrastructure/resticprofile/.ssh/known_hosts
+        - /etc/docker/infrastructure/secrets/restic_offsite_passphrase
+      when: is_dungeon
+      no_log: true
+
+    - name: Stat the offsite secrets of dungeon
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: offsite_stats
+      loop:
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_offsite
+        - /etc/docker/infrastructure/resticprofile/.ssh/id_offsite.pub
+        - /etc/docker/infrastructure/resticprofile/.ssh
+        - /etc/docker/infrastructure/secrets/restic_offsite_passphrase
+      when: is_dungeon
+
+    - name: Check the offsite secrets are the KeePass values, readable by root only
+      ansible.builtin.assert:
+        that:
+          - offsite_secrets.results[0].content | b64decode == 'LEAKCANARY-offsite-ssh-key\n'
+          - >-
+            offsite_secrets.results[1].content | b64decode
+            == 'ssh-ed25519 LEAKCANARY-offsite-ssh-key-pub molecule@test\n'
+          - >-
+            offsite_secrets.results[2].content | b64decode
+            == '[offsite.example.org]:23 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOffsiteHostKeyForMoleculeTestsOnly0000\n'
+          - offsite_secrets.results[3].content | b64decode == resticprofile_offsite_passphrase ~ '\n'
+          - offsite_stats.results[0].stat.mode == '0600'
+          - offsite_stats.results[1].stat.mode == '0644'
+          - offsite_stats.results[2].stat.mode == '0700'
+          - offsite_stats.results[3].stat.mode == '0600'
+          - offsite_stats.results | map(attribute='stat.pw_name') | unique == ['root']
+        fail_msg: The offsite key pair, known_hosts or passphrase is wrong, or readable by others
+      when: is_dungeon
+      no_log: true
 
 - name: Verify the backup target
   hosts: all

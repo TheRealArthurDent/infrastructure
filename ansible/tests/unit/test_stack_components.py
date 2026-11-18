@@ -138,6 +138,10 @@ def secrets_tasks():
 # The files the secrets role writes for a component -> the component whose host needs them (the ssh key pair only
 # with an sftp repository)
 SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
+# The offsite copy's passphrase and key pair (#60), and the .ssh directory for either
+OFFSITE = "'resticprofile' in stack_components and resticprofile_offsite_enabled | bool"
+SSH_DIR = ["'resticprofile' in stack_components",
+           "resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool"]
 # The directory of the Compose secrets, for every component that has one
 SECRETS_DIR = "['resticprofile', 'monitoring'] | intersect(stack_components) | length > 0"
 SECRET_FILES = {
@@ -148,7 +152,10 @@ SECRET_FILES = {
     "/etc/docker/infrastructure/secrets/grafana_admin_password": "monitoring",
     "/etc/docker/infrastructure/secrets/restic_passphrase": "resticprofile",
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh": SFTP,
+    "/etc/docker/infrastructure/resticprofile/.ssh": SSH_DIR,
+    "/etc/docker/infrastructure/secrets/restic_offsite_passphrase": OFFSITE,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_offsite": OFFSITE,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_offsite.pub": OFFSITE,
     "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": SFTP,
     "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub": SFTP,
 }
@@ -164,7 +171,8 @@ def test_secrets_are_written_only_for_enabled_components():
                     found[target] = task
     assert sorted(found) == sorted(SECRET_FILES)
     for target, component in SECRET_FILES.items():
-        condition = component if component in (SFTP, SECRETS_DIR) else f"'{component}' in stack_components"
+        condition = (component if component in (SFTP, SECRETS_DIR, OFFSITE, SSH_DIR)
+                     else f"'{component}' in stack_components")
         assert found[target].get("when") == condition, target
 
 

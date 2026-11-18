@@ -1,0 +1,7 @@
+# The offsite target (#60). ssh takes the first value it finds, so this block comes before the global options.
+Host offsite
+  HostName offsite.example.org
+  User offsite-user
+  Port 23
+  IdentityFile /root/.ssh/id_offsite
+  IdentitiesOnly yes

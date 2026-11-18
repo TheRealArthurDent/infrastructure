@@ -79,6 +79,26 @@
                     group='Backup', title='Dungeon', field='ssh-port')
              if 'resticprofile' in stack_components and resticprofile_repository_is_sftp
              else '' }}
+        resticprofile_offsite_passphrase: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_offsite_passphrase_title)
+             if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
+        resticprofile_offsite_host: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_offsite_title, field='url')
+             if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
+        resticprofile_offsite_user: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_offsite_title, field='username')
+             if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
+        resticprofile_offsite_ssh_private_key: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_offsite_title, attachment='id_ed25519')
+             if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
+        resticprofile_offsite_ssh_public_key: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Backup', title=resticprofile_offsite_title, attachment='id_ed25519.pub')
+             if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
         iobroker_states_redis_port: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/ioBroker', title='States Redis', field='port')
