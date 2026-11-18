@@ -754,7 +754,8 @@
         portainer_names: "portainer.{{ inventory_hostname }} portainer.{{ inventory_hostname }}.*;"
         outbound_names: "outbound.{{ inventory_hostname }} outbound.{{ inventory_hostname }}.*;"
         dungeon_services:
-          [grafana, healthmonitor, nginx, outbound, portainer, resticprofile, telegraf-agent, unbound, victoriametrics]
+          [grafana, healthmonitor, homepage, nginx, outbound, portainer, resticprofile, telegraf-agent, unbound,
+           victoriametrics]
         resticprofile_volumes: "{{ compose.services.resticprofile.volumes }}"
         backup_mount: "{{ resticprofile_volumes | select('mapping') | selectattr('target', 'eq', '/backup') | list }}"
       ansible.builtin.assert:
@@ -1328,3 +1329,50 @@
               - "'urls = [\"http://victoriametrics:8428\"]' in conf"
               - agent.user == 'telegraf:' ~ ansible_facts.getent_group.docker[1]
             fail_msg: "{{ conf }} {{ agent.user }}"
+
+    - name: Run the checks on the hosts with the landing page
+      # raspi's profile uses the default components, which verify doesn't load
+      when: "'landing_page' in stack_components | default(['landing_page'])"
+      block:
+        - name: Stat the Homepage config files
+          ansible.builtin.stat:
+            path: "/etc/docker/infrastructure/homepage/{{ item }}"
+          loop: [bookmarks.yaml, custom.css, custom.js, docker.yaml, kubernetes.yaml, proxmox.yaml, services.yaml,
+                 settings.yaml, widgets.yaml]
+          register: homepage_files
+
+        # The container mounts the directory read-only: a missing file would make Homepage exit
+        - name: Check every Homepage config file is present and readable for the container
+          ansible.builtin.assert:
+            that:
+              - item.stat.isreg | default(false)
+              - item.stat.pw_name == 'root'
+              - item.stat.mode == '0644'
+            fail_msg: "{{ item.item }}: {{ item.stat }}"
+            quiet: true
+          loop: "{{ homepage_files.results }}"
+          loop_control:
+            label: "{{ item.item }}"
+
+        - name: Read the Homepage settings, services and the nginx config
+          ansible.builtin.slurp:
+            src: "/etc/docker/infrastructure/{{ item }}"
+          loop: [homepage/settings.yaml, homepage/services.yaml, nginx/nginx.conf, nginx/snippets/landing-page.conf]
+          register: landing_page_rendered
+
+        - name: Check the host name leads to its landing page with its tiles
+          vars:
+            rendered: "{{ landing_page_rendered.results | items2dict(key_name='item', value_name='content') }}"
+            settings: "{{ rendered['homepage/settings.yaml'] | b64decode | from_yaml }}"
+            services: "{{ rendered['homepage/services.yaml'] | b64decode | from_yaml }}"
+            tiles: "{{ services | map('dict2items') | flatten | map(attribute='value') | flatten
+                       | map('dict2items') | flatten }}"
+            nginx_conf: "{{ rendered['nginx/nginx.conf'] | b64decode }}"
+            snippet: "{{ rendered['nginx/snippets/landing-page.conf'] | b64decode }}"
+          ansible.builtin.assert:
+            that:
+              - settings.title == inventory_hostname
+              - "'https://portainer.' ~ inventory_hostname in tiles | map(attribute='value.href')"
+              - "'include             snippets/landing-page.conf;' in nginx_conf"
+              - "'set $landing_page_host homepage:3000;' in snippet"
+            fail_msg: "{{ settings }} {{ tiles }}"

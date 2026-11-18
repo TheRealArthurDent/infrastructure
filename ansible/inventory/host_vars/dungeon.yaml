@@ -33,6 +33,8 @@ stack_components:
   - monitoring
   # The agent part (#39): Telegraf with the metrics of the host and its containers
   - monitoring_agent
+  # The landing page at https://dungeon/ (#4)
+  - landing_page
 resticprofile_repository: local:/backup/restic/dungeon
 resticprofile_backup_mount: /media/backup
 resticprofile_backup_stacks: ["{{ stack_project_name }}"]

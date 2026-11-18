@@ -1,0 +1,9 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# The landing pages of the other hosts
+- Hosts:
+  - raspi:
+    - abbr: RA
+      href: https://raspi
+  - dungeon:
+    - abbr: DU
+      href: https://dungeon

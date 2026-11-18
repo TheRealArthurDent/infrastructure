@@ -1,0 +1,29 @@
+services:
+  # The landing page at https://<host>/ (#4), reached through nginx
+  homepage:
+    hostname: homepage
+    container_name: homepage
+    image: ghcr.io/gethomepage/homepage:v2.8.0
+    # The image's files belong to 1000:1000; as that user the entrypoint changes no ownership and drops nothing
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # Homepage refuses other Host headers; nginx passes the host name on
+      HOMEPAGE_ALLOWED_HOSTS: "{{ inventory_hostname }}"
+      LOG_TARGETS: stdout
+    volumes:
+      - "{{ landing_page_config_dir }}:/app/config:ro"
+    deploy:
+      resources:
+        limits:
+          memory: "{{ landing_page_memory_limit }}"
+    restart: unless-stopped
+    # No internet: the status dots only ask the services in siz. The image brings its own healthcheck.
+    networks:
+      - siz

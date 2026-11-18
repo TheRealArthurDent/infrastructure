@@ -1,0 +1,9 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# The landing pages of the other hosts
+- Hosts:
+  - dungeon:
+    - abbr: DU
+      href: https://dungeon
+  - testbench:
+    - abbr: TE
+      href: https://testbench

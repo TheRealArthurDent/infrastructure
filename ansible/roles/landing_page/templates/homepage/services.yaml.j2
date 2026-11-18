@@ -1,0 +1,19 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# A tile for each web UI nginx serves on {{ inventory_hostname }} (landing_page_services)
+{% set ns = namespace(groups=[]) %}
+{% for group in landing_page_groups %}
+{%   set entries = [] %}
+{%   for vhost in landing_page_vhosts if landing_page_services[vhost].group == group %}
+{%     set service = landing_page_services[vhost] %}
+{%     set tile = {'href': 'https://' ~ vhost ~ '.' ~ inventory_hostname, 'icon': service.icon,
+                   'description': service.description} %}
+{%     if service.monitor is defined %}
+{%       set tile = tile | combine({'siteMonitor': service.monitor}) %}
+{%     endif %}
+{%     set _ = entries.append({service.name: tile}) %}
+{%   endfor %}
+{%   if entries %}
+{%     set ns.groups = ns.groups + [{group: entries}] %}
+{%   endif %}
+{% endfor %}
+{{ ns.groups | to_nice_yaml(indent=2, sort_keys=False) }}
