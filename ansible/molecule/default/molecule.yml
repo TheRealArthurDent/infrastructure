@@ -66,6 +66,7 @@ provisioner:
         base_rsnapshot_enabled: false
         secrets_smart_home_env: false
         secrets_opencloud_env: true
+        secrets_paperless_env: true
         backup_target_enabled: true
         # No SSD and no device to mount: the tmpfs from the platform stands in for the mounted SSD.
         backup_target_manage_mount: false
@@ -87,8 +88,8 @@ provisioner:
         resticprofile_repository: local:/backup/restic/dungeon
         resticprofile_backup_mount: /media/backup
         resticprofile_backup_stacks: ["{{ stack_project_name }}"]
-        reverse_proxy_vhosts: [portainer, outbound, opencloud, grafana]
-        certificate_check_subdomains: [portainer, outbound, opencloud, grafana]
+        reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
+        certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
 
 verifier:
   name: ansible

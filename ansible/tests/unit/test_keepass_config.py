@@ -175,6 +175,9 @@ LOOKUP_CONDITIONS = {
     "dungeon_ssh_port": SFTP,
     **{key: "secrets_smart_home_env | bool" for key in SMART_HOME_KEYS},
     "opencloud_admin_password": "secrets_opencloud_env | bool",
+    "paperless_secret_key": "secrets_paperless_env | bool",
+    "paperless_db_password": "secrets_paperless_env | bool",
+    "paperless_admin_password": "secrets_paperless_env | bool",
     "monitoring_grafana_admin_password": "'monitoring' in stack_components",
 }
 
@@ -196,6 +199,10 @@ def test_bootstrap_only_looks_up_what_the_host_needs():
     assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_id"])
     assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_token"])
     assert "group='OpenCloud', title=opencloud_admin_title" in str(facts["opencloud_admin_password"])
+    for name, title in (("paperless_secret_key", "paperless_secret_key_title"),
+                        ("paperless_db_password", "paperless_db_title"),
+                        ("paperless_admin_password", "paperless_admin_title")):
+        assert f"group='Paperless', title={title}" in str(facts[name]), name
     assert "group='Monitoring', title=monitoring_grafana_admin_title" in str(
         facts["monitoring_grafana_admin_password"])
 
@@ -233,6 +240,7 @@ def test_testbench_has_its_own_database_with_the_default_titles():
     assert titles == {
         "discord_docker_webhook_title", "resticprofile_ssh_key_title", "resticprofile_passphrase_title",
         "opencloud_admin_title",
+        "paperless_secret_key_title", "paperless_db_title", "paperless_admin_title",
         "monitoring_grafana_admin_title",
     }
     assert testbench["keepass_database"] == "testbench"

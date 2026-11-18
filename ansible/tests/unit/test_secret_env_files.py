@@ -19,7 +19,8 @@ ANSIBLE_DIR = Path(__file__).parents[2]
 SECRETS_ROLE = ANSIBLE_DIR / "roles" / "secrets"
 # The master password is awkward too; it comes from the environment, as with bin/with-keepass.
 PASSWORD = "master {{ 7 * 6 }} $HOME ' \" \\ #"
-ENV_DIRS = ("/etc/docker/infrastructure/", "/etc/docker/smart-home/", "/etc/docker/opencloud/")
+ENV_DIRS = ("/etc/docker/infrastructure/", "/etc/docker/smart-home/", "/etc/docker/opencloud/",
+            "/etc/docker/paperless/")
 
 pytestmark = pytest.mark.skipif(not compose_available(), reason="needs the docker compose CLI (no daemon)")
 
@@ -48,7 +49,7 @@ def secrets_tasks(out):
     env_tasks = tasks_where(
         role, lambda task: str(task.get("ansible.builtin.copy", {}).get("dest", "")).startswith(ENV_DIRS)
         and ".env" in task["ansible.builtin.copy"]["dest"])
-    assert len(env_tasks) == 5, [task["name"] for task in env_tasks]
+    assert len(env_tasks) == 6, [task["name"] for task in env_tasks]
     for task in env_tasks:
         copy = task["ansible.builtin.copy"]
         copy["dest"] = str(out / copy["dest"].removeprefix("/etc/docker/").replace("/", "_"))
@@ -60,7 +61,7 @@ def secrets_tasks(out):
 
 # KeePass entries the secrets role writes into .env files; the InfluxDB and VNC ones take fewer characters.
 GENERAL = ["pihole", "outbound", "webhook_id", "webhook_token", "restic", "grafana", "mosquitto", "github_user",
-           "github_email", "opencloud"]
+           "github_email", "opencloud", "paperless_secret_key", "paperless_db", "paperless_admin"]
 SPECIAL = {"influx_admin": AWKWARD_INFLUXDB, "influx_read": AWKWARD_INFLUXDB, "influx_write": AWKWARD_INFLUXDB,
            "vnc": AWKWARD_VNC}
 # Three runs give every awkward value at least one general entry.
@@ -108,6 +109,10 @@ def make_kdbx(path, values):
     entry(group("deconz - Phoscon-GW", smart_home), "Deconz VNC", values["vnc"])
     entry(group("GitHub"), "NodeRed", username=values["github_user"], email=values["github_email"])
     entry(group("OpenCloud"), defaults["opencloud_admin_title"], values["opencloud"])
+    paperless = group("Paperless")
+    entry(paperless, defaults["paperless_secret_key_title"], values["paperless_secret_key"])
+    entry(paperless, defaults["paperless_db_title"], values["paperless_db"])
+    entry(paperless, defaults["paperless_admin_title"], values["paperless_admin"])
     kp.save()
 
 
@@ -130,6 +135,7 @@ def run_playbook(tmp_path, kdbx, tasks):
             "resticprofile_repository_is_sftp": False,
             "secrets_smart_home_env": True,
             "secrets_opencloud_env": True,
+            "secrets_paperless_env": True,
         },
         "tasks": [read_secrets, *tasks],
     }], sort_keys=False))
@@ -175,6 +181,10 @@ def test_awkward_keepass_values_reach_compose_unchanged(tmp_path, offset):
             "GITHUB_EMAIL": values["github_email"],
         },
         "opencloud_.env": {"OPENCLOUD_ADMIN_PASSWORD": values["opencloud"]},
+        # private-cloud's paperless/.env.example
+        "paperless_.env": {"PAPERLESS_SECRET_KEY": values["paperless_secret_key"],
+                           "PAPERLESS_DB_PASSWORD": values["paperless_db"],
+                           "PAPERLESS_ADMIN_PASSWORD": values["paperless_admin"]},
     }
     for name, keys in expected.items():
         from_env_file, interpolated = compose_reads(out / name, keys, tmp_path)

@@ -59,6 +59,8 @@ pihole_instances:
         target: "dungeon"
       - domain: "opencloud.dungeon"
         target: "dungeon"
+      - domain: "paperless.dungeon"
+        target: "dungeon"
       - domain: "grafana.dungeon"
         target: "dungeon"
       - domain: "nextcloud.erika"
@@ -86,6 +88,8 @@ pihole_instances:
       - domain: "portainer.testbench"
         target: "testbench"
       - domain: "opencloud.testbench"
+        target: "testbench"
+      - domain: "paperless.testbench"
         target: "testbench"
 
     block_lists:

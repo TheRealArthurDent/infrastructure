@@ -133,16 +133,20 @@ Group/title, with the fields the roles read:
 | `raspberry`, `testbench` | `GitHub/NodeRed` | fields `username` and `email` |
 | `raspberry` | `Domain/rootCA` | the root CA (`keepass_ca_database`): password, attachments `rootCA.pem` and `rootCA.key` |
 | `testbench`, `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
+| `testbench`, `dungeon` | `Paperless/secret key` | password: Paperless' Django secret key, a long random string (private-cloud) |
+| `testbench`, `dungeon` | `Paperless/database` | password: the password of Paperless' database user (set on the database's first start) |
+| `testbench`, `dungeon` | `Paperless/admin` | password: the initial password of Paperless' user `admin` |
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository |
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
 
 Every host reads the same entry names from its own database, and only the entries of the parts it runs
-(`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`). dungeon's database holds nothing of the
-smart-home stack and no restic key pair (its repository is local). The titles of the Discord, restic and OpenCloud
-entries are host variables (`discord_docker_webhook_title`, `resticprofile_ssh_key_title`,
-`resticprofile_passphrase_title`, `monitoring_grafana_admin_title`, `opencloud_admin_title`, defaults in
+(`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`, `secrets_paperless_env`). dungeon's database
+holds nothing of the smart-home stack and no restic key pair (its repository is local). The titles of the Discord,
+restic, OpenCloud and Paperless entries are host variables (`discord_docker_webhook_title`,
+`resticprofile_ssh_key_title`, `resticprofile_passphrase_title`, `monitoring_grafana_admin_title`,
+`opencloud_admin_title`, `paperless_*_title`, defaults in
 `roles/secrets/defaults/main.yaml`); no host overrides them.
 
 Passwords may hold any printable character (`$`, `{{ }}`, quotes, backslashes, `#`, blanks, umlauts): the secrets role
@@ -275,8 +279,8 @@ the vhosts).
 | `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
-nginx serves the vhosts `portainer`, `outbound`, `opencloud` and `grafana`, and its resticprofile backs up to a local
-repository on the SSD (see [dungeon](#dungeon)).
+nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless` and `grafana`, and its resticprofile backs
+up to a local repository on the SSD (see [dungeon](#dungeon)).
 
 ## Set up a host (new install or after a crash)
 

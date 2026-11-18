@@ -181,7 +181,8 @@ def test_old_restic_init_script_and_generated_key_are_gone():
 def test_dungeon_renders_only_its_vhosts(tmp_path):
     tree = rendered_tree(tmp_path, "dungeon")
     names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
-    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon", "opencloud.dungeon", "grafana.dungeon"}
+    assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon", "opencloud.dungeon", "paperless.dungeon",
+                     "grafana.dungeon"}
     assert "listen              8443" not in tree["nginx/nginx.conf"]
     assert "location /health" in tree["nginx/nginx.conf"]
 
@@ -224,8 +225,26 @@ def test_raspi_has_no_opencloud_vhost(tmp_path):
     assert "opencloud." not in tree["nginx/nginx.conf"]
 
 
-def test_testbench_keeps_the_default_vhosts_and_sans_plus_opencloud():
-    """testbench lists them in full to add opencloud; a vhost added to a default must reach testbench too."""
+def test_paperless_vhost_proxies_to_the_webserver(tmp_path):
+    """private-cloud's paperless-webserver listens on 8000 in the network siz, without TLS (its README)."""
+    tree = rendered_tree(tmp_path, "dungeon")
+    assert "include             snippets/paperless.conf;" in tree["nginx/nginx.conf"]
+    snippet = tree["nginx/snippets/paperless.conf"]
+    assert "set $paperless paperless-webserver:8000;" in snippet
+    assert "proxy_pass http://$paperless;" in snippet
+    assert "proxy_set_header X-Forwarded-Proto https;" in snippet
+    # Scans of many pages, websockets for the status updates
+    assert "client_max_body_size 100M;" in snippet
+    assert 'proxy_set_header Connection "upgrade";' in snippet
+
+
+def test_raspi_has_no_paperless_vhost(tmp_path):
+    tree = rendered_tree(tmp_path, "raspi")
+    assert "paperless." not in tree["nginx/nginx.conf"]
+
+
+def test_testbench_keeps_the_default_vhosts_and_sans_plus_private_cloud():
+    """testbench lists them in full to add opencloud and paperless; a vhost added to a default must reach it too."""
     import yaml
     from pathlib import Path
 
@@ -233,7 +252,7 @@ def test_testbench_keeps_the_default_vhosts_and_sans_plus_opencloud():
     testbench = yaml.safe_load((ansible / "inventory/host_vars/testbench.yaml").read_text())
     for role, var in (("reverse_proxy", "reverse_proxy_vhosts"), ("certificate_check", "certificate_check_subdomains")):
         default = yaml.safe_load((ansible / f"roles/{role}/defaults/main.yaml").read_text())[var]
-        assert sorted(testbench[var]) == sorted(default + ["opencloud"]), var
+        assert sorted(testbench[var]) == sorted(default + ["opencloud", "paperless"]), var
 
 
 @pytest.mark.parametrize("host", ["dungeon", "testbench"])

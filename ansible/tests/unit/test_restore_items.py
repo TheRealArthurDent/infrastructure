@@ -84,6 +84,13 @@ def excluded(path):
     return any(match(split(p), parts[:n]) for p in exclude_patterns() for n in range(1, len(parts) + 1))
 
 
+def test_paperless_live_database_is_not_backed_up():
+    """private-cloud's Paperless backs up a pg_dump instead (volume paperless_dbdump, its README)."""
+    assert excluded("/source/docker-volumes/paperless_pgdata/_data/18/docker/base/1")
+    assert not excluded("/source/docker-volumes/paperless_dbdump/_data/paperless.sql.gz")
+    assert not excluded("/source/docker-volumes/paperless_media/_data/documents/originals/0000001.pdf")
+
+
 def literal_prefix(pattern):
     """The leading components of an anchored pattern that contain no wildcard."""
     prefix = []

@@ -10,8 +10,9 @@ docker_daemon_dns:
 base_rsnapshot_enabled: false
 # No smart-home stack on this host: no smart-home .env, no lookups of its secrets
 secrets_smart_home_env: false
-# private-cloud's OpenCloud: its .env, vhost and SAN
+# private-cloud's OpenCloud and Paperless: their .env, vhosts and SANs
 secrets_opencloud_env: true
+secrets_paperless_env: true
 # Restic sftp target for raspi and testbench (sftp:restic@dungeon:/media/backup/restic/<host>)
 backup_target_enabled: true
 backup_target_mount: /media/backup
@@ -36,5 +37,5 @@ stack_components:
 resticprofile_repository: local:/backup/restic/dungeon
 resticprofile_backup_mount: /media/backup
 resticprofile_backup_stacks: ["{{ stack_project_name }}"]
-reverse_proxy_vhosts: [portainer, outbound, opencloud, grafana]
-certificate_check_subdomains: [portainer, outbound, opencloud, grafana]
+reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
+certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]

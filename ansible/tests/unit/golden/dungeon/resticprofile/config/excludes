@@ -12,6 +12,9 @@
 /source/docker-volumes/outbound_pihole
 # The metrics of the monitoring may be lost (#39)
 /source/docker-volumes/victoriametrics_data
+# private-cloud's Paperless: the live Postgres files aren't consistent while it runs; its nightly pg_dump in
+# paperless_dbdump is backed up instead
+/source/docker-volumes/paperless_pgdata
 # Exclude iobroker's npm cache
 /source/docker-volumes/smart-home_iobroker-storage/_data/.npm
 # Python

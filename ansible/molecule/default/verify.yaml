@@ -42,6 +42,12 @@
         hosts: dungeon
         keys:
           OPENCLOUD_ADMIN_PASSWORD: "{{ opencloud_admin_password }}"
+      - file: /etc/docker/paperless/.env
+        hosts: dungeon
+        keys:
+          PAPERLESS_SECRET_KEY: "{{ paperless_secret_key }}"
+          PAPERLESS_DB_PASSWORD: "{{ paperless_db_password }}"
+          PAPERLESS_ADMIN_PASSWORD: "{{ paperless_admin_password }}"
     # pihole: raspi-trixie only, dungeon: dungeon-trixie only
     env_expectations: >-
       {{ env_expectations_all | rejectattr('hosts', 'defined')
@@ -251,7 +257,7 @@
               ['/etc/docker/infrastructure/.env',
                '/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519',
                '/etc/docker/smart-home/.env'])
-           + (['/etc/docker/opencloud/.env'] if is_dungeon else []) }}
+           + (['/etc/docker/opencloud/.env', '/etc/docker/paperless/.env'] if is_dungeon else []) }}
 
     - name: Check secret files exist, are owned by root and are not world-readable
       ansible.builtin.assert:
@@ -345,6 +351,18 @@
       ansible.builtin.assert:
         that: not opencloud_dir.stat.exists
         fail_msg: /etc/docker/opencloud exists on a host with secrets_opencloud_env false
+      when: not is_dungeon
+
+    - name: Stat the Paperless .env on a host without Paperless
+      ansible.builtin.stat:
+        path: /etc/docker/paperless
+      register: paperless_dir
+      when: not is_dungeon
+
+    - name: Check a host without Paperless gets no Paperless .env
+      ansible.builtin.assert:
+        that: not paperless_dir.stat.exists
+        fail_msg: /etc/docker/paperless exists on a host with secrets_paperless_env false
       when: not is_dungeon
 
     - name: Check dungeon has no pihole .env, no restic key pair, no ssh_config and no smart-home .env
@@ -621,12 +639,13 @@
           - "is_dungeon or 'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
 
     # certificate_check_subdomains of the platform: just the vhosts dungeon runs
-    - name: Check dungeon's certificate covers portainer, outbound, opencloud and grafana only
+    - name: Check dungeon's certificate covers portainer, outbound, opencloud, paperless and grafana only
       ansible.builtin.assert:
         that:
           - "'DNS:portainer.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:outbound.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:opencloud.' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:paperless.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:grafana.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:pihole.' ~ inventory_hostname not in cert_san.stdout"
           - "'DNS:iobroker.' ~ inventory_hostname not in cert_san.stdout"
