@@ -1,7 +1,7 @@
 {% if resticprofile_offsite_enabled | bool %}
 # The offsite target (#60). ssh takes the first value it finds, so this block comes before the global options.
 Host {{ resticprofile_offsite_alias }}
-  HostName {{ resticprofile_offsite_host }}
+  HostName {{ resticprofile_offsite_hostname }}
   User {{ resticprofile_offsite_user }}
   Port {{ resticprofile_offsite_port }}
   IdentityFile /root/.ssh/id_offsite

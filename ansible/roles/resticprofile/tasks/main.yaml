@@ -83,7 +83,7 @@
       {% endif %}
       {% if resticprofile_offsite_enabled | bool %}
       {% for key in resticprofile_offsite_host_keys %}
-      [{{ resticprofile_offsite_host }}]:{{ resticprofile_offsite_port }} {{ key | trim }}
+      [{{ resticprofile_offsite_hostname }}]:{{ resticprofile_offsite_port }} {{ key | trim }}
       {% endfor %}
       {% endif %}
     dest: "{{ stack_dir }}/resticprofile/.ssh/known_hosts"

@@ -105,6 +105,14 @@ def test_ssh_config_reaches_the_offsite_target_with_its_own_key(dungeon):
     assert not any(line.startswith("Port 1359") for line in lines)
 
 
+@pytest.mark.parametrize("url", ["https://offsite.example.org/", "sftp://offsite.example.org:23", "offsite.example.org"])
+def test_ssh_config_takes_the_bare_host_from_a_url(tmp_path, url):
+    # The KeePass entry's URL field may hold a link to the target rather than the bare host name
+    tree = rendered_tree(tmp_path, "dungeon", {"resticprofile_offsite_host": url})
+    lines = [line.strip() for line in tree["resticprofile/ssh_config"].splitlines()]
+    assert "HostName offsite.example.org" in lines
+
+
 def test_ssh_config_keeps_the_backup_host_after_the_offsite_block(tmp_path):
     # A host with both: the global options must not land in the offsite Host block, and ssh takes the first value
     tree = rendered_tree(tmp_path, "raspi", {"resticprofile_offsite_sources": ["raspi"]})

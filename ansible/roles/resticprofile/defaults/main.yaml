@@ -91,6 +91,10 @@ resticprofile_offsite_enabled: "{{ resticprofile_offsite_sources | length > 0 }}
 # The target's ssh alias in the container's ssh_config. Its host (the entry's URL) and user come from KeePass
 # (bootstrap.yaml: resticprofile_offsite_host, resticprofile_offsite_user), so they stay out of the repo.
 resticprofile_offsite_alias: offsite
+# The bare host name, also when the URL field holds a link (https://<host>/, sftp://<host>:23)
+resticprofile_offsite_hostname: >-
+  {{ resticprofile_offsite_host | default('') | regex_replace('^[A-Za-z][A-Za-z0-9+.-]*://', '')
+     | regex_replace('[/:].*$', '') }}
 resticprofile_offsite_port: 23
 # One offsite repository per source: <path>/<source>, relative to the target user's home
 resticprofile_offsite_path: restic

@@ -135,7 +135,7 @@ Group/title, with the fields the roles read:
 | `raspberry` | `Domain/rootCA` | the root CA (`keepass_ca_database`): password, attachments `rootCA.pem` and `rootCA.key` |
 | `testbench`, `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository, also a key of raspi's repository (offsite copy) |
-| `dungeon` | `Backup/Offsite` | user name, URL (the bare host name), attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
+| `dungeon` | `Backup/Offsite` | user name, URL (the host name, `https://` and a trailing `/` are cut off), attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
 | `dungeon` | `Backup/Resticprofile Offsite` | password: the passphrase of the offsite repositories |
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
@@ -655,8 +655,8 @@ parameters of their source, so the daily upload holds only what's new.
 
 Set up once (in this order):
 
-1. On the target: a login that only reaches its own directory, ssh key only. Put its user name, host (the URL field,
-   bare host name) and the key pair (attachments `id_ed25519`, `id_ed25519.pub`) into `Backup/Offsite` of the `dungeon`
+1. On the target: a login that only reaches its own directory, ssh key only. Put its user name, host (the URL field;
+   a scheme and a trailing `/` are cut off) and the key pair (attachments `id_ed25519`, `id_ed25519.pub`) into `Backup/Offsite` of the `dungeon`
    database, and a new passphrase into `Backup/Resticprofile Offsite`.
 2. Its ssh host keys into `resticprofile_offsite_host_keys` in `inventory/host_vars/dungeon.yaml`: compare
    `ssh-keyscan -p 23 <host>` with the fingerprints the provider publishes.
