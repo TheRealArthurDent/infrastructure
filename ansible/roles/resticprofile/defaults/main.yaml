@@ -88,8 +88,8 @@ resticprofile_retention:
 # restic passphrase: for another host's repository, add it as a key there (restic key add).
 resticprofile_offsite_sources: []
 resticprofile_offsite_enabled: "{{ resticprofile_offsite_sources | length > 0 }}"
-# The target's ssh alias in the container's ssh_config. Its host and user come from KeePass (bootstrap.yaml:
-# resticprofile_offsite_host, resticprofile_offsite_user), so they stay out of the repo.
+# The target's ssh alias in the container's ssh_config. Its host (the entry's URL) and user come from KeePass
+# (bootstrap.yaml: resticprofile_offsite_host, resticprofile_offsite_user), so they stay out of the repo.
 resticprofile_offsite_alias: offsite
 resticprofile_offsite_port: 23
 # One offsite repository per source: <path>/<source>, relative to the target user's home

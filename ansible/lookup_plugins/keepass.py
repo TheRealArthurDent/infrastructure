@@ -119,6 +119,8 @@ class LookupModule(LookupBase):
         results.append(entry.password)
       elif field == 'username' or field == 'user':
         results.append(entry.username)
+      elif field == 'url':
+        results.append(entry.url or '')
       else:
         # Custom field
         custom_value = entry.custom_properties.get(field, '')

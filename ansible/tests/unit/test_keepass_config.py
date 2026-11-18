@@ -214,9 +214,9 @@ def test_restic_key_pair_comes_from_the_hosts_entry():
 
 
 def test_offsite_target_comes_from_its_entries():
-    # #60: user name, custom field host and key pair of one entry, the passphrase of another
+    # #60: user name, URL (the host) and key pair of one entry, the passphrase of another
     facts = {name: " ".join(str(value).split()) for name, value in keepass_facts().items()}
-    for name, part in (("resticprofile_offsite_host", "field='host'"), ("resticprofile_offsite_user", "field='username'"),
+    for name, part in (("resticprofile_offsite_host", "field='url'"), ("resticprofile_offsite_user", "field='username'"),
                        ("resticprofile_offsite_ssh_private_key", "attachment='id_ed25519'"),
                        ("resticprofile_offsite_ssh_public_key", "attachment='id_ed25519.pub'")):
         assert "group='Backup', title=resticprofile_offsite_title," in facts[name], name

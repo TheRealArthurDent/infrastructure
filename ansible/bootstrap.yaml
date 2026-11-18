@@ -85,7 +85,7 @@
              if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
         resticprofile_offsite_host: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
-                    group='Backup', title=resticprofile_offsite_title, field='host')
+                    group='Backup', title=resticprofile_offsite_title, field='url')
              if 'resticprofile' in stack_components and resticprofile_offsite_enabled | bool else '' }}
         resticprofile_offsite_user: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,

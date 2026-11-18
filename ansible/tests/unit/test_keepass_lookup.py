@@ -28,7 +28,7 @@ def kdbx(tmp_path_factory):
     kp = create_database(str(path), password=PASSWORD)
 
     smart_home = kp.add_group(kp.root_group, "smart-home")
-    kp.add_entry(smart_home, "pihole", "admin", "pihole-secret")
+    kp.add_entry(smart_home, "pihole", "admin", "pihole-secret", url="pihole.example.org")
     iobroker = kp.add_group(smart_home, "ioBroker")
     states = kp.add_entry(iobroker, "States Redis", "", "")
     states.set_custom_property("port", "9000")
@@ -72,6 +72,11 @@ def test_password_is_default_field(kdbx):
 
 def test_username_field(kdbx):
     assert lookup(kdbx, group="smart-home", title="pihole", field="username") == ["admin"]
+
+
+def test_url_field(kdbx):
+    # KeePass' own URL field, not a custom field of that name (#60: the offsite target's host)
+    assert lookup(kdbx, group="smart-home", title="pihole", field="url") == ["pihole.example.org"]
 
 
 def test_custom_field(kdbx):
