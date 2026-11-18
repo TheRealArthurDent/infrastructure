@@ -17,6 +17,16 @@ import yaml
 from render import rendered_tree
 
 SERVICES = ("victoriametrics", "grafana", "telegraf-agent")
+METRICS = "/resticprofile-metrics"
+# Like the files resticprofile writes: its own backup.prom (HELP, TYPE, labels) and one of the run-after lines
+BACKUP_PROM = """# HELP resticprofile_backup_status Backup status: 0=fail, 1=warning, 2=success.
+# TYPE resticprofile_backup_status gauge
+resticprofile_backup_status{profile="default"} 2
+# HELP resticprofile_build_info resticprofile build information.
+# TYPE resticprofile_build_info gauge
+resticprofile_build_info{goversion="go1.24",version="0.33.1"} 1
+"""
+OFFSITE_PROM = 'resticprofile_offsite_last_success_timestamp_seconds{source="raspi"} 1763500000\n'
 
 
 def docker_available():
@@ -29,7 +39,9 @@ def docker_available():
 def monitoring_stack(tmp_path, password, publish_grafana=False):
     """Yields the docker compose command of the running project; publish_grafana maps Grafana to a local port."""
     # The agent's interval shortened, so its first metrics arrive within the test
-    tree = rendered_tree(tmp_path, "dungeon", {"monitoring_agent_interval": "5s"})
+    # resticprofile's metrics from a directory of the test instead of the host's
+    tree = rendered_tree(tmp_path, "dungeon", {"monitoring_agent_interval": "5s",
+                                               "monitoring_agent_resticprofile_metrics": METRICS})
     compose = yaml.safe_load(tree["docker-compose.yaml"])
     project = f"smoke-{uuid.uuid4().hex[:8]}"
     services = {name: dict(compose["services"][name]) for name in SERVICES}
@@ -47,9 +59,14 @@ def monitoring_stack(tmp_path, password, publish_grafana=False):
     telegraf_dir = tmp_path / "telegraf"
     telegraf_dir.mkdir()
     (telegraf_dir / "telegraf.conf").write_text(tree["telegraf/telegraf.conf"])
+    metrics = tmp_path / "resticprofile-metrics"
+    metrics.mkdir()
+    (metrics / "backup.prom").write_text(BACKUP_PROM)
+    (metrics / "offsite_raspi_last_success.prom").write_text(OFFSITE_PROM)
+    metrics.chmod(0o755)
     agent = services["telegraf-agent"]
     agent["volumes"] = [f"{telegraf_dir}:/etc/telegraf:ro" if str(v).endswith(":/etc/telegraf:ro") else v
-                        for v in agent["volumes"]]
+                        for v in agent["volumes"]] + [f"{metrics}:{METRICS}:ro"]
     # The group of this machine's Docker socket instead of the render's placeholder
     agent["user"] = f"telegraf:{os.stat('/var/run/docker.sock').st_gid}"
     secret = tmp_path / "grafana_admin_password"
