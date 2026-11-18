@@ -174,7 +174,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "decbytes",
+          "unit": "bytes",
           "color": {
             "mode": "fixed",
             "fixedColor": "dark-purple"
@@ -489,7 +489,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "Bps"
+          "unit": "binBps"
         },
         "overrides": []
       },
@@ -531,7 +531,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "Bps"
+          "unit": "binBps"
         },
         "overrides": []
       },
