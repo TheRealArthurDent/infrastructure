@@ -2,8 +2,8 @@
 # The landing pages of the other hosts
 - Hosts:
   - raspi:
-    - abbr: RA
+    - icon: raspberry-pi.png
       href: https://raspi
   - testbench:
-    - abbr: TE
+    - icon: raspberry-pi.png
       href: https://testbench

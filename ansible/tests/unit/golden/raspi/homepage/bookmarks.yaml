@@ -2,8 +2,8 @@
 # The landing pages of the other hosts
 - Hosts:
   - dungeon:
-    - abbr: DU
+    - icon: raspberry-pi.png
       href: https://dungeon
   - testbench:
-    - abbr: TE
+    - icon: raspberry-pi.png
       href: https://testbench

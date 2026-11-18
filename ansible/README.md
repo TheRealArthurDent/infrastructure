@@ -273,9 +273,9 @@ The `stack` role assembles the Docker stack from component roles: `reverse_proxy
 [Landing page](#landing-page)), `monitoring` (the central part of the monitoring: VictoriaMetrics and Grafana, #39) and
 `monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`). Each
 brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
-`docker compose up`. `stack_components` lists the enabled ones and defaults to the first eight; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in
-`inventory/host_vars/<host>.yaml` (components must be listed with the dependencies they need, e.g. `reverse_proxy` for
-the vhosts).
+`docker compose up`. `stack_components` lists the enabled ones and defaults to the first eight; `monitoring` runs on
+one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
+listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page).
 
 | Host | Components |
 | --- | --- |
