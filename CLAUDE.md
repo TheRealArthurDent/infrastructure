@@ -27,7 +27,8 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
 ## Layout
 
 - `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`,
-  `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`,
+  `setup-grafana.yaml`, `update.yaml`), `roles/`, `tasks/` (Pi-hole and Grafana API helpers), `configs/pihole.yaml`,
+  `configs/grafana.yaml` and `configs/grafana/dashboards/`,
   `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
 - `ansible/roles/` – besides host roles (`ssh`, `base`, `docker`, `secrets`, `argon_fan`, `certificate_check`), the
   stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile`,

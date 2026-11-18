@@ -9,7 +9,7 @@ import yaml
 
 ANSIBLE_DIR = Path(__file__).parents[2]
 TASKS = ANSIBLE_DIR / "tasks" / "keepass_credentials.yaml"
-PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml"]
+PLAYBOOKS = ["bootstrap.yaml", "check-certificates.yaml", "setup-pihole.yaml", "setup-grafana.yaml"]
 
 
 @pytest.fixture
