@@ -656,8 +656,8 @@ parameters of their source, so the daily upload holds only what's new.
 Set up once (in this order):
 
 1. On the target: a login that only reaches its own directory, ssh key only. Put its user name, host (the URL field;
-   a scheme and a trailing `/` are cut off) and the key pair (attachments `id_ed25519`, `id_ed25519.pub`) into `Backup/Offsite` of the `dungeon`
-   database, and a new passphrase into `Backup/Resticprofile Offsite`.
+   a scheme and a trailing `/` are cut off) and the key pair (attachments `id_ed25519`, `id_ed25519.pub`) into
+   `Backup/Offsite` of the `dungeon` database, and a new passphrase into `Backup/Resticprofile Offsite`.
 2. Its ssh host keys into `resticprofile_offsite_host_keys` in `inventory/host_vars/dungeon.yaml`: compare
    `ssh-keyscan -p 23 <host>` with the fingerprints the provider publishes.
 3. dungeon reads raspi's repository with its own passphrase, as a key of its own there (not raspi's passphrase):
