@@ -11,3 +11,5 @@ monitoring_agent_interval: 60s
 monitoring_agent_memory_limit: 256m
 # telegraf.conf on the host, mounted read-only; Telegraf reloads it when it changes (--watch-config poll)
 monitoring_agent_config_dir: "{{ stack_dir }}/telegraf"
+# resticprofile's metrics directory (/var/lib/resticprofile/metrics), as the agent sees it through /hostfs
+monitoring_agent_resticprofile_metrics: /hostfs/var/lib/resticprofile/metrics

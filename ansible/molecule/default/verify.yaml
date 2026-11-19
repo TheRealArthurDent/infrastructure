@@ -1128,6 +1128,19 @@
       when: is_dungeon
       no_log: true
 
+    - name: Stat the offsite metrics script
+      ansible.builtin.stat:
+        path: /etc/docker/infrastructure/resticprofile/config/offsite-metrics.sh
+      register: offsite_metrics_script
+
+    - name: Check only dungeon has the offsite metrics script, readable by root only
+      ansible.builtin.assert:
+        that:
+          - offsite_metrics_script.stat.exists == is_dungeon
+          - not is_dungeon or offsite_metrics_script.stat.mode == '0600'
+          - not is_dungeon or offsite_metrics_script.stat.pw_name == 'root'
+        fail_msg: The offsite metrics script is missing on dungeon, present elsewhere, or readable by others
+
 - name: Verify the backup target
   hosts: all
   become: true

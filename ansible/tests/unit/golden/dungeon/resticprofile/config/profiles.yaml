@@ -76,12 +76,19 @@ offsite-copy-raspi:
     schedule-permission: system
     schedule-priority: background
     schedule-lock-wait: 2h
+    # For the duration in offsite-metrics.sh
+    run-before:
+      - date +%s > /tmp/offsite-copy-raspi.start
     run-after:
       - resticprofile --name offsite-raspi forget
       - >-
         echo "resticprofile_offsite_last_success_timestamp_seconds{source=\"raspi\"} $(date +%s)"
         > /metrics/offsite_raspi_last_success.prom.tmp
         && mv /metrics/offsite_raspi_last_success.prom.tmp /metrics/offsite_raspi_last_success.prom
+      - >-
+        sh /etc/resticprofile/offsite-metrics.sh raspi
+        sftp:offsite:restic/raspi
+        "$(cat /tmp/offsite-copy-raspi.start)"
 
 # The offsite repository of raspi: its retention runs after each copy, its check once a month
 offsite-raspi:
@@ -125,12 +132,19 @@ offsite-copy-dungeon:
     schedule-permission: system
     schedule-priority: background
     schedule-lock-wait: 2h
+    # For the duration in offsite-metrics.sh
+    run-before:
+      - date +%s > /tmp/offsite-copy-dungeon.start
     run-after:
       - resticprofile --name offsite-dungeon forget
       - >-
         echo "resticprofile_offsite_last_success_timestamp_seconds{source=\"dungeon\"} $(date +%s)"
         > /metrics/offsite_dungeon_last_success.prom.tmp
         && mv /metrics/offsite_dungeon_last_success.prom.tmp /metrics/offsite_dungeon_last_success.prom
+      - >-
+        sh /etc/resticprofile/offsite-metrics.sh dungeon
+        sftp:offsite:restic/dungeon
+        "$(cat /tmp/offsite-copy-dungeon.start)"
 
 # The offsite repository of dungeon: its retention runs after each copy, its check once a month
 offsite-dungeon:

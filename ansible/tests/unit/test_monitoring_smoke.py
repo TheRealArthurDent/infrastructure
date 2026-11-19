@@ -72,3 +72,14 @@ def test_the_agent_delivers_container_metrics_without_labels(stack):
     assert "victoriametrics" in result
     assert "com.docker.compose" not in result
     assert "org.opencontainers" not in result
+
+
+def test_the_agent_delivers_the_backup_metrics_under_their_own_names(stack):
+    """backup.prom as resticprofile writes it, from the stack's sample (monitoring_stack.BACKUP_PROM)."""
+    result = query_until(stack, "resticprofile_backup_status", '"profile":"default"')
+    assert '"host":"dungeon"' in result and '"profile":"default"' in result
+    assert '"2"' in result
+    timestamp = query_until(stack, "resticprofile_offsite_last_success_timestamp_seconds", '"source":"raspi"')
+    assert '"source":"raspi"' in timestamp
+    # Build info is no series of its own
+    assert '"result":[]' in query_until(stack, '{__name__=~".*build_info"}', '"result":[]')

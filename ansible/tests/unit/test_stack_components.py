@@ -367,3 +367,18 @@ def test_the_agent_keeps_the_container_labels_out(dungeon_tree):
     assert "docker_label_include" not in conf
     assert "perdevice_include = []" in conf
     assert 'endpoint = "unix:///var/run/docker.sock"' in conf
+
+
+def test_the_agent_reads_the_backup_metrics_of_resticprofile(dungeon_tree):
+    """resticprofile writes Prometheus text files (backup.prom, offsite_*.prom); the agent reads them through /hostfs."""
+    conf = dungeon_tree["telegraf/telegraf.conf"]
+    assert "[[inputs.file]]" in conf
+    assert 'files = ["/hostfs/var/lib/resticprofile/metrics/*.prom"]' in conf
+    assert 'data_format = "prometheus"' in conf
+    # One measurement resticprofile with the metric names as fields: VictoriaMetrics stores
+    # resticprofile_<field>, i.e. the metric names resticprofile wrote, once the processor took their prefix off
+    assert "prometheus_metric_version = 2" in conf
+    assert 'name_override = "resticprofile"' in conf
+    assert '[[processors.strings.trim_prefix]]' in conf
+    assert 'prefix = "resticprofile_"' in conf
+    assert 'fieldexclude = ["resticprofile_build_info", "restic_build_info"]' in conf
