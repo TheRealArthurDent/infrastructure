@@ -47,7 +47,8 @@
     mode: '0600'
   loop: >-
     {{ ['config/profiles.yaml', 'config/excludes']
-       + (['ssh_config'] if resticprofile_repository_is_sftp | bool else []) }}
+       + (['ssh_config'] if resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool else [])
+       + (['config/offsite-metrics.sh'] if resticprofile_offsite_enabled | bool else []) }}
   register: resticprofile_config_files
 
 # A fresh host has no known_hosts, and the backup leaves out resticprofile/.ssh: without it, ssh in the container
@@ -62,16 +63,33 @@
     quiet: true
   when: resticprofile_repository_is_sftp | bool
 
+- name: Ensure the offsite target's ssh host key is configured
+  ansible.builtin.assert:
+    that: resticprofile_offsite_host_keys | length > 0
+    fail_msg: >-
+      resticprofile_offsite_host_keys is empty: put the offsite target's public ssh host keys into the host_vars of
+      {{ inventory_hostname }} (ssh-keyscan -p {{ resticprofile_offsite_port }} <host>, checked against the provider's
+      published fingerprints).
+    quiet: true
+  when: resticprofile_offsite_enabled | bool
+
 # ssh looks up a host on a port other than 22 as [host]:port
-- name: Ensure the backup host is in resticprofile's known_hosts
+- name: Ensure the backup and offsite hosts are in resticprofile's known_hosts
   ansible.builtin.copy:
     content: |
+      {% if resticprofile_repository_is_sftp | bool %}
       {% for key in resticprofile_backup_host_keys %}
       [{{ resticprofile_backup_host }}]:{{ dungeon_ssh_port }} {{ key | trim }}
       {% endfor %}
+      {% endif %}
+      {% if resticprofile_offsite_enabled | bool %}
+      {% for key in resticprofile_offsite_host_keys %}
+      [{{ resticprofile_offsite_hostname }}]:{{ resticprofile_offsite_port }} {{ key | trim }}
+      {% endfor %}
+      {% endif %}
     dest: "{{ stack_dir }}/resticprofile/.ssh/known_hosts"
     owner: root
     group: root
     mode: '0644'
   register: resticprofile_known_hosts_file
-  when: resticprofile_repository_is_sftp | bool
+  when: resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool

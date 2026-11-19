@@ -6,12 +6,17 @@
     - vars/secrets.yaml
   vars:
     dungeon_ssh_port: 2222
+    # The offsite target (#60), from KeePass in production
+    # A link in the URL field, as KeePass suggests: the role keeps the bare host name
+    resticprofile_offsite_host: https://offsite.example.org/
+    resticprofile_offsite_user: offsite-user
     iobroker_states_redis_port: 9000
     iobroker_objects_redis_port: 9001
     nodered_github_user: test-user
     nodered_github_email: test@example.com
     # No Docker daemon runs inside the test container.
     certificate_check_reload_nginx: false
+    certificate_check_restart_containers: false
     docker_restart_daemon: false
     # A container can't change the host's kernel settings.
     base_sysctl_reload: false

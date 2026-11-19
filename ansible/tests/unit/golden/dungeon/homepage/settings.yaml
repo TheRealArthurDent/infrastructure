@@ -1,0 +1,22 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+title: dungeon
+theme: dark
+color: slate
+headerStyle: clean
+statusStyle: dot
+language: de
+hideVersion: true
+disableUpdateCheck: true
+layout:
+  Infrastructure:
+    style: row
+    columns: 4
+  Monitoring:
+    style: row
+    columns: 4
+  Cloud:
+    style: row
+    columns: 4
+  Hosts:
+    style: row
+    columns: 4

@@ -164,6 +164,14 @@ services:
           $$1 == "restic_restore_drill_last_success_timestamp_seconds" { last = $$2 }
           END { exit !(ok && now - last < 35 * 86400) }'
           /metrics/restore_drill.prom; }
+          && for source in $${RESTICPROFILE_OFFSITE_SOURCES:-}; do
+          awk -v now=$$(date +%s)
+          '/^resticprofile_offsite_last_success_timestamp_seconds/ { ok = now - $$2 < 36 * 3600 } END { exit !ok }'
+          /metrics/offsite_$${source}_last_success.prom
+          && { [ ! -f /metrics/offsite_$${source}_check.prom ] || awk -v now=$$(date +%s)
+          '/^resticprofile_offsite_check_last_success_timestamp_seconds/ { ok = now - $$2 < 35 * 86400 } END { exit !ok }'
+          /metrics/offsite_$${source}_check.prom; }
+          || exit 1; done
       interval: 10m
       # Check every 10s during the first minute, so the status is known right after a deploy
       start_period: 1m
@@ -211,6 +219,31 @@ services:
       - outbound  # internet
     dns:
       - 172.30.1.153
+  # The landing page
+  homepage:
+    hostname: homepage
+    container_name: homepage
+    image: ghcr.io/gethomepage/homepage:v2.8.0
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "testbench"
+      LOG_TARGETS: stdout
+    volumes:
+      - "/etc/docker/infrastructure/homepage:/app/config:ro"
+    deploy:
+      resources:
+        limits:
+          memory: "256m"
+    restart: unless-stopped
+    networks:
+      - siz
 volumes:
   outbound_pihole:
     name: outbound_pihole

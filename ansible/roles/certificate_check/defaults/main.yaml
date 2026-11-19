@@ -9,6 +9,10 @@ certificate_check_key_size: 2048
 certificate_check_nginx_container: nginx
 # Set to false where no Docker daemon runs (Molecule).
 certificate_check_reload_nginx: true
+# Restart the running containers with certificate_check_restart_label when the root CA changes. Set to false where no
+# Docker daemon runs (Molecule).
+certificate_check_restart_containers: true
+certificate_check_restart_label: root-ca.restart-on-change=true
 
 # Subdomains of inventory_hostname added as SANs.
 certificate_check_subdomains:
@@ -18,7 +22,6 @@ certificate_check_subdomains:
   - iobroker
   - node-red
   - grafana
-  - chronograf
   - outbound
   - deconz
   - deconz-ui

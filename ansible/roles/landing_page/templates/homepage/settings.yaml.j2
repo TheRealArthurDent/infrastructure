@@ -1,0 +1,15 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+{% set present = landing_page_vhosts | map('extract', landing_page_services) | map(attribute='group') | list %}
+{% set layout = {} %}
+{% for group in landing_page_groups + ['Hosts'] if group in present or group == 'Hosts' %}
+{%   set _ = layout.update({group: {'style': 'row', 'columns': 4}}) %}
+{% endfor %}
+{{ {'title': inventory_hostname,
+    'theme': 'dark',
+    'color': 'slate',
+    'headerStyle': 'clean',
+    'statusStyle': 'dot',
+    'language': 'de',
+    'hideVersion': true,
+    'disableUpdateCheck': true,
+    'layout': layout} | to_nice_yaml(indent=2, sort_keys=False) }}

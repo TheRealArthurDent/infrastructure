@@ -27,15 +27,16 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
 ## Layout
 
 - `ansible/` – Ansible: playbooks (`bootstrap.yaml`, `check-certificates.yaml`, `setup-pihole.yaml`,
-  `update.yaml`), `roles/`, `tasks/` (Pi-hole API helpers), `configs/pihole.yaml`,
+  `setup-grafana.yaml`, `update.yaml`), `roles/`, `tasks/` (Pi-hole and Grafana API helpers), `configs/pihole.yaml`,
+  `configs/grafana.yaml` and `configs/grafana/dashboards/`,
   `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
 - `ansible/roles/` – besides host roles (`ssh`, `base`, `docker`, `secrets`, `argon_fan`, `certificate_check`), the
   stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile`,
-  `healthmonitor`, `monitoring` (VictoriaMetrics and Grafana, #39) and `monitoring_agent` (Telegraf), each with its
-  compose fragment (`templates/docker-compose.yaml.j2`); `stack` merges them, restores and runs `docker compose up`.
-  `stack_components` (default: the first seven) switches them per host in `host_vars`: raspi and testbench run the
-  first seven, dungeon all but `pihole`, plus `monitoring` and `monitoring_agent`. The host role `backup_target`
-  (dungeon only) mounts the backup SSD and creates the `restic` user.
+  `healthmonitor`, `landing_page` (Homepage at `https://<host>/`, #4), `monitoring` (VictoriaMetrics and Grafana, #39)
+  and `monitoring_agent` (Telegraf), each with its compose fragment (`templates/docker-compose.yaml.j2`); `stack`
+  merges them, restores and runs `docker compose up`. `stack_components` (default: the first eight) switches them per
+  host in `host_vars`: raspi and testbench run the first eight, dungeon all but `pihole`, plus `monitoring` and
+  `monitoring_agent`. The host role `backup_target` (dungeon only) mounts the backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,
   repo settings, repo hygiene)

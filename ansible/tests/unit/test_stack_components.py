@@ -138,6 +138,10 @@ def secrets_tasks():
 # The files the secrets role writes for a component -> the component whose host needs them (the ssh key pair only
 # with an sftp repository)
 SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
+# The offsite copy's passphrase and key pair (#60), and the .ssh directory for either
+OFFSITE = "'resticprofile' in stack_components and resticprofile_offsite_enabled | bool"
+SSH_DIR = ["'resticprofile' in stack_components",
+           "resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool"]
 # The directory of the Compose secrets, for every component that has one
 SECRETS_DIR = "['resticprofile', 'monitoring'] | intersect(stack_components) | length > 0"
 SECRET_FILES = {
@@ -148,7 +152,10 @@ SECRET_FILES = {
     "/etc/docker/infrastructure/secrets/grafana_admin_password": "monitoring",
     "/etc/docker/infrastructure/secrets/restic_passphrase": "resticprofile",
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
-    "/etc/docker/infrastructure/resticprofile/.ssh": SFTP,
+    "/etc/docker/infrastructure/resticprofile/.ssh": SSH_DIR,
+    "/etc/docker/infrastructure/secrets/restic_offsite_passphrase": OFFSITE,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_offsite": OFFSITE,
+    "/etc/docker/infrastructure/resticprofile/.ssh/id_offsite.pub": OFFSITE,
     "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519": SFTP,
     "/etc/docker/infrastructure/resticprofile/.ssh/id_ed25519.pub": SFTP,
 }
@@ -164,7 +171,8 @@ def test_secrets_are_written_only_for_enabled_components():
                     found[target] = task
     assert sorted(found) == sorted(SECRET_FILES)
     for target, component in SECRET_FILES.items():
-        condition = component if component in (SFTP, SECRETS_DIR) else f"'{component}' in stack_components"
+        condition = (component if component in (SFTP, SECRETS_DIR, OFFSITE, SSH_DIR)
+                     else f"'{component}' in stack_components")
         assert found[target].get("when") == condition, target
 
 
@@ -378,3 +386,18 @@ def test_the_agent_keeps_the_container_labels_out(dungeon_tree):
     assert "docker_label_include" not in conf
     assert "perdevice_include = []" in conf
     assert 'endpoint = "unix:///var/run/docker.sock"' in conf
+
+
+def test_the_agent_reads_the_backup_metrics_of_resticprofile(dungeon_tree):
+    """resticprofile writes Prometheus text files (backup.prom, offsite_*.prom); the agent reads them through /hostfs."""
+    conf = dungeon_tree["telegraf/telegraf.conf"]
+    assert "[[inputs.file]]" in conf
+    assert 'files = ["/hostfs/var/lib/resticprofile/metrics/*.prom"]' in conf
+    assert 'data_format = "prometheus"' in conf
+    # One measurement resticprofile with the metric names as fields: VictoriaMetrics stores
+    # resticprofile_<field>, i.e. the metric names resticprofile wrote, once the processor took their prefix off
+    assert "prometheus_metric_version = 2" in conf
+    assert 'name_override = "resticprofile"' in conf
+    assert '[[processors.strings.trim_prefix]]' in conf
+    assert 'prefix = "resticprofile_"' in conf
+    assert 'fieldexclude = ["resticprofile_build_info", "restic_build_info"]' in conf

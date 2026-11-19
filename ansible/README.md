@@ -34,8 +34,9 @@ Contents:
 | --- | --- |
 | `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `backup_target` (dungeon only), `stack`: SSH port and key-only login, a check that the host has at least `base_swap_min_mb` (1024) MB of swap, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, the `atop` recorder (`sudo atop -r /var/log/atop/atop_YYYYMMDD` replays a day, `t`/`T` step through the samples, `b` jumps to a time), Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
 | `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (raspberry#237) |
-| `check-certificates.yaml` | Copies the root CA from KeePass to the host and into its system trust store, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days or isn't signed by that CA, restarts nginx. Stops on an expired root CA, warns 400 days before it expires, and never issues a host certificate that outlives the root |
+| `check-certificates.yaml` | Copies the root CA from KeePass to the host and into its system trust store, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days or isn't signed by that CA, restarts nginx and the containers labelled `root-ca.restart-on-change=true` when the root CA changes. Stops on an expired root CA, warns 400 days before it expires, and never issues a host certificate that outlives the root |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
+| `setup-grafana.yaml` | Syncs the data sources and folders from `configs/grafana.yaml` and the dashboards from `configs/grafana/dashboards/<folder uid>/<dashboard uid>.json` through Grafana's HTTP API, and deletes the ones Grafana holds beyond them (only on the host running the `monitoring` component) |
 
 ## Hosts
 
@@ -136,7 +137,9 @@ Group/title, with the fields the roles read:
 | `testbench`, `dungeon` | `Paperless/secret key` | password: Paperless' Django secret key, a long random string (private-cloud) |
 | `testbench`, `dungeon` | `Paperless/database` | password: the password of Paperless' database user (set on the database's first start) |
 | `testbench`, `dungeon` | `Paperless/admin` | password: the initial password of Paperless' user `admin` |
-| `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository |
+| `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository, also a key of raspi's repository (offsite copy) |
+| `dungeon` | `Backup/Offsite` | user name, URL (the host name, `https://` and a trailing `/` are cut off), attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
+| `dungeon` | `Backup/Resticprofile Offsite` | password: the passphrase of the offsite repositories |
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
@@ -204,6 +207,11 @@ ansible-playbook setup-pihole.yaml --limit testbench
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbench
 
+# Change Grafana's data sources, folders or dashboards (dungeon, the host running the monitoring component):
+# edit configs/grafana.yaml or configs/grafana/dashboards/, then (check mode reports what it would change)
+bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon --check
+bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon
+
 # Redeploy / update only the Docker stack (config, networks, compose up; reloads nginx on config changes)
 ansible-playbook bootstrap.yaml --limit testbench --tags stack
 ```
@@ -247,8 +255,9 @@ replace it:
    bin/with-keepass ansible-playbook check-certificates.yaml --limit dungeon
    ```
 
-   Containers that bind-mount `/etc/ssl/certs/rootCA.pem` (OpenCloud on dungeon) keep seeing the old file until they
-   are restarted, because the role replaces the file: `docker restart opencloud`.
+   Containers that bind-mount `/etc/ssl/certs/rootCA.pem` keep seeing the old file until they are restarted, because
+   the role replaces the file. The role restarts the running containers labelled `root-ca.restart-on-change=true`
+   (OpenCloud on dungeon) when the root CA changes; restart any other such container yourself.
 
 4. **Clients**: install the new `rootCA.pem` as a trusted root and remove the old one.
    - Windows: `certutil -user -addstore Root rootCA.pem` (or `certmgr.msc`, *Trusted Root Certification
@@ -265,22 +274,32 @@ replace it:
 ## Stack components
 
 The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,
-`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor`, `monitoring` (the central part of
-the monitoring: VictoriaMetrics and Grafana, #39) and `monitoring_agent` (Telegraf with the metrics of the host and its
-containers, sent to `monitoring_agent_url`). Each brings its compose fragment and config; `stack` merges the fragments,
-runs the clean-slate restore and `docker compose up`. `stack_components` lists the enabled ones and defaults to the
-first seven; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in
-`inventory/host_vars/<host>.yaml` (components must be listed with the dependencies they need, e.g. `reverse_proxy` for
-the vhosts).
+`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor`, `landing_page` (see
+[Landing page](#landing-page)), `monitoring` (the central part of the monitoring: VictoriaMetrics and Grafana, #39) and
+`monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`). Each
+brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
+`docker compose up`. `stack_components` lists the enabled ones and defaults to the first eight; `monitoring` runs on
+one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
+listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page).
 
 | Host | Components |
 | --- | --- |
-| `raspi`, `testbench` | the first seven |
-| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
+| `raspi`, `testbench` | the first eight |
+| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
 nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless` and `grafana`, and its resticprofile backs
 up to a local repository on the SSD (see [dungeon](#dungeon)).
+
+### Landing page
+
+`https://<host>/` shows [Homepage](https://gethomepage.dev) (component `landing_page`, #4) instead of nginx's default
+page: a tile for each web UI nginx serves on the host, with a status dot, the host's CPU, memory, disk, temperature
+and uptime, and links to the other hosts. The tiles come from `reverse_proxy_vhosts` and `landing_page_services`
+(name, group, icon, the upstream the status dot checks); a vhost without an entry there gets no tile. A new vhost
+needs an entry, or `test_landing_page.py` fails. Homepage runs read-only as 1000:1000 in the network `siz` without
+internet; it reads its config (`/etc/docker/infrastructure/homepage/`) on every request, so a playbook run changes the
+page without a restart. Its icons come from the dashboard-icons on jsDelivr, loaded by the browser.
 
 ## Set up a host (new install or after a crash)
 
@@ -445,8 +464,8 @@ raspi: the user runs everything against it, and Claude's guard hook blocks it on
   ("Host key verification failed"). Compare `ssh-keyscan -p <ssh port> -t ed25519 192.168.1.5` with
   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on dungeon, put the key into `resticprofile_backup_host_keys`
   (`group_vars/all/backup.yaml`) and run the stack of raspi and testbench.
-- **Lost SSD**: dungeon's and raspi's backups are gone with it; restoring dungeon would need an off-site copy, which
-  doesn't exist yet.
+- **Lost SSD**: dungeon's and raspi's local backups are gone with it; restore from the offsite copy
+  (see [Offsite copy](#offsite-copy-dungeon)).
 
 ### Takeover of dungeon
 
@@ -637,6 +656,65 @@ The schedule and the number of parts are in `resticprofile_restore_drill` (resti
 that is often switched off on the 1st, set `resticprofile_restore_drill_enabled: false` (testbench has it in
 `inventory/host_vars/testbench.yaml`): a missed drill would turn the healthcheck red. `sudo restic-restore drill`
 still works there by hand, without recording a result.
+
+### Offsite copy (dungeon)
+
+dungeon copies the repositories of the hosts in `resticprofile_offsite_sources` (`raspi` and `dungeon`, not
+testbench) from its backup SSD to an sftp target outside the house (#60): daily at 05:00 the profile
+`offsite-copy-<host>` runs `restic copy` into `restic/<host>` on the target, then `forget --prune` with the local
+retention (`resticprofile_retention`), then writes `/var/lib/resticprofile/metrics/offsite_<host>_last_success.prom`.
+On the 2nd of each month the profile `offsite-<host>` checks a random 9 % of the offsite data. The resticprofile
+healthcheck turns unhealthy when a copy is older than 36 h (also before the first one) or the last successful check
+is older than 35 days, and healthmonitor alerts. The offsite repositories have their own passphrase and the chunker
+parameters of their source, so the daily upload holds only what's new.
+
+After each copy, `offsite-metrics.sh` writes the duration, size and snapshot count of the offsite repository to
+`offsite_<host>.prom`, and the target's disk usage (provider snapshots included, from `df` in its shell) to
+`offsite_disk.prom`. The monitoring agent reads every `.prom` file in `/var/lib/resticprofile/metrics` under the
+names resticprofile wrote; the Grafana dashboard **Backups** (folder Infrastructure) shows them with the local
+backups of each host that runs the agent.
+
+Set up once (in this order):
+
+1. On the target: a login that only reaches its own directory, ssh key only. Put its user name, host (the URL field;
+   a scheme and a trailing `/` are cut off) and the key pair (attachments `id_ed25519`, `id_ed25519.pub`) into
+   `Backup/Offsite` of the `dungeon` database, and a new passphrase into `Backup/Resticprofile Offsite`.
+2. Its ssh host keys into `resticprofile_offsite_host_keys` in `inventory/host_vars/dungeon.yaml`: compare
+   `ssh-keyscan -p 23 <host>` with the fingerprints the provider publishes.
+3. dungeon reads raspi's repository with its own passphrase, as a key of its own there (not raspi's passphrase):
+
+   ```sh
+   # On raspi; restic reads raspi's passphrase from the file and asks for the new one twice: dungeon's
+   # (Backup/Resticprofile in the dungeon database)
+   docker exec -it resticprofile restic -r sftp:restic@dungeon:/media/backup/restic/raspi \
+     --password-file /run/secrets/restic_passphrase key add
+   ```
+
+4. The stack of dungeon (`--check --diff`, the real run, a second run with `changed=0`). The first copy runs at 05:00;
+   to start it now: `docker exec resticprofile resticprofile --name offsite-copy-raspi copy` (and `-dungeon`).
+
+```sh
+docker exec resticprofile resticprofile --name offsite-raspi snapshots     # what's offsite
+docker exec resticprofile resticprofile --name offsite-raspi check         # check it now (9 % of the data)
+cat /var/lib/resticprofile/metrics/offsite_*.prom                          # last successes
+```
+
+To take dungeon's access to raspi's repository away: `restic key list`, then `restic key remove <id>` on raspi.
+
+**Restore from the offsite copy** (backup SSD lost): copy the offsite repository back onto a new SSD, then restore as
+usual. On dungeon, with the new SSD mounted and its marker created:
+
+```sh
+docker exec resticprofile restic -r local:/backup/restic/raspi --password-file /run/secrets/restic_offsite_passphrase \
+  init --copy-chunker-params --from-repo sftp:offsite:restic/raspi \
+  --from-password-file /run/secrets/restic_offsite_passphrase
+docker exec resticprofile restic -r local:/backup/restic/raspi --password-file /run/secrets/restic_offsite_passphrase \
+  copy --from-repo sftp:offsite:restic/raspi --from-password-file /run/secrets/restic_offsite_passphrase
+```
+
+The copied repository then has the offsite passphrase: add the host's own passphrase as a key (`restic key add`) before
+its backups and restores use it. Without dungeon at all, any machine with restic, the key pair and the passphrase from
+KeePass reads the offsite repository directly (`restic -r sftp:<user>@<host>:restic/<host> -o sftp.args='-p 23'`).
 
 ### Restore drill (testbench only)
 

@@ -11,6 +11,8 @@ networks:
 secrets:
   grafana_admin_password:
     file: /etc/docker/infrastructure/secrets/grafana_admin_password
+  restic_offsite_passphrase:
+    file: /etc/docker/infrastructure/secrets/restic_offsite_passphrase
   restic_passphrase:
     file: /etc/docker/infrastructure/secrets/restic_passphrase
 services:
@@ -65,6 +67,30 @@ services:
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
+  homepage:
+    cap_drop:
+    - ALL
+    container_name: homepage
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: dungeon
+      LOG_TARGETS: stdout
+    hostname: homepage
+    image: ghcr.io/gethomepage/homepage:v2.8.0
+    networks:
+    - siz
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp
+    user: 1000:1000
+    volumes:
+    - /etc/docker/infrastructure/homepage:/app/config:ro
   nginx:
     container_name: nginx
     healthcheck:
@@ -156,6 +182,7 @@ services:
           cpus: '0.50'
     entrypoint: /bin/sh
     environment:
+      RESTICPROFILE_OFFSITE_SOURCES: raspi dungeon
       TZ: Europe/Berlin
     healthcheck:
       interval: 10m
@@ -168,7 +195,13 @@ services:
         && { [ ! -f /metrics/restore_drill.prom ] || awk -v now=$$(date +%s) '$$1
         == "restic_restore_drill_success" { ok = $$2 == 1 } $$1 == "restic_restore_drill_last_success_timestamp_seconds"
         { last = $$2 } END { exit !(ok && now - last < 35 * 86400) }' /metrics/restore_drill.prom;
-        }
+        } && for source in $${RESTICPROFILE_OFFSITE_SOURCES:-}; do awk -v now=$$(date
+        +%s) '/^resticprofile_offsite_last_success_timestamp_seconds/ { ok = now -
+        $$2 < 36 * 3600 } END { exit !ok }' /metrics/offsite_$${source}_last_success.prom
+        && { [ ! -f /metrics/offsite_$${source}_check.prom ] || awk -v now=$$(date
+        +%s) '/^resticprofile_offsite_check_last_success_timestamp_seconds/ { ok =
+        now - $$2 < 35 * 86400 } END { exit !ok }' /metrics/offsite_$${source}_check.prom;
+        } || exit 1; done
     hostname: resticprofile
     image: creativeprojects/resticprofile:0.33.1
     init: true
@@ -177,8 +210,11 @@ services:
     restart: unless-stopped
     secrets:
     - restic_passphrase
+    - restic_offsite_passphrase
     stop_grace_period: 2m
     volumes:
+    - /etc/docker/infrastructure/resticprofile/.ssh:/root/.ssh
+    - /etc/docker/infrastructure/resticprofile/ssh_config:/etc/ssh/ssh_config:ro
     - /etc/docker/infrastructure/resticprofile/config:/etc/resticprofile:ro
     - /home:/source/home:ro
     - /etc:/source/etc:ro

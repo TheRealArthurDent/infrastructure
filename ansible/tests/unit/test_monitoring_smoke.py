@@ -6,79 +6,22 @@ secret unchanged and reaches VictoriaMetrics, and the agent delivers the host's 
 where Docker runs (CI), skipped elsewhere.
 """
 import base64
-import os
-import shutil
-import subprocess
 import time
-import uuid
 
 import pytest
-import yaml
 
-from render import rendered_tree
+from monitoring_stack import docker_available, exec_in, monitoring_stack, query_until
 
 # Characters Compose would interpolate or a .env file would need quoted; ${...} is ruled out by the secrets role
 PASSWORD = 'smoke $x {{ z }} "q" \'s\' \\b #c'
-
-
-def docker_available():
-    if shutil.which("docker") is None:
-        return False
-    return subprocess.run(["docker", "info"], capture_output=True).returncode == 0
-
 
 pytestmark = pytest.mark.skipif(not docker_available(), reason="no Docker daemon")
 
 
 @pytest.fixture(scope="module")
 def stack(tmp_path_factory):
-    tmp_path = tmp_path_factory.mktemp("monitoring-smoke")
-    # The agent's interval shortened, so its first metrics arrive within the test
-    tree = rendered_tree(tmp_path, "dungeon", {"monitoring_agent_interval": "5s"})
-    compose = yaml.safe_load(tree["docker-compose.yaml"])
-    project = f"smoke-{uuid.uuid4().hex[:8]}"
-    services = {name: dict(compose["services"][name]) for name in ("victoriametrics", "grafana", "telegraf-agent")}
-    for service in services.values():
-        # The project's default network and generated names, so nothing collides with a running stack
-        service.pop("networks")
-        service.pop("container_name")
-        service.pop("hostname")
-    grafana_data = tmp_path / "grafana-data"
-    grafana_data.mkdir()
-    grafana_data.chmod(0o777)
-    services["grafana"]["volumes"] = [f"{grafana_data}:/var/lib/grafana"]
-    telegraf_dir = tmp_path / "telegraf"
-    telegraf_dir.mkdir()
-    (telegraf_dir / "telegraf.conf").write_text(tree["telegraf/telegraf.conf"])
-    agent = services["telegraf-agent"]
-    agent["volumes"] = [f"{telegraf_dir}:/etc/telegraf:ro" if str(v).endswith(":/etc/telegraf:ro") else v
-                        for v in agent["volumes"]]
-    # The group of this machine's Docker socket instead of the render's placeholder
-    agent["user"] = f"telegraf:{os.stat('/var/run/docker.sock').st_gid}"
-    secret = tmp_path / "grafana_admin_password"
-    secret.write_text(PASSWORD)
-    # On the host the file belongs to Grafana's user 472 (secrets role); here the runner's user owns it
-    secret.chmod(0o644)
-    smoke = {
-        "services": services,
-        "volumes": {"victoriametrics_data": {"name": f"{project}_victoriametrics_data"}},
-        "secrets": {"grafana_admin_password": {"file": str(secret)}},
-    }
-    compose_file = tmp_path / "docker-compose.yaml"
-    compose_file.write_text(yaml.safe_dump(smoke))
-    base = ["docker", "compose", "-p", project, "-f", str(compose_file)]
-    try:
-        up = subprocess.run([*base, "up", "-d", "--wait", "--wait-timeout", "300"], capture_output=True, text=True,
-                            timeout=600)
-        logs = subprocess.run([*base, "logs"], capture_output=True, text=True).stdout
-        assert up.returncode == 0, up.stderr + logs
+    with monitoring_stack(tmp_path_factory.mktemp("monitoring-smoke"), PASSWORD) as base:
         yield base
-    finally:
-        subprocess.run([*base, "down", "-v"], capture_output=True, timeout=120)
-
-
-def exec_in(base, service, *command):
-    return subprocess.run([*base, "exec", "-T", service, *command], capture_output=True, text=True, timeout=60)
 
 
 def test_victoriametrics_stores_and_returns_a_metric(stack):
@@ -115,18 +58,6 @@ def test_grafana_reaches_victoriametrics(stack):
     assert health.stdout.strip() == "OK", health.stdout + health.stderr
 
 
-def query_until(base, promql, expected, attempts=60):
-    """The VictoriaMetrics query result once expected is in it, or the last one."""
-    for _ in range(attempts):
-        exec_in(base, "victoriametrics", "wget", "-qO-", "http://127.0.0.1:8428/internal/force_flush")
-        query = exec_in(base, "victoriametrics", "wget", "-qO-",
-                        f"http://127.0.0.1:8428/api/v1/query?query={promql}")
-        if expected in query.stdout:
-            break
-        time.sleep(2)
-    return query.stdout + query.stderr
-
-
 def test_the_agent_delivers_host_metrics_tagged_with_its_host(stack):
     assert '"host":"dungeon"' in query_until(stack, "cpu_usage_idle", '"host":"dungeon"')
 
@@ -141,3 +72,14 @@ def test_the_agent_delivers_container_metrics_without_labels(stack):
     assert "victoriametrics" in result
     assert "com.docker.compose" not in result
     assert "org.opencontainers" not in result
+
+
+def test_the_agent_delivers_the_backup_metrics_under_their_own_names(stack):
+    """backup.prom as resticprofile writes it, from the stack's sample (monitoring_stack.BACKUP_PROM)."""
+    result = query_until(stack, "resticprofile_backup_status", '"profile":"default"')
+    assert '"host":"dungeon"' in result and '"profile":"default"' in result
+    assert '"2"' in result
+    timestamp = query_until(stack, "resticprofile_offsite_last_success_timestamp_seconds", '"source":"raspi"')
+    assert '"source":"raspi"' in timestamp
+    # Build info is no series of its own
+    assert '"result":[]' in query_until(stack, '{__name__=~".*build_info"}', '"result":[]')

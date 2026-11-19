@@ -85,9 +85,14 @@ provisioner:
           - healthmonitor
           - monitoring
           - monitoring_agent
+          - landing_page
         resticprofile_repository: local:/backup/restic/dungeon
         resticprofile_backup_mount: /media/backup
         resticprofile_backup_stacks: ["{{ stack_project_name }}"]
+        resticprofile_offsite_sources: [raspi, dungeon]
+        # Public, made up
+        resticprofile_offsite_host_keys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOffsiteHostKeyForMoleculeTestsOnly0000
         reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
         certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
 

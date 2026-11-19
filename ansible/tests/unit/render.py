@@ -17,7 +17,7 @@ ANSIBLE_DIR = Path(__file__).parents[2]
 ROLES_DIR = ANSIBLE_DIR / "roles"
 # The stack's components, in the order of the component map (#14)
 COMPONENTS = ["reverse_proxy", "portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor",
-              "monitoring", "monitoring_agent"]
+              "monitoring", "monitoring_agent", "landing_page"]
 DUNGEON_IP = "192.0.2.10"
 DUNGEON_SSH_PORT = 1359
 DOCKER_GID = 990
@@ -105,6 +105,9 @@ def rendered_tree(tmp_path, host, extra_vars=None):
         "vars": {
             "resticprofile_backup_host_ip": DUNGEON_IP,
             "dungeon_ssh_port": DUNGEON_SSH_PORT,
+            # From KeePass on a real run (bootstrap.yaml), for hosts with an offsite copy (#60)
+            "resticprofile_offsite_host": "offsite.example.org",
+            "resticprofile_offsite_user": "offsite-user",
             # Read from the host's group database by the monitoring_agent role
             "monitoring_agent_docker_gid": DOCKER_GID,
             "ansible_python_interpreter": "auto_silent",
@@ -122,9 +125,13 @@ def rendered_tree(tmp_path, host, extra_vars=None):
                     "dest": f"{out}/{{{{ item.path | regex_replace('\\.j2$', '') }}}}",
                 },
                 "loop": templates,
-                # The resticprofile role deploys ssh_config only for an sftp repository
+                # The resticprofile role deploys ssh_config only for an sftp repository or an offsite copy, the
+                # offsite metrics script only for an offsite copy
                 "when": "item.component in stack_components and "
-                        "(item.path != 'resticprofile/ssh_config.j2' or resticprofile_repository_is_sftp | bool)",
+                        "(item.path != 'resticprofile/ssh_config.j2' or resticprofile_repository_is_sftp | bool "
+                        "or resticprofile_offsite_enabled | bool) and "
+                        "(item.path != 'resticprofile/config/offsite-metrics.sh.j2' "
+                        "or resticprofile_offsite_enabled | bool)",
             },
         ] + role_tasks(out),
     }]))

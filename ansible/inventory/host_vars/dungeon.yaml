@@ -34,8 +34,16 @@ stack_components:
   - monitoring
   # The agent part (#39): Telegraf with the metrics of the host and its containers
   - monitoring_agent
+  # The landing page at https://dungeon/ (#4)
+  - landing_page
 resticprofile_repository: local:/backup/restic/dungeon
 resticprofile_backup_mount: /media/backup
 resticprofile_backup_stacks: ["{{ stack_project_name }}"]
 reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
 certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
+# Offsite copy (#60) of the repositories on the backup SSD; testbench's stays at home. Host, user, key pair and
+# passphrase of the target come from KeePass (ansible/README.md).
+resticprofile_offsite_sources: [raspi, dungeon]
+# The target's public ssh host key, checked against the fingerprint its provider publishes (#60)
+resticprofile_offsite_host_keys:
+  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIICf9svRenC/PLKIL9nk6K/pxQgoiFC41wTNvoIncOxs

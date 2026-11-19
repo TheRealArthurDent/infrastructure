@@ -1,0 +1,30 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# A tile for each web UI nginx serves on dungeon (landing_page_services)
+- Infrastructure:
+  - Portainer:
+      href: https://portainer.dungeon
+      icon: portainer.png
+      description: Docker containers
+      siteMonitor: http://portainer:9000
+  - Pi-hole outbound:
+      href: https://outbound.dungeon
+      icon: pi-hole.png
+      description: Egress filter of the containers
+      siteMonitor: http://outbound:80/admin/
+- Monitoring:
+  - Grafana:
+      href: https://grafana.dungeon
+      icon: grafana.png
+      description: Dashboards and alerts
+      siteMonitor: http://grafana:3000/api/health
+- Cloud:
+  - OpenCloud:
+      href: https://opencloud.dungeon
+      icon: open-cloud.png
+      description: Files
+      siteMonitor: http://opencloud:9200
+  - Paperless:
+      href: https://paperless.dungeon
+      icon: paperless-ngx.png
+      description: Documents
+      siteMonitor: http://paperless-webserver:8000

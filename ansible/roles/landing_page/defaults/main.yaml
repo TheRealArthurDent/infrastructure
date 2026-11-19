@@ -1,0 +1,96 @@
+---
+# The landing page at https://<host>/ (#4): Homepage (gethomepage.dev) with a tile for each web UI that nginx serves
+# on the host and the host's CPU, memory, disk and temperature. Enabled per host through stack_components; needs the
+# reverse_proxy component.
+
+# Homepage's config on the host, mounted read-only. Ansible renders every file Homepage would otherwise copy from
+# its skeleton.
+landing_page_config_dir: "{{ stack_dir }}/homepage"
+# Memory limit of the container (Compose deploy.resources.limits.memory); Homepage idles at about 120-160 MB
+landing_page_memory_limit: 256m
+
+# The tile of each vhost (reverse_proxy_vhosts), shown when nginx serves the vhost on the host. Keys are the vhost
+# names; a vhost without an entry gets no tile (nextcloud: no longer running, going away).
+#   name, description: what the tile shows
+#   group:   one of landing_page_groups
+#   icon:    a file of github.com/homarr-labs/dashboard-icons (the browser loads it from jsDelivr) or mdi-<name>
+#   monitor: the upstream nginx proxies the vhost to, checked by Homepage inside the network siz (the status dot);
+#            left out where the upstream speaks TLS with its own certificate
+landing_page_services:
+  portainer:
+    name: Portainer
+    description: Docker containers
+    group: Infrastructure
+    icon: portainer.png
+    monitor: http://portainer:9000
+  pihole:
+    name: Pi-hole
+    description: DNS and ad blocking for the LAN
+    group: Infrastructure
+    icon: pi-hole.png
+    monitor: http://pihole:80/admin/
+  outbound:
+    name: Pi-hole outbound
+    description: Egress filter of the containers
+    group: Infrastructure
+    icon: pi-hole.png
+    monitor: http://outbound:80/admin/
+  grafana:
+    name: Grafana
+    description: Dashboards and alerts
+    group: Monitoring
+    icon: grafana.png
+    monitor: http://grafana:3000/api/health
+  iobroker:
+    name: ioBroker
+    description: Smart home admin
+    group: Smart home
+    icon: iobroker.png
+    monitor: http://iobroker:8081
+  ui:
+    name: Lovelace
+    description: ioBroker's Lovelace UI
+    group: Smart home
+    icon: mdi-view-dashboard
+    monitor: http://iobroker:8091
+  node-red:
+    name: Node-RED
+    description: Automations
+    group: Smart home
+    icon: node-red.png
+    monitor: http://iobroker:1880
+  deconz:
+    name: Phoscon
+    description: deCONZ, the Zigbee gateway
+    group: Smart home
+    icon: phoscon.png
+    monitor: http://deconz:443
+  deconz-ui:
+    name: Phoscon VNC
+    description: deCONZ' desktop over VNC
+    group: Smart home
+    icon: phoscon.png
+  opencloud:
+    name: OpenCloud
+    description: Files
+    group: Cloud
+    icon: open-cloud.png
+    monitor: http://opencloud:9200
+  paperless:
+    name: Paperless
+    description: Documents
+    group: Cloud
+    icon: paperless-ngx.png
+    monitor: http://paperless-webserver:8000
+
+# The order of the groups on the page; the bookmarks with the other hosts come last
+landing_page_groups: [Infrastructure, Monitoring, Smart home, Cloud]
+# The hosts the page links to
+landing_page_other_hosts: "{{ groups['all'] | reject('eq', inventory_hostname) | list }}"
+
+# The vhosts with a tile: those nginx serves on the host (Pi-hole's two also need their component) that have an entry
+landing_page_vhosts: >-
+  {{ reverse_proxy_vhosts
+     | reject('in', ['pihole', 'outbound'] | difference(stack_components))
+     | select('in', landing_page_services)
+     | list }}

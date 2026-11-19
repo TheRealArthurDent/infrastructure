@@ -14,3 +14,10 @@
     that: "'outbound' in stack_components or 'healthmonitor' not in stack_components"
     fail_msg: "healthmonitor needs outbound (its dns): add outbound to stack_components or leave healthmonitor out too"
     quiet: true
+
+# The landing page is served by nginx at https://<host>/.
+- name: Ensure reverse_proxy is a component wherever landing_page is
+  ansible.builtin.assert:
+    that: "'reverse_proxy' in stack_components or 'landing_page' not in stack_components"
+    fail_msg: "landing_page needs reverse_proxy: add reverse_proxy to stack_components or leave landing_page out too"
+    quiet: true

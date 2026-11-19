@@ -1,0 +1,23 @@
+---
+# Grafana of the monitoring component (#39), set up through its HTTP API by setup-grafana.yaml (smart-home#11).
+# The repo is the only source: setup-grafana.yaml deletes the data sources, dashboards and folders Grafana holds
+# beyond these. Change them here, not in the UI; the next run would undo a change made there.
+
+grafana_datasources:
+  # VictoriaMetrics answers PromQL (MetricsQL) like Prometheus, so the built-in Prometheus type does without a
+  # plugin. Grafana reaches it in the network siz.
+  - uid: victoriametrics
+    name: VictoriaMetrics
+    type: prometheus
+    access: proxy
+    url: http://victoriametrics:8428
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      # The agents' interval (monitoring_agent_interval): $__rate_interval spans at least four of them
+      timeInterval: 60s
+
+# Dashboards live in configs/grafana/dashboards/<folder uid>/<dashboard uid>.json, one directory per folder here.
+grafana_folders:
+  - uid: infrastructure
+    title: Infrastructure

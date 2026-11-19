@@ -18,3 +18,25 @@
 - name: Update CA certificates
   ansible.builtin.command: update-ca-certificates --fresh
   changed_when: true
+
+# Apps mount the root CA as a single-file bind mount, which keeps showing the replaced file, and Go services read their
+# trust store only at start: after the root CA renewal, private-cloud's OpenCloud failed every upload with 500 until it
+# was restarted. Apps opt in with the label certificate_check_restart_label on the container.
+- name: Find the running containers that trust the root CA
+  community.docker.docker_host_info:
+    containers: true
+    containers_filters:
+      label: "{{ certificate_check_restart_label }}"
+  register: certificate_check_ca_containers
+  listen: Restart containers that trust the root CA
+  when: certificate_check_restart_containers | bool
+
+- name: Restart the containers that trust the root CA
+  ansible.builtin.command:
+    argv: [docker, restart, "{{ item.Id }}"]
+  loop: "{{ certificate_check_ca_containers.containers }}"
+  loop_control:
+    label: "{{ item.Names | first }}"
+  changed_when: true
+  listen: Restart containers that trust the root CA
+  when: certificate_check_restart_containers | bool

@@ -78,6 +78,7 @@
     owner: root
     group: root
     mode: '0644'
+  notify: Restart containers that trust the root CA
 
 - name: Ensure root CA is trusted by the host
   ansible.builtin.import_tasks: trust_store.yaml
