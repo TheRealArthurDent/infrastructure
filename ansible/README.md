@@ -291,7 +291,8 @@ repository on the SSD (see [dungeon](#dungeon)).
 
 `https://<host>/` shows [Homepage](https://gethomepage.dev) (component `landing_page`, #4) instead of nginx's default
 page: a tile for each web UI nginx serves on the host, with a status dot, the host's CPU, memory, disk, temperature
-and uptime, and links to the other hosts. The tiles come from `reverse_proxy_vhosts` and `landing_page_services`
+and uptime, and links to the other hosts. The free space covers `landing_page_disks` (dungeon: the backup SSD too),
+mounted read-only into the container, in GiB/TiB. The tiles come from `reverse_proxy_vhosts` and `landing_page_services`
 (name, group, icon, the upstream the status dot checks); a vhost without an entry there gets no tile. A new vhost
 needs an entry, or `test_landing_page.py` fails. Homepage runs read-only as 1000:1000 in the network `siz` without
 internet; it reads its config (`/etc/docker/infrastructure/homepage/`) on every request, so a playbook run changes the

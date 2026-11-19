@@ -89,6 +89,7 @@ provisioner:
         resticprofile_backup_mount: /media/backup
         resticprofile_backup_stacks: ["{{ stack_project_name }}"]
         resticprofile_offsite_sources: [raspi, dungeon]
+        landing_page_disks: [/, /media/backup]
         # Public, made up
         resticprofile_offsite_host_keys:
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOffsiteHostKeyForMoleculeTestsOnly0000

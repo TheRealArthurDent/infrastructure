@@ -168,7 +168,9 @@ def test_the_page_shows_the_resources_of_its_host(raspi):
     resources = next(widget["resources"] for widget in widgets if "resources" in widget)
     assert resources["cpu"] is True
     assert resources["memory"] is True
-    assert resources["disk"] == "/"
+    assert resources["disk"] == ["/"]
+    # Free and total space in GiB/TiB, as df -h shows them
+    assert resources["diskUnits"] == "bbytes"
     assert resources["cputemp"] is True
     assert resources["uptime"] is True
 
@@ -196,3 +198,17 @@ def test_the_config_files_are_valid_yaml(raspi, dungeon):
         for name in HOMEPAGE_FILES:
             if name.endswith(".yaml"):
                 yaml.safe_load(tree[f"homepage/{name}"])
+
+
+def test_dungeon_shows_the_backup_ssd_too(dungeon):
+    resources = next(w["resources"] for w in yaml.safe_load(dungeon["homepage/widgets.yaml"]) if "resources" in w)
+    assert resources["disk"] == ["/", "/media/backup"]
+    homepage = yaml.safe_load(dungeon["docker-compose.yaml"])["services"]["homepage"]
+    # Read-only; rslave so the SSD shows up when it is mounted after the container started
+    assert {"type": "bind", "source": "/media/backup", "target": "/media/backup", "read_only": True,
+            "bind": {"propagation": "rslave"}} in homepage["volumes"]
+
+
+def test_the_root_disk_needs_no_mount(raspi):
+    homepage = yaml.safe_load(raspi["docker-compose.yaml"])["services"]["homepage"]
+    assert homepage["volumes"] == ["/etc/docker/infrastructure/homepage:/app/config:ro"]

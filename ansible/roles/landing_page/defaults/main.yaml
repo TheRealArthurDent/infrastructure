@@ -77,6 +77,10 @@ landing_page_services:
     icon: open-cloud.png
     monitor: http://opencloud:9200
 
+# The file systems whose free space the page shows, by mount point on the host. Each one but / is mounted read-only
+# into the container (Homepage only sees its own mounts).
+landing_page_disks: [/]
+
 # The order of the groups on the page; the bookmarks with the other hosts come last
 landing_page_groups: [Infrastructure, Monitoring, Smart home, Cloud]
 # The hosts the page links to
