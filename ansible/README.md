@@ -34,7 +34,7 @@ Contents:
 | --- | --- |
 | `bootstrap.yaml` | Roles `ssh`, `base`, `docker`, `secrets`, `argon_fan` (raspi only), `backup_target` (dungeon only), `stack`: SSH port and key-only login, a check that the host has at least `base_swap_min_mb` (1024) MB of swap, DNS fallback while Pi-hole is down, memory cgroup on the kernel command line, packages, sysctl, sudoers, rsnapshot cron, the `atop` recorder (`sudo atop -r /var/log/atop/atop_YYYYMMDD` replays a day, `t`/`T` step through the samples, `b` jumps to a time), Docker, fan control of the Argon ONE V2 case, `.env` files under `/etc/docker/`, nginx/resticprofile config, docker networks, `docker compose up` (tag `stack` for the stack alone) |
 | `update.yaml` | `apt dist-upgrade` with autoremove; reports when the host needs a reboot. Run on purpose, `bootstrap.yaml` doesn't upgrade packages (raspberry#237) |
-| `check-certificates.yaml` | Copies the root CA from KeePass to the host and into its system trust store, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days or isn't signed by that CA, restarts nginx. Stops on an expired root CA, warns 400 days before it expires, and never issues a host certificate that outlives the root |
+| `check-certificates.yaml` | Copies the root CA from KeePass to the host and into its system trust store, renews `/etc/docker/infrastructure/nginx/<host>.pem` when it expires within 30 days or isn't signed by that CA, restarts nginx and the containers labelled `root-ca.restart-on-change=true` when the root CA changes. Stops on an expired root CA, warns 400 days before it expires, and never issues a host certificate that outlives the root |
 | `setup-pihole.yaml` | Syncs A records, CNAME records, block lists, groups, clients and domains from `configs/pihole.yaml` through the Pi-hole REST API |
 | `setup-grafana.yaml` | Syncs the data sources and folders from `configs/grafana.yaml` and the dashboards from `configs/grafana/dashboards/<folder uid>/<dashboard uid>.json` through Grafana's HTTP API, and deletes the ones Grafana holds beyond them (only on the host running the `monitoring` component) |
 
@@ -251,8 +251,9 @@ replace it:
    bin/with-keepass ansible-playbook check-certificates.yaml --limit dungeon
    ```
 
-   Containers that bind-mount `/etc/ssl/certs/rootCA.pem` (OpenCloud on dungeon) keep seeing the old file until they
-   are restarted, because the role replaces the file: `docker restart opencloud`.
+   Containers that bind-mount `/etc/ssl/certs/rootCA.pem` keep seeing the old file until they are restarted, because
+   the role replaces the file. The role restarts the running containers labelled `root-ca.restart-on-change=true`
+   (OpenCloud on dungeon) when the root CA changes; restart any other such container yourself.
 
 4. **Clients**: install the new `rootCA.pem` as a trusted root and remove the old one.
    - Windows: `certutil -user -addstore Root rootCA.pem` (or `certmgr.msc`, *Trusted Root Certification
