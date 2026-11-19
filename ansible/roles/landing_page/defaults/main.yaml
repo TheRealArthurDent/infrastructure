@@ -76,6 +76,12 @@ landing_page_services:
     group: Cloud
     icon: open-cloud.png
     monitor: http://opencloud:9200
+  paperless:
+    name: Paperless
+    description: Documents
+    group: Cloud
+    icon: paperless-ngx.png
+    monitor: http://paperless-webserver:8000
 
 # The file systems whose free space the page shows, by mount point on the host. Each one but / is mounted read-only
 # into the container (Homepage only sees its own mounts).

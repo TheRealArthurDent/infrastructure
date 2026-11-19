@@ -23,3 +23,8 @@
       icon: open-cloud.png
       description: Files
       siteMonitor: http://opencloud:9200
+  - Paperless:
+      href: https://paperless.dungeon
+      icon: paperless-ngx.png
+      description: Documents
+      siteMonitor: http://paperless-webserver:8000

@@ -618,12 +618,13 @@
           - "is_dungeon or 'DNS:pihole.' ~ inventory_hostname in cert_san.stdout"
 
     # certificate_check_subdomains of the platform: just the vhosts dungeon runs
-    - name: Check dungeon's certificate covers portainer, outbound, opencloud and grafana only
+    - name: Check dungeon's certificate covers portainer, outbound, opencloud, paperless and grafana only
       ansible.builtin.assert:
         that:
           - "'DNS:portainer.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:outbound.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:opencloud.' ~ inventory_hostname in cert_san.stdout"
+          - "'DNS:paperless.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:grafana.' ~ inventory_hostname in cert_san.stdout"
           - "'DNS:pihole.' ~ inventory_hostname not in cert_san.stdout"
           - "'DNS:iobroker.' ~ inventory_hostname not in cert_san.stdout"
@@ -1391,3 +1392,82 @@
               - "'set $landing_page_host homepage:3000;' in snippet"
               - "'diskUnits: bbytes' in rendered['homepage/widgets.yaml'] | b64decode"
             fail_msg: "{{ settings }} {{ tiles }}"
+
+# private-cloud's Paperless reads its secrets as Compose secret files (homelab-security#1). Compose bind-mounts them as
+# they are, so each belongs to the container user reading it (Paperless 1000, Postgres 70) and holds the KeePass
+# value unchanged, without a newline.
+- name: Verify the Paperless secrets
+  hosts: all
+  become: true
+  gather_facts: false
+  vars_files:
+    - vars/secrets.yaml
+  vars:
+    paperless_secret_files:
+      - {name: secret_key, uid: 1000, value: paperless_secret_key}
+      - {name: admin_password, uid: 1000, value: paperless_admin_password}
+      - {name: db_password, uid: 1000, value: paperless_db_password}
+      - {name: postgres_password, uid: 70, value: paperless_db_password}
+  tasks:
+    - name: Stat the Paperless secrets directory
+      ansible.builtin.stat:
+        path: /etc/docker/paperless/secrets
+      register: paperless_secrets_dir
+
+    - name: Check a host without Paperless gets no Paperless secrets
+      ansible.builtin.assert:
+        that: not paperless_secrets_dir.stat.exists
+        fail_msg: /etc/docker/paperless/secrets exists on a host with secrets_paperless false
+      when: not secrets_paperless | default(false) | bool
+
+    - name: Run the checks on the host with Paperless
+      when: secrets_paperless | default(false) | bool
+      block:
+        - name: Check the Paperless secrets directory is root's alone
+          ansible.builtin.assert:
+            that:
+              - paperless_secrets_dir.stat.isdir
+              - paperless_secrets_dir.stat.uid == 0
+              - paperless_secrets_dir.stat.mode == '0700'
+            fail_msg: "/etc/docker/paperless/secrets: uid {{ paperless_secrets_dir.stat.uid | default('-') }},
+              mode {{ paperless_secrets_dir.stat.mode | default('-') }}"
+
+        - name: Stat the Paperless secret files
+          ansible.builtin.stat:
+            path: /etc/docker/paperless/secrets/{{ item.name }}
+          loop: "{{ paperless_secret_files }}"
+          loop_control:
+            label: "{{ item.name }}"
+          register: paperless_secret_stats
+
+        - name: Check only the reading container's user can read each Paperless secret
+          ansible.builtin.assert:
+            that:
+              - item.stat.exists
+              - item.stat.uid == item.item.uid
+              - item.stat.gid == 0
+              - item.stat.mode == '0400'
+            fail_msg: >-
+              {{ item.item.name }}: uid {{ item.stat.uid | default('-') }}, mode {{ item.stat.mode | default('-') }}
+          loop: "{{ paperless_secret_stats.results }}"
+          loop_control:
+            label: "{{ item.item.name }}"
+
+        - name: Read the Paperless secret files
+          ansible.builtin.slurp:
+            src: /etc/docker/paperless/secrets/{{ item.name }}
+          loop: "{{ paperless_secret_files }}"
+          loop_control:
+            label: "{{ item.name }}"
+          register: paperless_secret_contents
+          no_log: true
+
+        - name: Check each Paperless secret holds the KeePass value as is
+          ansible.builtin.assert:
+            that: item.content | b64decode == lookup('ansible.builtin.vars', item.item.value)
+            fail_msg: "{{ item.item.name }} differs from the KeePass value (the value isn't shown)"
+            quiet: true
+          loop: "{{ paperless_secret_contents.results }}"
+          loop_control:
+            label: "{{ item.item.name }}"
+          no_log: true

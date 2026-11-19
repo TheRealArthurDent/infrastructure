@@ -53,3 +53,8 @@
       icon: open-cloud.png
       description: Files
       siteMonitor: http://opencloud:9200
+  - Paperless:
+      href: https://paperless.testbench
+      icon: paperless-ngx.png
+      description: Documents
+      siteMonitor: http://paperless-webserver:8000

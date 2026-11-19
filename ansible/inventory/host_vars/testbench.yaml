@@ -7,10 +7,11 @@ resticprofile_restore_drill_enabled: false
 # they belong to, and its throwaway repository has a passphrase of its own. The root CA still comes from raspberry.
 keepass_database: testbench
 
-# private-cloud's OpenCloud, for its integration runs: its .env, and the default vhosts and SANs plus opencloud
-# (opencloud isn't in the roles' defaults, raspi doesn't run it)
+# private-cloud's OpenCloud and Paperless, for their integration runs: their .env files, and the default vhosts and
+# SANs plus opencloud and paperless (not in the roles' defaults, raspi doesn't run them)
 secrets_opencloud_env: true
+secrets_paperless: true
 reverse_proxy_vhosts: [iobroker, ui, node-red, deconz, deconz-ui, grafana, portainer, nextcloud,
-                       pihole, outbound, opencloud]
+                       pihole, outbound, opencloud, paperless]
 certificate_check_subdomains: [pihole, portainer, nextcloud, iobroker, node-red, grafana, outbound, deconz,
-                               deconz-ui, ui, opencloud]
+                               deconz-ui, ui, opencloud, paperless]

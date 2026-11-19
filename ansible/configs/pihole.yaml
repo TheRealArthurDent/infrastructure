@@ -59,6 +59,8 @@ pihole_instances:
         target: "dungeon"
       - domain: "opencloud.dungeon"
         target: "dungeon"
+      - domain: "paperless.dungeon"
+        target: "dungeon"
       - domain: "grafana.dungeon"
         target: "dungeon"
       - domain: "nextcloud.erika"
@@ -86,6 +88,8 @@ pihole_instances:
       - domain: "portainer.testbench"
         target: "testbench"
       - domain: "opencloud.testbench"
+        target: "testbench"
+      - domain: "paperless.testbench"
         target: "testbench"
 
     block_lists:
@@ -132,8 +136,8 @@ pihole_instances:
         comment: "For TrackTitan"
         groups: ["Rennknecht"]
 
-  # Egress filter for the containers on the outbound network (smart-home, nextcloud, healthmonitor): it denies
-  # everything and allows only what they need (raspberry#293). The containers use it as their DNS server.
+  # Egress filter for the containers on the outbound network (smart-home, nextcloud, healthmonitor, Paperless): it
+  # denies everything and allows only what they need (raspberry#293). The containers use it as their DNS server.
   - name: "outbound"
     hosts: ["raspi", "testbench"]
     a_records: []
@@ -223,8 +227,14 @@ pihole_instances:
       - domain: "telemetry.nodered.org"
         type: "allow"
         kind: "exact"
+      # private-cloud's Paperless fetches mail over IMAP (TLS, port 993). Placeholder until the mail account is
+      # chosen: replace it with the account's IMAP server. .invalid never resolves (RFC 6761).
+      - domain: "imap.mail.invalid"
+        type: "allow"
+        kind: "exact"
+        comment: "Paperless mail import (placeholder)"
 
-  # dungeon's egress filter: only healthmonitor uses it there, and it only needs discord.com (#15).
+  # dungeon's egress filter: healthmonitor needs discord.com (#15), private-cloud's Paperless its IMAP server.
   - name: "outbound"
     hosts: ["dungeon"]
     a_records: []
@@ -247,3 +257,9 @@ pihole_instances:
       - domain: "discord.com"
         type: "allow"
         kind: "exact"
+      # private-cloud's Paperless fetches mail over IMAP (TLS, port 993). Placeholder until the mail account is
+      # chosen: replace it with the account's IMAP server. .invalid never resolves (RFC 6761).
+      - domain: "imap.mail.invalid"
+        type: "allow"
+        kind: "exact"
+        comment: "Paperless mail import (placeholder)"

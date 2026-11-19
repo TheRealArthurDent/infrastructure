@@ -695,8 +695,12 @@ def test_each_host_configures_only_its_instances():
     assert instances_of("dungeon") == ["outbound"]
 
 
-def test_dungeons_outbound_allows_what_healthmonitor_needs():
-    """healthmonitor on dungeon resolves through outbound and only talks to discord.com."""
+# Placeholder for the IMAP server of private-cloud's Paperless (mail import); .invalid never resolves (RFC 6761).
+PAPERLESS_IMAP = "imap.mail.invalid"
+
+
+def test_dungeons_outbound_allows_what_healthmonitor_and_paperless_need():
+    """healthmonitor on dungeon talks only to discord.com, Paperless' webserver only to its IMAP server."""
     outbound = next(i for i in configured_instances() if i["name"] == "outbound" and i["hosts"] == ["dungeon"])
 
     assert {(d["type"], d["kind"], d["domain"]) for d in outbound["domains"]} == {
@@ -704,8 +708,23 @@ def test_dungeons_outbound_allows_what_healthmonitor_needs():
         ("allow", "regex", r".*\.172\.in-addr\.arpa"),
         ("allow", "exact", "1.0.0.127.in-addr.arpa"),
         ("allow", "exact", "discord.com"),
+        ("allow", "exact", PAPERLESS_IMAP),
     }
     assert outbound["block_lists"] == []
+
+
+def test_testbenchs_outbound_allows_paperless_imap_server():
+    """testbench runs Paperless for its integration runs; it shares the outbound instance with raspi."""
+    outbound = next(i for i in configured_instances() if i["name"] == "outbound" and "testbench" in i["hosts"])
+
+    assert ("allow", "exact", PAPERLESS_IMAP) in {(d["type"], d["kind"], d["domain"]) for d in outbound["domains"]}
+
+
+@pytest.mark.parametrize("host", ["dungeon", "testbench"])
+def test_the_lan_pihole_resolves_the_paperless_vhost(host):
+    main = next(i for i in configured_instances() if i["name"] == "pihole")
+
+    assert {"domain": f"paperless.{host}", "target": host} in main["cname_records"]
 
 
 def test_the_lan_pihole_resolves_the_outbound_vhost_of_dungeon():

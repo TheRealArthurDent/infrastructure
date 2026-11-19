@@ -122,7 +122,7 @@ def test_dungeon_shows_only_its_own_web_uis(dungeon):
     assert {group: sorted(entries) for group, entries in tiles(dungeon).items()} == {
         "Infrastructure": ["Pi-hole outbound", "Portainer"],
         "Monitoring": ["Grafana"],
-        "Cloud": ["OpenCloud"],
+        "Cloud": ["OpenCloud", "Paperless"],
     }
 
 
