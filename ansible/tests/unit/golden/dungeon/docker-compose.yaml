@@ -91,6 +91,12 @@ services:
     user: 1000:1000
     volumes:
     - /etc/docker/infrastructure/homepage:/app/config:ro
+    - bind:
+        propagation: rslave
+      read_only: true
+      source: /media/backup
+      target: /media/backup
+      type: bind
   nginx:
     container_name: nginx
     healthcheck:

@@ -1,10 +1,12 @@
 # Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
 # The resources of raspi: Homepage reads them in its container (/proc and /sys are the host's, the
-# disk / is the host's root file system)
+# disk / is the host's root file system, the others are mounted)
 - resources:
     cpu: true
     memory: true
-    disk: /
+    disk: ["/"]
+    # GiB/TiB, as df -h shows them
+    diskUnits: bbytes
     cputemp: true
     uptime: true
     units: metric

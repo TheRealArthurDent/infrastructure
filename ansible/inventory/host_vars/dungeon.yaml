@@ -46,3 +46,5 @@ resticprofile_offsite_sources: [raspi, dungeon]
 # The target's public ssh host key, checked against the fingerprint its provider publishes (#60)
 resticprofile_offsite_host_keys:
   - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIICf9svRenC/PLKIL9nk6K/pxQgoiFC41wTNvoIncOxs
+# The landing page shows the free space of the backup SSD too
+landing_page_disks: [/, "{{ backup_target_mount }}"]
