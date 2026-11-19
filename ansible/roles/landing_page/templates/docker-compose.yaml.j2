@@ -19,7 +19,7 @@ services:
       LOG_TARGETS: stdout
     volumes:
       - "{{ landing_page_config_dir }}:/app/config:ro"
-{% for disk in landing_page_disks | reject('eq', '/') %}
+      # {% for disk in landing_page_disks | reject('eq', '/') +%}
       # For the free space of {{ disk }}; rslave: a file system mounted there after the start shows up too
       - type: bind
         source: "{{ disk }}"
@@ -27,7 +27,7 @@ services:
         read_only: true
         bind:
           propagation: rslave
-{% endfor %}
+      # {% endfor +%}
     deploy:
       resources:
         limits:
