@@ -174,11 +174,11 @@ services:
     - "# No backups before every stack's clean-slate restore is done or skipped, or
       a fresh host's empty or\n# half-restored state would become the latest snapshot
       (raspberry#287). restic-restore clean-slate writes the\n# markers.\nfor stack
-      in infrastructure; do\n  [ -f /restore-state/$$stack.done ] ||\n    echo \"Waiting
-      for /var/lib/restic-restore/$$stack.done to schedule backups\"\n  while [ !
-      -f /restore-state/$$stack.done ]; do sleep 60; done\ndone\nresticprofile schedule
-      --all || exit 1\ncrond -f &\ncrond_pid=$$!\n# crond doesn't pass SIGTERM on
-      to its jobs: stop the running job (resticprofile) first and wait for it\nstop_job()
+      in infrastructure opencloud paperless; do\n  [ -f /restore-state/$$stack.done
+      ] ||\n    echo \"Waiting for /var/lib/restic-restore/$$stack.done to schedule
+      backups\"\n  while [ ! -f /restore-state/$$stack.done ]; do sleep 60; done\ndone\nresticprofile
+      schedule --all || exit 1\ncrond -f &\ncrond_pid=$$!\n# crond doesn't pass SIGTERM
+      on to its jobs: stop the running job (resticprofile) first and wait for it\nstop_job()
       {\n  pkill -TERM -P $$crond_pid\n  while pgrep -P $$crond_pid >/dev/null; do
       sleep 1; done\n  kill $$crond_pid\n}\ntrap stop_job TERM INT\nwait $$crond_pid\n"
     container_name: resticprofile
