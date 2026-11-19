@@ -269,22 +269,32 @@ replace it:
 ## Stack components
 
 The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,
-`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor`, `monitoring` (the central part of
-the monitoring: VictoriaMetrics and Grafana, #39) and `monitoring_agent` (Telegraf with the metrics of the host and its
-containers, sent to `monitoring_agent_url`). Each brings its compose fragment and config; `stack` merges the fragments,
-runs the clean-slate restore and `docker compose up`. `stack_components` lists the enabled ones and defaults to the
-first seven; `monitoring` runs on one host only, which lists it. To run fewer on a host, set it in
-`inventory/host_vars/<host>.yaml` (components must be listed with the dependencies they need, e.g. `reverse_proxy` for
-the vhosts).
+`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor`, `landing_page` (see
+[Landing page](#landing-page)), `monitoring` (the central part of the monitoring: VictoriaMetrics and Grafana, #39) and
+`monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`). Each
+brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
+`docker compose up`. `stack_components` lists the enabled ones and defaults to the first eight; `monitoring` runs on
+one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
+listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page).
 
 | Host | Components |
 | --- | --- |
-| `raspi`, `testbench` | the first seven |
-| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
+| `raspi`, `testbench` | the first eight |
+| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
 nginx serves the vhosts `portainer`, `outbound`, `opencloud` and `grafana`, and its resticprofile backs up to a local
 repository on the SSD (see [dungeon](#dungeon)).
+
+### Landing page
+
+`https://<host>/` shows [Homepage](https://gethomepage.dev) (component `landing_page`, #4) instead of nginx's default
+page: a tile for each web UI nginx serves on the host, with a status dot, the host's CPU, memory, disk, temperature
+and uptime, and links to the other hosts. The tiles come from `reverse_proxy_vhosts` and `landing_page_services`
+(name, group, icon, the upstream the status dot checks); a vhost without an entry there gets no tile. A new vhost
+needs an entry, or `test_landing_page.py` fails. Homepage runs read-only as 1000:1000 in the network `siz` without
+internet; it reads its config (`/etc/docker/infrastructure/homepage/`) on every request, so a playbook run changes the
+page without a restart. Its icons come from the dashboard-icons on jsDelivr, loaded by the browser.
 
 ## Set up a host (new install or after a crash)
 

@@ -67,6 +67,30 @@ services:
     restart: unless-stopped
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
+  homepage:
+    cap_drop:
+    - ALL
+    container_name: homepage
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: dungeon
+      LOG_TARGETS: stdout
+    hostname: homepage
+    image: ghcr.io/gethomepage/homepage:v2.8.0
+    networks:
+    - siz
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp
+    user: 1000:1000
+    volumes:
+    - /etc/docker/infrastructure/homepage:/app/config:ro
   nginx:
     container_name: nginx
     healthcheck:

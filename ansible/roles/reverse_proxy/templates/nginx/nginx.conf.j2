@@ -29,8 +29,12 @@ http {
         include             snippets/ssl-certificates.conf;
         include             snippets/ssl-params.conf;
 
+{% if 'landing_page' in stack_components %}
+        # The landing page (#4)
+        include             snippets/landing-page.conf;
+{% else %}
         root                /usr/share/nginx/html;
-        # TODO #4 create some sort of landing page
+{% endif %}
     }
 
 {% if 'iobroker' in reverse_proxy_vhosts %}
@@ -119,19 +123,6 @@ http {
         include             snippets/ssl-params.conf;
 
         include             snippets/grafana.conf;
-    }
-{% endif %}
-
-{% if 'chronograf' in reverse_proxy_vhosts %}
-    server {
-        listen              443 ssl;
-        listen              [::]:443 ssl;
-        server_name         chronograf.{{ inventory_hostname }} chronograf.{{ inventory_hostname }}.*;
-
-        include             snippets/ssl-certificates.conf;
-        include             snippets/ssl-params.conf;
-
-        include             snippets/chronograf.conf;
     }
 {% endif %}
 

@@ -1,0 +1,3 @@
+---
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# Not used, empty like Homepage's skeleton.

@@ -1,0 +1,7 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# The landing pages of the other hosts
+{% set entries = [] %}
+{% for host in landing_page_other_hosts %}
+{%   set _ = entries.append({host: [{'icon': 'raspberry-pi.png', 'href': 'https://' ~ host}]}) %}
+{% endfor %}
+{{ [{'Hosts': entries}] | to_nice_yaml(indent=2, sort_keys=False) }}

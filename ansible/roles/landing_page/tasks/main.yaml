@@ -1,0 +1,21 @@
+---
+# Homepage reads its config on every request, so a changed file needs no restart.
+- name: Ensure the Homepage config directory exists
+  ansible.builtin.file:
+    path: "{{ landing_page_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# Holds no secrets yet. The container runs as 1000:1000 and only reads the files.
+- name: Ensure the Homepage config is present
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "{{ landing_page_config_dir }}/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ query('ansible.builtin.fileglob', role_path ~ '/templates/homepage/*.j2') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"

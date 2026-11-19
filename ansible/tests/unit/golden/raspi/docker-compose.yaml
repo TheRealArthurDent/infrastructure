@@ -217,6 +217,31 @@ services:
       - outbound  # internet
     dns:
       - 172.30.1.153
+  # The landing page
+  homepage:
+    hostname: homepage
+    container_name: homepage
+    image: ghcr.io/gethomepage/homepage:v2.8.0
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "raspi"
+      LOG_TARGETS: stdout
+    volumes:
+      - "/etc/docker/infrastructure/homepage:/app/config:ro"
+    deploy:
+      resources:
+        limits:
+          memory: "256m"
+    restart: unless-stopped
+    networks:
+      - siz
 volumes:
   outbound_pihole:
     name: outbound_pihole

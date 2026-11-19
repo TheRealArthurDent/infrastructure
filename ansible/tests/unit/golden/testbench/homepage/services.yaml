@@ -1,0 +1,55 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# A tile for each web UI nginx serves on testbench (landing_page_services)
+- Infrastructure:
+  - Portainer:
+      href: https://portainer.testbench
+      icon: portainer.png
+      description: Docker containers
+      siteMonitor: http://portainer:9000
+  - Pi-hole:
+      href: https://pihole.testbench
+      icon: pi-hole.png
+      description: DNS and ad blocking for the LAN
+      siteMonitor: http://pihole:80/admin/
+  - Pi-hole outbound:
+      href: https://outbound.testbench
+      icon: pi-hole.png
+      description: Egress filter of the containers
+      siteMonitor: http://outbound:80/admin/
+- Monitoring:
+  - Grafana:
+      href: https://grafana.testbench
+      icon: grafana.png
+      description: Dashboards and alerts
+      siteMonitor: http://grafana:3000/api/health
+- Smart home:
+  - ioBroker:
+      href: https://iobroker.testbench
+      icon: iobroker.png
+      description: Smart home admin
+      siteMonitor: http://iobroker:8081
+  - Lovelace:
+      href: https://ui.testbench
+      icon: mdi-view-dashboard
+      description: ioBroker's Lovelace UI
+      siteMonitor: http://iobroker:8091
+  - Node-RED:
+      href: https://node-red.testbench
+      icon: node-red.png
+      description: Automations
+      siteMonitor: http://iobroker:1880
+  - Phoscon:
+      href: https://deconz.testbench
+      icon: phoscon.png
+      description: deCONZ, the Zigbee gateway
+      siteMonitor: http://deconz:443
+  - Phoscon VNC:
+      href: https://deconz-ui.testbench
+      icon: phoscon.png
+      description: deCONZ' desktop over VNC
+- Cloud:
+  - OpenCloud:
+      href: https://opencloud.testbench
+      icon: open-cloud.png
+      description: Files
+      siteMonitor: http://opencloud:9200

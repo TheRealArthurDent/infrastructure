@@ -1,0 +1,9 @@
+# Managed by Ansible (landing_page role, #4). Homepage reads this file on every request.
+# The landing pages of the other hosts
+- Hosts:
+  - raspi:
+    - icon: raspberry-pi.png
+      href: https://raspi
+  - testbench:
+    - icon: raspberry-pi.png
+      href: https://testbench
