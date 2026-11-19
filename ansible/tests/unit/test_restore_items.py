@@ -180,6 +180,12 @@ def test_backups_wait_for_the_smart_home_restore_too():
     assert group_vars["resticprofile_backup_stacks"] == ["{{ stack_project_name }}", "smart-home"]
 
 
+def test_dungeon_backs_up_only_after_the_private_cloud_apps_are_restored():
+    """private-cloud's OpenCloud and Paperless restore clean-slate before they start, each writing its marker."""
+    host_vars = yaml.safe_load(read(ANSIBLE_DIR / "inventory" / "host_vars" / "dungeon.yaml"))
+    assert host_vars["resticprofile_backup_stacks"] == ["{{ stack_project_name }}", "opencloud", "paperless"]
+
+
 def test_stack_merges_the_restore_items_of_its_components():
     defaults = read(ROLES_DIR / "stack" / "defaults" / "main.yaml")
     assert "stack_restore_items:" in defaults

@@ -638,6 +638,8 @@ resticprofile backs up the whole host, so the helper is shared. Every stack list
 like this stack's. The smart-home stack does since TheRealArthurDent/smart-home#1, so
 `inventory/group_vars/all/backup.yaml` adds
 it to `resticprofile_backup_stacks`: backups also wait for `/var/lib/restic-restore/smart-home.done`.
+On dungeon, private-cloud's OpenCloud and Paperless do the same (private-cloud#15): its host vars list `opencloud`
+and `paperless`, so its backups also wait for `opencloud.done` and `paperless.done`.
 
 ### Monthly drill (every host)
 

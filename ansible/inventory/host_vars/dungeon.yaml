@@ -38,7 +38,9 @@ stack_components:
   - landing_page
 resticprofile_repository: local:/backup/restic/dungeon
 resticprofile_backup_mount: /media/backup
-resticprofile_backup_stacks: ["{{ stack_project_name }}"]
+# Backups wait for the clean-slate restore of every stack here (its marker in /var/lib/restic-restore/): this one and
+# private-cloud's apps (private-cloud#15), whose deployments wrote their markers
+resticprofile_backup_stacks: ["{{ stack_project_name }}", opencloud, paperless]
 reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
 certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
 # Offsite copy (#60) of the repositories on the backup SSD; testbench's stays at home. Host, user, key pair and
