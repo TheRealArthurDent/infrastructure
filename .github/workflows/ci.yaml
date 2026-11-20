@@ -68,7 +68,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.15'
           cache: 'pip'
 
       # Same pinned versions as local runs and pre-commit, so results match.
@@ -95,7 +95,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.15'
           cache: 'pip'
 
       - name: Install Python dependencies
@@ -134,7 +134,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7.0.0
         with:
-          python-version: '3.12'
+          python-version: '3.15'
           cache: 'pip'
 
       - name: Install Python dependencies
