@@ -59,8 +59,9 @@ default:
 offsite-copy-raspi:
   password-file: /run/secrets/restic_passphrase
   repository: local:/backup/restic/raspi
-  # The copies run one after the other
-  lock: /tmp/resticprofile-offsite-copy.lock
+  # One lock per source: a copy waits for its own previous run only, never for another source's, which can take hours
+  # on a thin uplink (#69). Copies that overlap run side by side and share the line.
+  lock: /tmp/resticprofile-offsite-copy-raspi.lock
   # Before the copy initializes the offsite repository: without the SSD there's nothing to copy
   run-before:
     - >-
@@ -115,8 +116,9 @@ offsite-raspi:
 offsite-copy-dungeon:
   password-file: /run/secrets/restic_passphrase
   repository: local:/backup/restic/dungeon
-  # The copies run one after the other
-  lock: /tmp/resticprofile-offsite-copy.lock
+  # One lock per source: a copy waits for its own previous run only, never for another source's, which can take hours
+  # on a thin uplink (#69). Copies that overlap run side by side and share the line.
+  lock: /tmp/resticprofile-offsite-copy-dungeon.lock
   # Before the copy initializes the offsite repository: without the SSD there's nothing to copy
   run-before:
     - >-

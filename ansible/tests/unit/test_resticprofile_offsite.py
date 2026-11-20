@@ -53,6 +53,14 @@ def test_copy_profile_copies_the_local_repository_offsite(profiles, source):
     assert copy["schedule"] == SCHEDULES[source]
 
 
+def test_a_long_copy_does_not_block_the_other_source(profiles):
+    # Each copy waits only for its own previous run, never for another source's (a thin uplink, #69)
+    locks = [profiles[f"offsite-copy-{source}"]["lock"] for source in SOURCES]
+    assert len(set(locks)) == len(locks), locks
+    # A scheduled copy still waits for a manual run of the same source instead of failing at once
+    assert all(profiles[f"offsite-copy-{s}"]["copy"]["schedule-lock-wait"] for s in SOURCES)
+
+
 def test_the_copies_start_at_different_times(profiles):
     schedules = [profiles[f"offsite-copy-{source}"]["copy"]["schedule"] for source in SOURCES]
     assert len(set(schedules)) == len(schedules), schedules
@@ -84,12 +92,6 @@ def test_copy_records_its_start_and_writes_the_offsite_metrics_last(profiles, so
     assert success < script
     assert f"sh /etc/resticprofile/offsite-metrics.sh {source} " in run_after[script]
     assert f"/tmp/offsite-copy-{source}.start" in run_after[script]
-
-
-def test_copies_run_one_after_the_other(profiles):
-    locks = {profiles[f"offsite-copy-{s}"]["lock"] for s in SOURCES}
-    assert len(locks) == 1
-    assert all(profiles[f"offsite-copy-{s}"]["copy"]["schedule-lock-wait"] for s in SOURCES)
 
 
 @pytest.mark.parametrize("source", SOURCES)

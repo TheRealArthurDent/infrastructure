@@ -100,10 +100,10 @@ resticprofile_offsite_port: 23
 resticprofile_offsite_path: restic
 # The target's public ssh host keys ("ssh-ed25519 AAAA..."), for the container's known_hosts
 resticprofile_offsite_host_keys: []
-# After the local backups at 03:00; the copies run one after the other
+# After the local backups at 03:00
 resticprofile_offsite_schedule: '*-*-* 05:00:00'
-# A source's own time, instead of resticprofile_offsite_schedule. The copies share a lock and wait 2h for it at most,
-# so copies at the same time can give up when one takes long (the first copy uploads everything).
+# A source's own time, instead of resticprofile_offsite_schedule. Each copy has its own lock, so copies at the same
+# time run side by side; separate times keep them from sharing the uplink.
 resticprofile_offsite_schedules: {}
 # Monthly check of a random part of the offsite data (restic check --read-data-subset); about 1/12 a month
 resticprofile_offsite_check_schedule: '*-*-02 06:00:00'

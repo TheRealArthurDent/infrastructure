@@ -666,8 +666,8 @@ dungeon copies the repositories of the hosts in `resticprofile_offsite_sources` 
 testbench) from its backup SSD to an sftp target outside the house (#60): daily (dungeon at 04:00, raspi at 05:00,
 `resticprofile_offsite_schedules`) the profile `offsite-copy-<host>` runs `restic copy` into `restic/<host>` on the
 target, then `forget --prune` with the local retention (`resticprofile_retention`), then writes
-`/var/lib/resticprofile/metrics/offsite_<host>_last_success.prom`. The copies share a lock and wait for it 2 h at
-most, so each source gets its own time. On the 2nd of each month the profile `offsite-<host>` checks a random 9 % of
+`/var/lib/resticprofile/metrics/offsite_<host>_last_success.prom`. Each copy has its own lock and waits only for its
+own previous run; at different times, the copies rarely share the uplink. On the 2nd of each month the profile `offsite-<host>` checks a random 9 % of
 the offsite data. The resticprofile healthcheck turns unhealthy when a copy is older than 36 h (also before the first
 one) or the last successful check is older than 35 days, and healthmonitor alerts. The offsite repositories have their
 own passphrase and the chunker parameters of their source, so the daily upload holds only what's new.
