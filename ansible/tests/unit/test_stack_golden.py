@@ -2,6 +2,9 @@
 
 The refactor of the stack role into components (#14) must not change what lands on the hosts. Regenerate the files
 after an intended change with: GOLDEN_UPDATE=1 pytest tests/unit/test_stack_golden.py
+
+Image tags and digests are left out of the comparison: Renovate bumps them in the templates and cannot regenerate
+the golden files, and test_stack_templates.py already checks that every image is pinned.
 """
 import os
 import shutil
@@ -12,6 +15,49 @@ import yaml
 from render import ANSIBLE_DIR, RENDER_DESTS, ROLE_TASKS, role_task, rendered_tree
 
 GOLDEN = ANSIBLE_DIR / "tests" / "unit" / "golden"
+
+
+def image_name(image):
+    """The image reference without its tag and digest (a registry port is not a tag)."""
+    name = image.split("@", 1)[0]
+    last = name.rsplit("/", 1)[-1]
+    if ":" in last:
+        name = name[: len(name) - len(last)] + last.split(":", 1)[0]
+    return name
+
+
+def without_image_tags(compose):
+    for service in (compose or {}).get("services", {}).values():
+        if "image" in service:
+            service["image"] = image_name(service["image"])
+    return compose
+
+
+@pytest.mark.parametrize(
+    "image,name",
+    [
+        ("nginx:1.31-alpine", "nginx"),
+        ("creativeprojects/resticprofile:0.33.1", "creativeprojects/resticprofile"),
+        ("ghcr.io/gethomepage/homepage:v2.8.0", "ghcr.io/gethomepage/homepage"),
+        ("deconzcommunity/deconz:2.30@sha256:abc123", "deconzcommunity/deconz"),
+        ("registry.local:5000/team/app:1.0", "registry.local:5000/team/app"),
+        ("registry.local:5000/team/app", "registry.local:5000/team/app"),
+    ],
+)
+def test_image_name_drops_tag_and_digest(image, name):
+    assert image_name(image) == name
+
+
+def test_a_new_image_tag_does_not_differ_from_the_golden_file():
+    golden = {"services": {"resticprofile": {"image": "creativeprojects/resticprofile:0.33.1", "init": True}}}
+    rendered = {"services": {"resticprofile": {"image": "creativeprojects/resticprofile:0.35.0", "init": True}}}
+    assert without_image_tags(rendered) == without_image_tags(golden)
+
+
+def test_another_image_still_differs_from_the_golden_file():
+    golden = {"services": {"resticprofile": {"image": "creativeprojects/resticprofile:0.33.1"}}}
+    rendered = {"services": {"resticprofile": {"image": "someone/resticprofile:0.33.1"}}}
+    assert without_image_tags(rendered) != without_image_tags(golden)
 
 
 @pytest.mark.parametrize("host", ["raspi", "dungeon", "testbench"])
@@ -27,7 +73,7 @@ def test_rendered_output_matches_golden_files(tmp_path, host):
     assert sorted(tree) == sorted(golden)
     for name, content in tree.items():
         if name == "docker-compose.yaml":
-            assert yaml.safe_load(content) == yaml.safe_load(golden[name]), name
+            assert without_image_tags(yaml.safe_load(content)) == without_image_tags(yaml.safe_load(golden[name])), name
         else:
             assert content == golden[name], name
 
