@@ -695,7 +695,8 @@ Set up once (in this order):
    ```
 
 4. The stack of dungeon (`--check --diff`, the real run, a second run with `changed=0`). The first copies run at 04:00
-   and 05:00; to start them now: `docker exec resticprofile resticprofile --name offsite-copy-raspi copy` (and `-dungeon`).
+   and 05:00; to start them now: `docker exec resticprofile resticprofile --name offsite-copy-raspi copy` (and
+   `-dungeon`).
 
 ```sh
 docker exec resticprofile resticprofile --name offsite-raspi snapshots     # what's offsite
