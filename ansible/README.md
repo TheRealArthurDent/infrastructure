@@ -667,10 +667,10 @@ testbench) from its backup SSD to an sftp target outside the house (#60): daily 
 `resticprofile_offsite_schedules`) the profile `offsite-copy-<host>` runs `restic copy` into `restic/<host>` on the
 target, then `forget --prune` with the local retention (`resticprofile_retention`), then writes
 `/var/lib/resticprofile/metrics/offsite_<host>_last_success.prom`. Each copy has its own lock and waits only for its
-own previous run; at different times, the copies rarely share the uplink. On the 2nd of each month the profile `offsite-<host>` checks a random 9 % of
-the offsite data. The resticprofile healthcheck turns unhealthy when a copy is older than 36 h (also before the first
-one) or the last successful check is older than 35 days, and healthmonitor alerts. The offsite repositories have their
-own passphrase and the chunker parameters of their source, so the daily upload holds only what's new.
+own previous run; at different times, the copies rarely share the uplink. On the 2nd of each month the profile
+`offsite-<host>` checks a random 9 % of the offsite data. The resticprofile healthcheck turns unhealthy when a copy is
+older than 36 h (also before the first one) or the last successful check is older than 35 days, and healthmonitor
+alerts. The offsite repositories have their own passphrase and the chunker parameters of their source, so the daily upload holds only what's new.
 
 After each copy, `offsite-metrics.sh` writes the duration, size and snapshot count of the offsite repository to
 `offsite_<host>.prom`, and the target's disk usage (provider snapshots included, from `df` in its shell) to
