@@ -27,7 +27,8 @@ default:
 {% endif %}
   prometheus-save-to-file: /metrics/backup.prom
   backup:
-    source: '/source/'
+    # Clean path: restic saves it as /source, and the retention's --path filter must match that (#69)
+    source: '/source'
     exclude-caches: true
     exclude-file: '/etc/resticprofile/excludes'
     exclude-if-present: DO_NOT_BACKUP
@@ -61,8 +62,9 @@ default:
 offsite-copy-{{ source }}:
   password-file: /run/secrets/restic_passphrase
   repository: local:/backup/restic/{{ source }}
-  # The copies run one after the other
-  lock: /tmp/resticprofile-offsite-copy.lock
+  # One lock per source: a copy waits for its own previous run only, never for another source's, which can take hours
+  # on a thin uplink (#69). Copies that overlap run side by side and share the line.
+  lock: /tmp/resticprofile-offsite-copy-{{ source }}.lock
 {% if resticprofile_backup_mount | length > 0 %}
   # Before the copy initializes the offsite repository: without the SSD there's nothing to copy
   run-before:
@@ -76,7 +78,7 @@ offsite-copy-{{ source }}:
     initialize: true
     # Same chunker parameters as the source, so the copy deduplicates and the daily upload stays small
     initialize-copy-chunker-params: true
-    schedule: '{{ resticprofile_offsite_schedule }}'
+    schedule: '{{ resticprofile_offsite_schedules[source] | default(resticprofile_offsite_schedule) }}'
     schedule-permission: system
     schedule-priority: background
     schedule-lock-wait: 2h

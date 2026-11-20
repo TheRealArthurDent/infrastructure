@@ -46,6 +46,9 @@ certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafan
 # Offsite copy (#60) of the repositories on the backup SSD; testbench's stays at home. Host, user, key pair and
 # passphrase of the target come from KeePass (ansible/README.md).
 resticprofile_offsite_sources: [raspi, dungeon]
+# dungeon's own copy before raspi's (05:00), so they rarely share the uplink
+resticprofile_offsite_schedules:
+  dungeon: '*-*-* 04:00:00'
 # The target's public ssh host key, checked against the fingerprint its provider publishes (#60)
 resticprofile_offsite_host_keys:
   - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIICf9svRenC/PLKIL9nk6K/pxQgoiFC41wTNvoIncOxs

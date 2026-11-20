@@ -18,7 +18,8 @@ default:
   initialize: true
   prometheus-save-to-file: /metrics/backup.prom
   backup:
-    source: '/source/'
+    # Clean path: restic saves it as /source, and the retention's --path filter must match that (#69)
+    source: '/source'
     exclude-caches: true
     exclude-file: '/etc/resticprofile/excludes'
     exclude-if-present: DO_NOT_BACKUP
