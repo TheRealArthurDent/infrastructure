@@ -102,6 +102,9 @@ resticprofile_offsite_path: restic
 resticprofile_offsite_host_keys: []
 # After the local backups at 03:00; the copies run one after the other
 resticprofile_offsite_schedule: '*-*-* 05:00:00'
+# A source's own time, instead of resticprofile_offsite_schedule. The copies share a lock and wait 2h for it at most,
+# so copies at the same time can give up when one takes long (the first copy uploads everything).
+resticprofile_offsite_schedules: {}
 # Monthly check of a random part of the offsite data (restic check --read-data-subset); about 1/12 a month
 resticprofile_offsite_check_schedule: '*-*-02 06:00:00'
 resticprofile_offsite_check_subset: 9%

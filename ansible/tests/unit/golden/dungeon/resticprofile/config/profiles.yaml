@@ -128,7 +128,7 @@ offsite-copy-dungeon:
     initialize: true
     # Same chunker parameters as the source, so the copy deduplicates and the daily upload stays small
     initialize-copy-chunker-params: true
-    schedule: '*-*-* 05:00:00'
+    schedule: '*-*-* 04:00:00'
     schedule-permission: system
     schedule-priority: background
     schedule-lock-wait: 2h

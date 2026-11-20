@@ -14,6 +14,8 @@ import yaml
 from render import ROLES_DIR, rendered_tree
 
 SOURCES = ["raspi", "dungeon"]
+# Each copy has its own time: they share a lock, and a long first copy of raspi made dungeon's give up after 2h
+SCHEDULES = {"raspi": "*-*-* 05:00:00", "dungeon": "*-*-* 04:00:00"}
 OFFSITE = "/run/secrets/restic_offsite_passphrase"
 LOCAL = "/run/secrets/restic_passphrase"
 COMPOSE = ROLES_DIR / "resticprofile" / "templates" / "docker-compose.yaml.j2"
@@ -48,7 +50,12 @@ def test_copy_profile_copies_the_local_repository_offsite(profiles, source):
     assert copy["initialize"] is True
     # Same chunker parameters as the source, or deduplication across copies doesn't work
     assert copy["initialize-copy-chunker-params"] is True
-    assert copy["schedule"] == "*-*-* 05:00:00"
+    assert copy["schedule"] == SCHEDULES[source]
+
+
+def test_the_copies_start_at_different_times(profiles):
+    schedules = [profiles[f"offsite-copy-{source}"]["copy"]["schedule"] for source in SOURCES]
+    assert len(set(schedules)) == len(schedules), schedules
 
 
 @pytest.mark.parametrize("source", SOURCES)

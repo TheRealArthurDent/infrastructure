@@ -76,7 +76,7 @@ offsite-copy-{{ source }}:
     initialize: true
     # Same chunker parameters as the source, so the copy deduplicates and the daily upload stays small
     initialize-copy-chunker-params: true
-    schedule: '{{ resticprofile_offsite_schedule }}'
+    schedule: '{{ resticprofile_offsite_schedules[source] | default(resticprofile_offsite_schedule) }}'
     schedule-permission: system
     schedule-priority: background
     schedule-lock-wait: 2h
