@@ -535,9 +535,15 @@
         path: /etc/ssl/certs/dhparam.pem
       register: dhparam
 
-    - name: Check DH parameters exist
+    # Generated on the control node and copied over: owner and mode must still be the ones nginx expects.
+    - name: Check DH parameters exist with owner root and mode 0644
       ansible.builtin.assert:
-        that: dhparam.stat.exists
+        that:
+          - dhparam.stat.exists
+          - dhparam.stat.pw_name == 'root'
+          - dhparam.stat.gr_name == 'root'
+          - dhparam.stat.mode == '0644'
+        fail_msg: "/etc/ssl/certs/dhparam.pem is missing or not root:root 0644: {{ dhparam.stat }}"
 
     - name: Stat root CA private key on the host
       ansible.builtin.stat:
