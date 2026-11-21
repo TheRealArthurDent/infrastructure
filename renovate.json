@@ -7,6 +7,15 @@
   },
   "packageRules": [
     {
+      "description": "The Docker socket proxy: updates wait a month, keep the digest pinned and are merged by hand. linuxserver's tags are <HAProxy version>-r<build>-ls<image revision>.",
+      "matchPackageNames": ["linuxserver/socket-proxy"],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-r(?<build>\\d+)-ls(?<revision>\\d+)$",
+      "minimumReleaseAge": "30 days",
+      "minimumReleaseAgeBehaviour": "timestamp-required",
+      "pinDigests": true,
+      "automerge": false
+    },
+    {
       "description": "Update the Ansible dev tools together: ansible-lint in requirements.txt and .pre-commit-config.yaml (so local runs, pre-commit and CI use the same version), and molecule and molecule-plugins, which are usually released alongside it.",
       "groupName": "ansible-devtools",
       "matchPackageNames": ["ansible-lint", "ansible/ansible-lint", "molecule", "molecule-plugins"]

@@ -58,3 +58,21 @@ def test_renovate_updates_the_ansible_dev_tools_in_one_group():
     groups = {p: group_of(p) for p in ("ansible-lint", "ansible/ansible-lint", "molecule", "molecule-plugins")}
     assert None not in groups.values(), groups
     assert len(set(groups.values())) == 1, groups
+
+
+def test_renovate_never_auto_merges_the_docker_socket_proxy():
+    """Updates of the Docker socket proxy wait a month and are merged by hand."""
+    config = json.loads((REPO_DIR / "renovate.json").read_text())
+    rules = [r for r in config["packageRules"] if r.get("matchPackageNames") == ["linuxserver/socket-proxy"]]
+    assert len(rules) == 1, config["packageRules"]
+    rule = rules[0]
+    assert rule["automerge"] is False
+    assert rule["minimumReleaseAge"] == "30 days"
+    assert rule["minimumReleaseAgeBehaviour"] == "timestamp-required"
+    assert rule["pinDigests"] is True
+    # linuxserver's tags are <HAProxy version>-r<build>-ls<image revision>; Renovate's docker versioning would treat
+    # the suffix as fixed and never move to a new image revision
+    # Renovate's named groups (?<name>) are (?P<name>) in Python
+    versioning = re.fullmatch(r"regex:(.*)", rule["versioning"]).group(1).replace("(?<", "(?P<")
+    assert re.fullmatch(versioning, "3.4.7-r0-ls104")
+    assert not re.fullmatch(versioning, "latest")

@@ -22,6 +22,8 @@ stack_components:
   - pihole
   - outbound
   - resticprofile
+  # The read-only Docker API for healthmonitor and monitoring_agent
+  - docker_socket_proxy
   - healthmonitor
   - landing_page
 

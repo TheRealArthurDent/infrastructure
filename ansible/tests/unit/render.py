@@ -16,11 +16,10 @@ import yaml
 ANSIBLE_DIR = Path(__file__).parents[2]
 ROLES_DIR = ANSIBLE_DIR / "roles"
 # The stack's components, in the order of the component map (#14)
-COMPONENTS = ["reverse_proxy", "portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor",
-              "monitoring", "monitoring_agent", "landing_page"]
+COMPONENTS = ["reverse_proxy", "portainer", "unbound", "pihole", "outbound", "resticprofile", "docker_socket_proxy",
+              "healthmonitor", "monitoring", "monitoring_agent", "landing_page"]
 DUNGEON_IP = "192.0.2.10"
 DUNGEON_SSH_PORT = 1359
-DOCKER_GID = 990
 
 
 # Role tasks the render reuses: (task file, task name, module) -> what the render keeps of them
@@ -108,8 +107,6 @@ def rendered_tree(tmp_path, host, extra_vars=None):
             # From KeePass on a real run (bootstrap.yaml), for hosts with an offsite copy (#60)
             "resticprofile_offsite_host": "offsite.example.org",
             "resticprofile_offsite_user": "offsite-user",
-            # Read from the host's group database by the monitoring_agent role
-            "monitoring_agent_docker_gid": DOCKER_GID,
             "ansible_python_interpreter": "auto_silent",
         },
         "tasks": [

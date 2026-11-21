@@ -29,6 +29,8 @@ stack_components:
   - unbound
   - outbound
   - resticprofile
+  # The read-only Docker API for healthmonitor and the monitoring agent
+  - docker_socket_proxy
   - healthmonitor
   # The central part of the monitoring (#39): VictoriaMetrics and Grafana
   - monitoring

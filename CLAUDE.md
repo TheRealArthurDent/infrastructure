@@ -32,11 +32,13 @@ Apps for dungeon (OpenCloud, ...) go into their own repo, like smart-home for ra
   `inventory/` (`hosts.yaml`, `group_vars/all/`, `host_vars/`), `lookup_plugins/keepass.py`
 - `ansible/roles/` – besides host roles (`ssh`, `base`, `docker`, `secrets`, `argon_fan`, `certificate_check`), the
   stack components `reverse_proxy`, `portainer`, `unbound`, `pihole`, `outbound`, `resticprofile`,
-  `healthmonitor`, `landing_page` (Homepage at `https://<host>/`, #4), `monitoring` (VictoriaMetrics and Grafana, #39)
-  and `monitoring_agent` (Telegraf), each with its compose fragment (`templates/docker-compose.yaml.j2`); `stack`
-  merges them, restores and runs `docker compose up`. `stack_components` (default: the first eight) switches them per
-  host in `host_vars`: raspi and testbench run the first eight, dungeon all but `pihole`, plus `monitoring` and
-  `monitoring_agent`. The host role `backup_target` (dungeon only) mounts the backup SSD and creates the `restic` user.
+  `docker_socket_proxy` (the read-only Docker API for healthmonitor and Telegraf; only it and portainer mount the
+  socket), `healthmonitor`, `landing_page` (Homepage at `https://<host>/`, #4), `monitoring` (VictoriaMetrics and
+  Grafana, #39) and `monitoring_agent` (Telegraf), each with its compose fragment
+  (`templates/docker-compose.yaml.j2`); `stack` merges them, restores and runs `docker compose up`.
+  `stack_components` (default: the first nine) switches them per host in `host_vars`: raspi and testbench run the
+  first nine, dungeon all but `pihole`, plus `monitoring` and `monitoring_agent`. The host role `backup_target`
+  (dungeon only) mounts the backup SSD and creates the `restic` user.
 - `ansible/molecule/default/` – container-based role tests
 - `ansible/tests/unit/` – pytest tests (KeePass lookup, `--limit` guard, templates, Claude hook, rulesets,
   repo settings, repo hygiene)

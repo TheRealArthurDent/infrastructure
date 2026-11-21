@@ -15,6 +15,16 @@
     fail_msg: "healthmonitor needs outbound (its dns): add outbound to stack_components or leave healthmonitor out too"
     quiet: true
 
+# Both read the Docker API from the proxy, not from the socket (DOCKER_HOST, Telegraf's endpoint).
+- name: Ensure docker_socket_proxy is a component wherever a client of the Docker API is
+  ansible.builtin.assert:
+    that: "'docker_socket_proxy' in stack_components or item not in stack_components"
+    fail_msg: "{{ item }} needs docker_socket_proxy: add it to stack_components or leave {{ item }} out too"
+    quiet: true
+  loop:
+    - healthmonitor
+    - monitoring_agent
+
 # The landing page is served by nginx at https://<host>/.
 - name: Ensure reverse_proxy is a component wherever landing_page is
   ansible.builtin.assert:

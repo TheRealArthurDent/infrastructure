@@ -1,11 +1,10 @@
 """The monitoring stack of dungeon with the real images, for the tests that need Docker (CI).
 
-VictoriaMetrics, Grafana and the Telegraf agent as the stack role renders them for dungeon, in a Compose project of
-their own: the project's default network instead of siz, generated container names, Grafana's data and the agent's
+VictoriaMetrics, Grafana, the Telegraf agent and the Docker socket proxy it reads the containers from, as the stack
+role renders them for dungeon, in a Compose project of their own: the project's default network instead of siz, generated container names, Grafana's data and the agent's
 config in temporary directories and a throwaway admin password as the Compose secret.
 """
 import contextlib
-import os
 import shutil
 import subprocess
 import time
@@ -16,7 +15,7 @@ import yaml
 
 from render import rendered_tree
 
-SERVICES = ("victoriametrics", "grafana", "telegraf-agent")
+SERVICES = ("victoriametrics", "grafana", "telegraf-agent", "docker-socket-proxy")
 METRICS = "/resticprofile-metrics"
 # Like the files resticprofile writes: its own backup.prom (HELP, TYPE, labels) and one of the run-after lines
 BACKUP_PROM = """# HELP resticprofile_backup_status Backup status: 0=fail, 1=warning, 2=success.
@@ -70,8 +69,6 @@ def monitoring_stack(tmp_path, password, publish_grafana=False):
     agent = services["telegraf-agent"]
     agent["volumes"] = [f"{telegraf_dir}:/etc/telegraf:ro" if str(v).endswith(":/etc/telegraf:ro") else v
                         for v in agent["volumes"]] + [f"{metrics}:{METRICS}:ro"]
-    # The group of this machine's Docker socket instead of the render's placeholder
-    agent["user"] = f"telegraf:{os.stat('/var/run/docker.sock').st_gid}"
     secret = tmp_path / "grafana_admin_password"
     secret.write_text(password)
     # On the host the file belongs to Grafana's user 472 (secrets role); here the runner's user owns it

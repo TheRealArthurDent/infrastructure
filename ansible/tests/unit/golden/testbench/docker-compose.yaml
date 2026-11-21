@@ -200,6 +200,35 @@ services:
         trap stop_job TERM INT
         wait $$crond_pid
   # Monitoring
+  # The Docker API for the containers that only read it (healthmonitor, telegraf-agent), at
+  # tcp://docker-socket-proxy:2375 in the network docker-api. HAProxy in front of the socket: GET on the container
+  # list, the containers' details and stats, and the engine info; every other path and every POST get a 403.
+  docker-socket-proxy:
+    hostname: docker-socket-proxy
+    container_name: docker-socket-proxy
+    image: linuxserver/socket-proxy:3.4.7-r0-ls103@sha256:e5d819de59b343c01b2fe7adc7fad3c7a60e5dba08e45f1ac317352bc08599b5
+    environment:
+      CONTAINERS: '1'
+      INFO: '1'
+      POST: '0'
+      # The network docker-api has no IPv6; without it HAProxy would also try to listen on [::]
+      DISABLE_IPV6: '1'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    restart: unless-stopped
+    networks:
+      - docker-api
   healthmonitor:
     hostname: healthmonitor
     container_name: healthmonitor
@@ -211,12 +240,15 @@ services:
       # container-mon does not negotiate the API version. 1.44 is the oldest version Docker 29+ accepts
       # and still within the range of Debian's docker.io 26.x. Drop it once all hosts run docker-ce 28.4+.
       - DOCKER_API_VERSION=1.44
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # The Docker API, read-only, from the proxy instead of the socket
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    depends_on:
+      - docker-socket-proxy
     restart: unless-stopped
     networks:
       - siz
       - outbound  # internet
+      - docker-api
     dns:
       - 172.30.1.153
   # The landing page
@@ -248,6 +280,10 @@ volumes:
   outbound_pihole:
     name: outbound_pihole
 networks:
+  # Only the proxy and its clients; no internet, no nginx
+  docker-api:
+    name: docker-api
+    internal: true
   nginx:
     name: nginx
   siz:
