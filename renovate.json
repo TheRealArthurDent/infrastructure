@@ -1,23 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "pre-commit": {
-    "enabled": true
-  },
+  "extends": ["github>TheRealArthurDent/renovate:homelab"],
   "docker-compose": {
     "description": "The stack's compose file only exists as its components' Jinja fragments, roles/<component>/templates/docker-compose.yaml.j2 (raspberry#238, #14).",
     "managerFilePatterns": ["/(^|/)docker-compose\\.yaml\\.j2$/"]
   },
   "packageRules": [
-    {
-      "description": "Auto merge all minor and patch updates to github-actions. Do it without a PR to reduce noise.",
-      "groupName": "github-actions",
-      "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "automerge": true,
-      "addLabels": ["auto-merge"],
-      "automergeType": "branch"
-    },
     {
       "description": "Update the Ansible dev tools together: ansible-lint in requirements.txt and .pre-commit-config.yaml (so local runs, pre-commit and CI use the same version), and molecule and molecule-plugins, which are usually released alongside it.",
       "groupName": "ansible-devtools",
