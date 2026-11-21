@@ -437,8 +437,9 @@ bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 
 ### 7. smart-home (restores its volumes)
 
-raspi and testbench only; dungeon has no smart-home stack and no apps in this repo (OpenCloud and the like come from
-their own repo later).
+raspi and testbench only. dungeon runs private-cloud's OpenCloud and Paperless instead: deploy them from that repo's
+`ansible/` the same way (`deploy.yaml --limit dungeon`, TheRealArthurDent/private-cloud#15); its backups wait for their
+markers too.
 
 Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
 Backups wait for its marker too (`resticprofile_backup_stacks`), so don't skip this. In `ansible/` of the
@@ -474,8 +475,8 @@ raspi: the user runs everything against it, and Claude's guard hook blocks it on
   repository in the empty, root-owned mount point.
 - **Differences from raspi**: DNS through raspi's Pi-hole (`base_dns_servers`, `docker_daemon_dns` are
   `192.168.1.2`), rsnapshot off (the hand-made one on the SSD stays untouched), no `argon_fan` (the Pi 5 fan header
-  is controlled by the kernel), `dhparameter_bits: 4096`, no smart-home `.env`, `resticprofile_backup_stacks` is only
-  `infrastructure`.
+  is controlled by the kernel), `dhparameter_bits: 4096`, no smart-home `.env`, `resticprofile_backup_stacks` is
+  `infrastructure`, `opencloud` and `paperless` (private-cloud's apps) instead of smart-home.
 - **Reinstalled dungeon**: a new install has a new ssh host key, and raspi's and testbench's resticprofile refuse it
   ("Host key verification failed"). Compare `ssh-keyscan -p <ssh port> -t ed25519 192.168.1.5` with
   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on dungeon, put the key into `resticprofile_backup_host_keys`
