@@ -28,9 +28,11 @@
 - name: Ensure the kernel command line enables the memory cgroup
   ansible.builtin.import_tasks: kernel_cmdline.yaml
 
-# A dry run of the same module tells quickly whether the file is missing or has the wrong size, so the async task
-# below only starts when there's something to do: with poll, even an async task that has nothing to do waits for its
-# first poll. In check mode, this task reports the change. On a host that needs new parameters, both tasks report
+# 4096-bit Diffie-Hellman parameters take about an hour on a Pi, minutes on the control node. So the host only checks
+# whether its file is missing or has the wrong size, and the control node generates new ones and copies them over.
+# Generating them on the Pi failed twice: a silent ssh connection was dropped and Ansible waited forever, and the
+# async run that replaced it failed at its very end because the module's payload below /tmp on the Pi was gone.
+# In check mode, the check reports the change. On a host that needs new parameters, the check and the copy report
 # changed in a real run.
 - name: "Check Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
   community.crypto.openssl_dhparam:
@@ -42,20 +44,43 @@
   check_mode: true
   register: base_dhparam_check
 
-# 4096 bits take about an hour on a Pi. Run in the background and poll, so the ssh connection isn't silent for an
-# hour: a dropped connection made Ansible wait forever although the task had finished on the host.
-- name: "Generate Diffie-Hellman parameters with bit size {{ dhparameter_bits }}"
-  community.crypto.openssl_dhparam:
-    path: /etc/ssl/certs/dhparam.pem
-    owner: root
-    group: root
-    mode: '0644'
-    size: "{{ dhparameter_bits }}"
-  async: 7200
-  poll: 30
+- name: "Generate Diffie-Hellman parameters on the control node with bit size {{ dhparameter_bits }}"
   when:
     - base_dhparam_check.changed
     - not ansible_check_mode
+  block:
+    - name: Create a temporary file for the Diffie-Hellman parameters on the control node
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .dhparam.pem
+      register: base_dhparam_tmp
+      delegate_to: localhost
+      become: false
+
+    - name: Generate the Diffie-Hellman parameters on the control node
+      community.crypto.openssl_dhparam:
+        path: "{{ base_dhparam_tmp.path }}"
+        size: "{{ dhparameter_bits }}"
+        force: true
+      delegate_to: localhost
+      become: false
+
+    - name: Ensure the Diffie-Hellman parameters are on the host
+      ansible.builtin.copy:
+        src: "{{ base_dhparam_tmp.path }}"
+        dest: /etc/ssl/certs/dhparam.pem
+        owner: root
+        group: root
+        mode: '0644'
+
+  always:
+    - name: Remove the temporary Diffie-Hellman parameters on the control node
+      ansible.builtin.file:
+        path: "{{ base_dhparam_tmp.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      when: base_dhparam_tmp.path is defined
 
 # Package upgrades are update.yaml's job: here they'd change something on every run once Debian has published
 # updates (raspberry#237). The cache is only refreshed when it's older than a day. Every host refreshes it, because
