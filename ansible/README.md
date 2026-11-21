@@ -299,8 +299,9 @@ one host only, which lists it. To run fewer on a host, set it in `inventory/host
 listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page, and
 `docker_socket_proxy` for `healthmonitor` and `monitoring_agent`).
 
-Only `portainer` (which manages containers) and `docker_socket_proxy` mount the Docker socket; healthmonitor and Telegraf read the container list, stats and engine info from the
-proxy, which answers every other request and every POST with 403.
+Only `portainer` (which manages containers) and `docker_socket_proxy` mount the Docker socket; healthmonitor and
+Telegraf read the container list, stats and engine info from the proxy, which answers every other request and every
+POST with 403.
 
 | Host | Components |
 | --- | --- |
