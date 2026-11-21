@@ -20,7 +20,7 @@ def run_hook(tool_name, tool_input):
 
 
 BLOCKED_COMMANDS = [
-    # Production (raspi) and unlimited runs
+    # Production (raspi, dungeon) and unlimited runs
     "cd ansible && ansible-playbook bootstrap.yaml --limit raspi",
     "ansible-playbook bootstrap.yaml -l raspi --check",
     "ansible-playbook bootstrap.yaml --limit=all",
@@ -29,12 +29,12 @@ BLOCKED_COMMANDS = [
     "bin/with-keepass ansible-playbook bootstrap.yaml --limit raspi",
     "KEEPASS_DB=x ansible-playbook setup-pihole.yaml -l raspi",
     "ansible raspi -m ping",
-    "./deploy.sh",
-    "./deploy.sh raspi 1357 smarthome",
-    "bash deploy.sh",
-    "git pull && ./deploy.sh",
+    "ansible-playbook bootstrap.yaml --limit dungeon --check --diff",
+    "bin/with-keepass ansible-playbook setup-grafana.yaml -l dungeon",
     "ssh -p 1357 smarthome@192.168.1.2",
     "scp file smarthome@raspi:/tmp/",
+    "ssh -p 1359 dragon@192.168.1.5",
+    "rsync -a ./x dragon@dungeon:/tmp/",
     # main branch
     "git push origin main",
     "git push origin HEAD:main",
@@ -64,7 +64,6 @@ ALLOWED_COMMANDS = [
     "pytest ansible/tests/unit/test_limit_guard.py",
     "cd ansible && ../.venv/bin/molecule test",
     "ansible-galaxy collection install -r ansible/requirements.yaml",
-    "./deploy.sh testbed 4242 testuser",
     "cat deploy.sh",
     "git diff main -- deploy.sh setup/setup.sh",
     "grep -n ssh ansible/inventory/hosts.yaml | grep raspi",

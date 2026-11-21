@@ -18,7 +18,7 @@ def block(reason):
     sys.exit(2)
 
 
-PROD = r"(\braspi\b|192\.168\.1\.2\b)"
+PROD = r"(\braspi\b|\bdungeon\b|192\.168\.1\.[25]\b)"
 # -f, --force, or -f among combined short flags (-Af); not --force-with-lease.
 FORCE = r"\s(-[a-zA-Z]*f[a-zA-Z]*|--force)(?=\s|$)"
 
@@ -35,17 +35,14 @@ def runs(program):
 if tool == "Bash":
     cmd = args.get("command", "")
 
-    # 1. Production: the user runs everything against raspi.
+    # 1. Production: the user runs everything against raspi and dungeon.
     if re.search(runs(r"ansible(?:-playbook)?"), cmd):
         if not re.search(r"(--limit|-l)[ =]", cmd):
-            block("ansible without --limit. Use --limit testbed.")
+            block("ansible without --limit. Use --limit testbench.")
         if re.search(r"(--limit|-l)[ =]['\"]?[^ ]*(" + PROD[1:-1] + r"|\ball\b|\*)", cmd):
-            block("ansible against raspi (production) or all hosts. Hand the user the command instead.")
-    if re.search(runs(r"deploy\.sh"), cmd):
-        if not re.search(runs(r"deploy\.sh") + r"\s+testbed\b", cmd):
-            block("deploy.sh defaults to raspi (production). Only 'deploy.sh testbed ...' is allowed.")
+            block("ansible against raspi or dungeon (production) or all hosts. Hand the user the command instead.")
     if re.search(runs(r"(?:ssh|scp|rsync|sftp)"), cmd) and re.search(PROD, cmd):
-        block("direct access to raspi (production).")
+        block("direct access to raspi or dungeon (production).")
 
     # 2. main branch: work on a branch, PR into main.
     # Flags are checked per command, so `rm -f x && git push` or a branch named `...-f75dkr` don't count.
