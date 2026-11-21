@@ -3,6 +3,8 @@
 Access to the socket is root on the host, read-only mount or not. healthmonitor and the monitoring agent only read the
 container list, their stats and the engine info, so they get them from the proxy, which refuses everything else.
 """
+import re
+
 import pytest
 import yaml
 
@@ -40,7 +42,8 @@ def test_only_portainer_and_the_proxy_mount_the_docker_socket(compose):
 
 def test_the_proxy_only_allows_reading_containers_and_info(compose):
     proxy = compose["services"]["docker-socket-proxy"]
-    assert proxy["image"].startswith("linuxserver/socket-proxy:")
+    # Pinned by tag and digest: the image holds the socket (renovate.json waits a month and never auto-merges it)
+    assert re.fullmatch(r"linuxserver/socket-proxy:\d+\.\d+\.\d+-r\d+-ls\d+@sha256:[0-9a-f]{64}", proxy["image"])
     environment = proxy["environment"]
     assert environment["CONTAINERS"] == "1"
     assert environment["INFO"] == "1"

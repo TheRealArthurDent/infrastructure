@@ -33,7 +33,7 @@ services:
       INFO: '1'
       POST: '0'
     hostname: docker-socket-proxy
-    image: linuxserver/socket-proxy:3.4.8
+    image: linuxserver/socket-proxy:3.4.7-r0-ls103@sha256:e5d819de59b343c01b2fe7adc7fad3c7a60e5dba08e45f1ac317352bc08599b5
     networks:
     - docker-api
     read_only: true
