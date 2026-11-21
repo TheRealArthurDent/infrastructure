@@ -11,5 +11,13 @@ docker_apt_architecture: >-
 docker_daemon_dns:
   - "{{ ansible_facts['default_ipv4']['address'] }}"
 
+# Container logs: capped and rotated, so one container printing in a loop can't fill the disk (#70). The local driver
+# compresses its rotated files; docker logs reads it as before. dockerd wants every log-opt as a string, the template
+# quotes them. Only containers created after the change get it: recreate them after the daemon restart.
+docker_daemon_log_driver: local
+docker_daemon_log_opts:
+  max-size: 10m
+  max-file: "3"
+
 # Restart the daemon when its config changes. Molecule turns this off: no Docker daemon runs in the test container.
 docker_restart_daemon: true

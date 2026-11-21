@@ -1,5 +1,11 @@
 {
   "dns": {{ docker_daemon_dns | to_json }},
   "max-concurrent-uploads": 1,
-  "max-concurrent-downloads": 1
+  "max-concurrent-downloads": 1,
+  "log-driver": {{ docker_daemon_log_driver | to_json }},
+  "log-opts": {
+{% for key, value in docker_daemon_log_opts | dictsort %}
+    {{ key | string | to_json }}: {{ value | string | to_json }}{{ ',' if not loop.last }}
+{% endfor %}
+  }
 }

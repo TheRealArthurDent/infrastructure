@@ -218,6 +218,21 @@ ansible-playbook bootstrap.yaml --limit testbench --tags stack
 
 A second run of `bootstrap.yaml` should end with `changed=0`.
 
+### Docker daemon config
+
+The `docker` role writes `/etc/docker/daemon.json` and restarts dockerd when it changed, which stops every container
+for a moment: on raspi and dungeon pick a quiet time. Container logs use the `local` driver with at most 3 files of
+10 MB per container (`docker_daemon_log_driver`, `docker_daemon_log_opts`, #70); `docker logs` reads them as before.
+A changed log setting only applies to containers created after the restart, so recreate the running ones once, per
+Compose project (`docker compose ls` lists them with their compose files):
+
+```sh
+# On the host, for each project (infrastructure, smart-home, ...), with the compose file docker compose ls shows
+docker compose -p <project> -f <compose file> up -d --force-recreate
+# Shows local for a recreated container
+docker inspect --format '{{.HostConfig.LogConfig.Type}}' <container>
+```
+
 When an image tag changed (a Renovate update), the dry run can't pull the new image, so Compose can't simulate
 recreating its containers. "Ensure the stack is up" then reports `changed`, and "Note the image that check mode
 couldn't pull" names the image; the real run pulls it. Any other Compose error still fails the dry run.
