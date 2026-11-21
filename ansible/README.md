@@ -19,7 +19,8 @@ Contents:
   - [4. Backup access](#4-backup-access)
   - [5. Certificate and stack (restores the infrastructure state)](#5-certificate-and-stack-restores-the-infrastructure-state)
   - [6. Pi-hole](#6-pi-hole)
-  - [7. smart-home (restores its volumes)](#7-smart-home-restores-its-volumes)
+  - [7. App stacks (restore their volumes)](#7-app-stacks-restore-their-volumes)
+  - [8. Idempotence check](#8-idempotence-check)
 - [dungeon](#dungeon)
   - [Takeover of dungeon](#takeover-of-dungeon)
 - [Restore](#restore)
@@ -328,7 +329,10 @@ page without a restart. Its icons come from the dashboard-icons on jsDelivr, loa
 The same steps for a new Pi and for one rebuilt after a crash or reinstall. On a host with a backup, the state that
 isn't IaC comes back from restic by itself in steps 5 and 7, before the stacks start
 ([how it decides](#clean-slate-restore)). `<target>` is the inventory host (`raspi`, `dungeon` or `testbench`);
-`<user>`, `<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node.
+`<user>`, `<ip>` and `<port>` are its values in `inventory/hosts.yaml`. Playbooks run in `ansible/` on the control node,
+with the venv of this repo activated (`source ../.venv/bin/activate`, see [Control node setup](#control-node-setup-once));
+the app repos' playbooks use the same venv. Every playbook step is a dry run (`--check --diff`), a real run and, at the
+end ([step 8](#8-idempotence-check)), a second run that reports `changed=0`.
 Where dungeon differs, the step says so; [dungeon](#dungeon) has the details.
 
 ### 1. Flash the SSD
@@ -390,6 +394,8 @@ ssh -p <port> <user>@<ip> sudo reboot
 
 ### 4. Backup access
 
+Nothing to run as long as the host keeps its restic key pair; this step only explains why the backups work again.
+
 raspi and testbench: the `secrets` role wrote the host's restic key pair from its KeePass entry
 (`Backup/Resticprofile SSH`, attachments `id_ed25519` and `id_ed25519.pub`; `resticprofile_ssh_key_title` names another
 entry, see [KeePass](#put-the-restic-key-pairs-into-keepass)). The backup host `dungeon` must accept the public key: it
@@ -441,26 +447,42 @@ A second stack run ends with `changed=0`, since the marker makes the restore a n
 bin/with-keepass ansible-playbook bootstrap.yaml --limit <target> --tags stack
 ```
 
-### 7. smart-home (restores its volumes)
+### 7. App stacks (restore their volumes)
 
-raspi and testbench only. dungeon runs private-cloud's OpenCloud and Paperless instead: deploy them from that repo's
-`ansible/` the same way (`deploy.yaml --limit dungeon`, TheRealArthurDent/private-cloud#15); its backups wait for their
-markers too.
+Each app repo restores its own volumes before its stack starts, the same way as step 5 (TheRealArthurDent/smart-home#1).
+Backups wait for their markers too (`resticprofile_backup_stacks`), so don't skip this. In the app repo's `ansible/`,
+dry run first:
 
-Deploy the smart-home stack, which restores its own volumes the same way (TheRealArthurDent/smart-home#1).
-Backups wait for its marker too (`resticprofile_backup_stacks`), so don't skip this. In `ansible/` of the
-smart-home repo:
+| Host | Repo | Host name in its inventory |
+| --- | --- | --- |
+| raspi | smart-home | `raspi` |
+| dungeon | private-cloud (OpenCloud, Paperless; TheRealArthurDent/private-cloud#15) | `dungeon` |
+| testbench | smart-home **and** private-cloud (`secrets_opencloud_env`, `secrets_paperless` in its `host_vars`) | `testbench` |
 
 ```sh
 ansible-playbook deploy.yaml --limit <target> --check --diff
 ansible-playbook deploy.yaml --limit <target>
+ansible-playbook deploy.yaml --limit <target>     # changed=0
 ```
 
-On a new host without a snapshot, add `-e skip_smart_home_restore=true`. Then check that resticprofile no longer
-waits for a marker and has scheduled the backups:
+On a new host without a snapshot, add `-e skip_smart_home_restore=true` (smart-home) or
+`-e skip_opencloud_restore=true -e skip_paperless_restore=true` (private-cloud). Paperless' first start on an empty
+database runs every migration; on a Pi that takes a few minutes, which its healthcheck allows for
+(TheRealArthurDent/private-cloud#39).
+
+Then check that resticprofile no longer waits for a marker and has scheduled the backups. On a freshly set
+up host, resticprofile stays unhealthy until it has run its first backup, and healthmonitor reports that in Discord.
 
 ```sh
 ssh -p <port> <user>@<ip> docker logs resticprofile
+```
+
+### 8. Idempotence check
+
+A second run of the whole bootstrap, without tags, must report `changed=0`:
+
+```sh
+bin/with-keepass ansible-playbook bootstrap.yaml --limit <target>
 ```
 
 ## dungeon
