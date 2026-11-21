@@ -61,7 +61,7 @@ def test_renovate_updates_the_ansible_dev_tools_in_one_group():
 
 
 def test_renovate_never_auto_merges_the_docker_socket_proxy():
-    """The proxy holds the Docker socket, i.e. root on the host: an update waits a month and is merged by hand."""
+    """Updates of the Docker socket proxy wait a month and are merged by hand."""
     config = json.loads((REPO_DIR / "renovate.json").read_text())
     rules = [r for r in config["packageRules"] if r.get("matchPackageNames") == ["linuxserver/socket-proxy"]]
     assert len(rules) == 1, config["packageRules"]

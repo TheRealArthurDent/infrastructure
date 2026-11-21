@@ -801,7 +801,7 @@
         fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
       when: is_dungeon
 
-    # Access to the socket is root on the host, read-only mount or not: the others read the API through the proxy
+    # The others read the API through the proxy
     - name: Check only portainer and the Docker socket proxy mount the Docker socket
       vars:
         rendered: "{{ stack_rendered.results | items2dict(key_name='item', value_name='content') }}"
