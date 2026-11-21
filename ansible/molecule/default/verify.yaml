@@ -904,6 +904,31 @@
           - restore_helper.stat.isreg
           - restore_helper.stat.mode == '0755'
 
+# A container's log can't grow until the disk is full (#70).
+- name: Verify the Docker container logs
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read Docker daemon config for the log settings
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: docker_log_config
+
+    - name: Check Docker daemon caps and rotates the container logs
+      vars:
+        config: "{{ docker_log_config.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - config['log-driver'] == 'local'
+          - "config['log-opts'] == {'max-size': '10m', 'max-file': '3'}"
+        fail_msg: "Expected log-driver local with max-size 10m and max-file 3, got {{ config }}"
+
+    # No daemon runs in the test container, so docker info can't report the driver; dockerd checks the file itself.
+    - name: Check dockerd accepts its config
+      ansible.builtin.command: dockerd --validate --config-file /etc/docker/daemon.json
+      changed_when: false
+
 # More plays: ansible-lint caps a play at 100 tasks (complexity[play])
 - name: Verify the system trust store
   hosts: all
