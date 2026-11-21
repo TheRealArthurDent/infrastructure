@@ -55,6 +55,8 @@
         suffix: .dhparam.pem
       register: base_dhparam_tmp
       delegate_to: localhost
+      vars:
+        ansible_become: false
       become: false
 
     - name: Generate the Diffie-Hellman parameters on the control node
@@ -63,6 +65,8 @@
         size: "{{ dhparameter_bits }}"
         force: true
       delegate_to: localhost
+      vars:
+        ansible_become: false
       become: false
 
     - name: Ensure the Diffie-Hellman parameters are on the host
@@ -79,6 +83,8 @@
         path: "{{ base_dhparam_tmp.path }}"
         state: absent
       delegate_to: localhost
+      vars:
+        ansible_become: false
       become: false
       when: base_dhparam_tmp.path is defined
 
