@@ -761,8 +761,8 @@
         portainer_names: "portainer.{{ inventory_hostname }} portainer.{{ inventory_hostname }}.*;"
         outbound_names: "outbound.{{ inventory_hostname }} outbound.{{ inventory_hostname }}.*;"
         dungeon_services:
-          [grafana, healthmonitor, homepage, nginx, outbound, portainer, resticprofile, telegraf-agent, unbound,
-           victoriametrics]
+          [docker-socket-proxy, grafana, healthmonitor, homepage, nginx, outbound, portainer, resticprofile,
+           telegraf-agent, unbound, victoriametrics]
         resticprofile_volumes: "{{ compose.services.resticprofile.volumes }}"
         backup_mount: "{{ resticprofile_volumes | select('mapping') | selectattr('target', 'eq', '/backup') | list }}"
       ansible.builtin.assert:
@@ -800,6 +800,25 @@
           - compose.services.nginx.networks.siz.aliases == ['opencloud.' ~ inventory_hostname]
         fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
       when: is_dungeon
+
+    # Access to the socket is root on the host, read-only mount or not: the others read the API through the proxy
+    - name: Check only portainer and the Docker socket proxy mount the Docker socket
+      vars:
+        rendered: "{{ stack_rendered.results | items2dict(key_name='item', value_name='content') }}"
+        compose: "{{ rendered['compose/docker-compose.yaml'] | b64decode | from_yaml }}"
+        socket_services: >-
+          {% set names = [] %}{% for name, service in compose.services.items() %}{%
+             if 'docker.sock' in service.volumes | default([]) | to_json %}{% set _ = names.append(name) %}{%
+             endif %}{% endfor %}{{ names | sort }}
+        proxy: "{{ compose.services['docker-socket-proxy'] }}"
+      ansible.builtin.assert:
+        that:
+          - socket_services == ['docker-socket-proxy', 'portainer']
+          - proxy.environment.POST == '0'
+          - proxy.networks == ['docker-api']
+          - compose.networks['docker-api'].internal
+          - "'DOCKER_HOST=tcp://docker-socket-proxy:2375' in compose.services.healthmonitor.environment"
+        fail_msg: "Docker socket mounted by {{ socket_services }}"
 
     - name: Stat stack directories
       ansible.builtin.stat:
@@ -1354,17 +1373,12 @@
             src: /etc/docker/infrastructure/telegraf/telegraf.conf
           register: telegraf_conf
 
-        - name: Read the docker group
-          ansible.builtin.getent:
-            database: group
-            key: docker
-
         - name: Read the merged compose file for the agent
           ansible.builtin.slurp:
             src: /etc/docker/infrastructure/compose/docker-compose.yaml
           register: agent_compose_file
 
-        - name: Check the agent writes to VictoriaMetrics as its host, with the host's docker group
+        - name: Check the agent writes to VictoriaMetrics as its host and reads Docker through the proxy
           vars:
             conf: "{{ telegraf_conf.content | b64decode }}"
             agent: "{{ (agent_compose_file.content | b64decode | from_yaml).services['telegraf-agent'] }}"
@@ -1372,8 +1386,10 @@
             that:
               - "'hostname = \"' ~ inventory_hostname ~ '\"' in conf"
               - "'urls = [\"http://victoriametrics:8428\"]' in conf"
-              - agent.user == 'telegraf:' ~ ansible_facts.getent_group.docker[1]
-            fail_msg: "{{ conf }} {{ agent.user }}"
+              - "'endpoint = \"tcp://docker-socket-proxy:2375\"' in conf"
+              - "'docker-api' in agent.networks"
+              - agent.user == 'telegraf'
+            fail_msg: "{{ conf }} {{ agent }}"
 
     - name: Run the checks on the hosts with the landing page
       # raspi's profile uses the default components, which verify doesn't load

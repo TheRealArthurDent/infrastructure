@@ -289,18 +289,24 @@ replace it:
 ## Stack components
 
 The `stack` role assembles the Docker stack from component roles: `reverse_proxy` (nginx), `portainer`, `unbound`,
-`pihole`, `outbound`, `resticprofile` (backups, restore helper), `healthmonitor`, `landing_page` (see
+`pihole`, `outbound`, `resticprofile` (backups, restore helper), `docker_socket_proxy` (the Docker API, read-only, at
+`tcp://docker-socket-proxy:2375` in the internal network `docker-api`), `healthmonitor`, `landing_page` (see
 [Landing page](#landing-page)), `monitoring` (the central part of the monitoring: VictoriaMetrics and Grafana, #39) and
 `monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`). Each
 brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
-`docker compose up`. `stack_components` lists the enabled ones and defaults to the first eight; `monitoring` runs on
+`docker compose up`. `stack_components` lists the enabled ones and defaults to the first nine; `monitoring` runs on
 one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
-listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page).
+listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page, and
+`docker_socket_proxy` for `healthmonitor` and `monitoring_agent`).
+
+Access to the Docker socket is root on the host, read-only mount or not. Only `portainer` (which manages containers)
+and `docker_socket_proxy` mount it; healthmonitor and Telegraf read the container list, stats and engine info from the
+proxy, which answers every other request and every POST with 403.
 
 | Host | Components |
 | --- | --- |
-| `raspi`, `testbench` | the first eight |
-| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
+| `raspi`, `testbench` | the first nine |
+| `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `docker_socket_proxy`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
 nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless` and `grafana`, and its resticprofile backs

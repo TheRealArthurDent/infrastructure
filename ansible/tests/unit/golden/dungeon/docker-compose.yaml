@@ -1,5 +1,8 @@
 # Merged by the stack role from the components' compose fragments (#14). Don't edit, run the playbook.
 networks:
+  docker-api:
+    internal: true
+    name: docker-api
   nginx:
     name: nginx
   outbound:
@@ -16,6 +19,31 @@ secrets:
   restic_passphrase:
     file: /etc/docker/infrastructure/secrets/restic_passphrase
 services:
+  docker-socket-proxy:
+    cap_drop:
+    - ALL
+    container_name: docker-socket-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    environment:
+      CONTAINERS: '1'
+      DISABLE_IPV6: '1'
+      INFO: '1'
+      POST: '0'
+    hostname: docker-socket-proxy
+    image: linuxserver/socket-proxy:3.4.8
+    networks:
+    - docker-api
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /run
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
   grafana:
     container_name: grafana
     depends_on:
@@ -52,6 +80,8 @@ services:
     - /etc/docker/infrastructure/grafana/data:/var/lib/grafana
   healthmonitor:
     container_name: healthmonitor
+    depends_on:
+    - docker-socket-proxy
     dns:
     - 172.30.1.153
     env_file:
@@ -59,14 +89,14 @@ services:
     environment:
     - CONTAINERMON_CHECK_STOPPED=false
     - DOCKER_API_VERSION=1.44
+    - DOCKER_HOST=tcp://docker-socket-proxy:2375
     hostname: healthmonitor
     image: ghcr.io/rafhaanshah/container-mon:v1.1.1
     networks:
     - siz
     - outbound
+    - docker-api
     restart: unless-stopped
-    volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
   homepage:
     cap_drop:
     - ALL
@@ -239,6 +269,8 @@ services:
     - --watch-config
     - poll
     container_name: telegraf-agent
+    depends_on:
+    - docker-socket-proxy
     deploy:
       resources:
         limits:
@@ -252,11 +284,11 @@ services:
     image: telegraf:1.40.3-alpine
     networks:
     - siz
+    - docker-api
     restart: unless-stopped
-    user: telegraf:990
+    user: telegraf
     volumes:
     - /etc/docker/infrastructure/telegraf:/etc/telegraf:ro
-    - /var/run/docker.sock:/var/run/docker.sock:ro
     - bind:
         propagation: rslave
       read_only: true

@@ -5,8 +5,8 @@ services:
     container_name: telegraf-agent
     image: telegraf:1.40.3-alpine
     command: [telegraf, --watch-config, poll]
-    # The image's user, with the host's docker group for the socket
-    user: "telegraf:{{ monitoring_agent_docker_gid }}"
+    # The image's user; the Docker API comes from the proxy, so it needs no docker group
+    user: telegraf
     environment:
       HOST_PROC: /hostfs/proc
       HOST_SYS: /hostfs/sys
@@ -14,7 +14,6 @@ services:
       HOST_MOUNT_PREFIX: /hostfs
     volumes:
       - "{{ monitoring_agent_config_dir }}:/etc/telegraf:ro"
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       # rslave: mounts made after the start (the backup SSD) show up too
       - type: bind
         source: /
@@ -26,6 +25,9 @@ services:
       resources:
         limits:
           memory: "{{ monitoring_agent_memory_limit }}"
+    depends_on:
+      - docker-socket-proxy
     restart: unless-stopped
     networks:
       - siz
+      - docker-api

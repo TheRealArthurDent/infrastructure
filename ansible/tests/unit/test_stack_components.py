@@ -10,8 +10,10 @@ import yaml
 from render import ANSIBLE_DIR, rendered_tree
 
 ROLES_DIR = ANSIBLE_DIR / "roles"
-WITHOUT_PIHOLE = ["reverse_proxy", "portainer", "unbound", "outbound", "resticprofile", "healthmonitor"]
-WITHOUT_REVERSE_PROXY = ["portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor"]
+WITHOUT_PIHOLE = ["reverse_proxy", "portainer", "unbound", "outbound", "resticprofile", "healthmonitor",
+                  "docker_socket_proxy"]
+WITHOUT_REVERSE_PROXY = ["portainer", "unbound", "pihole", "outbound", "resticprofile", "healthmonitor",
+                         "docker_socket_proxy"]
 
 
 @pytest.fixture(scope="module")
@@ -24,7 +26,7 @@ def test_leaving_pihole_out_drops_its_service_and_server_block(without_pihole):
     tree, _ = without_pihole
     compose = yaml.safe_load(tree["docker-compose.yaml"])
     assert sorted(compose["services"]) == sorted(
-        ["nginx", "portainer", "unbound", "outbound", "resticprofile", "healthmonitor"])
+        ["nginx", "portainer", "unbound", "outbound", "resticprofile", "healthmonitor", "docker-socket-proxy"])
     conf = tree["nginx/nginx.conf"]
     assert "server_name         pihole." not in conf
     assert "server_name         outbound." in conf
@@ -212,7 +214,8 @@ def test_healthmonitor_needs_outbound(tmp_path):
     result = run_components_check(tmp_path, ["healthmonitor"])
     assert result.returncode != 0
     assert "healthmonitor needs outbound" in result.stdout + result.stderr
-    assert run_components_check(tmp_path, ["unbound", "outbound", "healthmonitor"]).returncode == 0
+    components = ["unbound", "outbound", "healthmonitor", "docker_socket_proxy"]
+    assert run_components_check(tmp_path, components).returncode == 0
 
 
 def test_opencloud_vhost_proxies_to_the_container(tmp_path):
@@ -339,15 +342,15 @@ def test_dungeon_runs_the_monitoring_agent(dungeon_compose):
     """The agent part of the monitoring (#39): Telegraf collects the host's and the containers' metrics."""
     agent = dungeon_compose["services"]["telegraf-agent"]
     assert agent["image"].startswith("telegraf:")
-    assert agent["networks"] == ["siz"]
+    assert agent["networks"] == ["siz", "docker-api"]
     assert "ports" not in agent
     assert agent["deploy"]["resources"]["limits"]["memory"]
     assert undefined_references(dungeon_compose) == []
 
 
-def test_the_agent_reads_the_host_and_docker_read_only(dungeon_compose):
+def test_the_agent_reads_the_host_read_only(dungeon_compose):
+    # The Docker API comes through the proxy (test_docker_socket_proxy.py)
     agent = dungeon_compose["services"]["telegraf-agent"]
-    assert "/var/run/docker.sock:/var/run/docker.sock:ro" in agent["volumes"]
     assert {"type": "bind", "source": "/", "target": "/hostfs", "read_only": True,
             "bind": {"propagation": "rslave"}} in agent["volumes"]
     assert "/etc/docker/infrastructure/telegraf:/etc/telegraf:ro" in agent["volumes"]
@@ -355,8 +358,6 @@ def test_the_agent_reads_the_host_and_docker_read_only(dungeon_compose):
     assert environment["HOST_PROC"] == "/hostfs/proc"
     assert environment["HOST_SYS"] == "/hostfs/sys"
     assert environment["HOST_MOUNT_PREFIX"] == "/hostfs"
-    # Not root: the image's user, plus the docker group of the host for the socket
-    assert re.fullmatch(r"telegraf:\d+", agent["user"])
     # Reloads its config when the playbook changes it
     assert agent["command"] == ["telegraf", "--watch-config", "poll"]
 
@@ -385,7 +386,6 @@ def test_the_agent_keeps_the_container_labels_out(dungeon_tree):
     assert 'docker_label_exclude = ["*"]' in conf
     assert "docker_label_include" not in conf
     assert "perdevice_include = []" in conf
-    assert 'endpoint = "unix:///var/run/docker.sock"' in conf
 
 
 def test_the_agent_reads_the_backup_metrics_of_resticprofile(dungeon_tree):

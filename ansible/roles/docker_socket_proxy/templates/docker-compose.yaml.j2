@@ -1,0 +1,36 @@
+services:
+  # The Docker API for the containers that only read it (healthmonitor, telegraf-agent), at
+  # tcp://docker-socket-proxy:2375 in the network docker-api. HAProxy in front of the socket: GET on the container
+  # list, the containers' details and stats, and the engine info; every other path and every POST get a 403.
+  docker-socket-proxy:
+    hostname: docker-socket-proxy
+    container_name: docker-socket-proxy
+    image: linuxserver/socket-proxy:3.4.8
+    environment:
+      CONTAINERS: '1'
+      INFO: '1'
+      POST: '0'
+      # The network docker-api has no IPv6; without it HAProxy would also try to listen on [::]
+      DISABLE_IPV6: '1'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: "{{ docker_socket_proxy_memory_limit }}"
+    restart: unless-stopped
+    networks:
+      - docker-api
+
+networks:
+  # Only the proxy and its clients; no internet, no nginx
+  docker-api:
+    name: docker-api
+    internal: true

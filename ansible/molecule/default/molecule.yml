@@ -82,6 +82,7 @@ provisioner:
           - unbound
           - outbound
           - resticprofile
+          - docker_socket_proxy
           - healthmonitor
           - monitoring
           - monitoring_agent

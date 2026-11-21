@@ -1,0 +1,6 @@
+---
+# The Docker API, read-only, for the containers that only need to read it (healthmonitor, monitoring_agent). Access to
+# the socket itself is root on the host, read-only mount or not; only portainer and this proxy mount it.
+
+# Memory limit of the container (Compose deploy.resources.limits.memory)
+docker_socket_proxy_memory_limit: 64m

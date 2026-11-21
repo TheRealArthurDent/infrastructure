@@ -1,15 +1,4 @@
 ---
-# The container runs as the image's user telegraf with the host's docker group, to read the Docker socket. The
-# docker role installs Docker and with it the group.
-- name: Read the docker group of the host
-  ansible.builtin.getent:
-    database: group
-    key: docker
-
-- name: Remember the docker group's id for the compose fragment
-  ansible.builtin.set_fact:
-    monitoring_agent_docker_gid: "{{ ansible_facts.getent_group.docker[1] }}"
-
 - name: Ensure the Telegraf config directory exists
   ansible.builtin.file:
     path: "{{ monitoring_agent_config_dir }}"

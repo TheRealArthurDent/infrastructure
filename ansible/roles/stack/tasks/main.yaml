@@ -52,6 +52,12 @@
     tasks_from: main
   when: "'resticprofile' in stack_components"
 
+- name: Set up the Docker socket proxy
+  ansible.builtin.import_role:
+    name: docker_socket_proxy
+    tasks_from: main
+  when: "'docker_socket_proxy' in stack_components"
+
 - name: Set up healthmonitor
   ansible.builtin.import_role:
     name: healthmonitor
