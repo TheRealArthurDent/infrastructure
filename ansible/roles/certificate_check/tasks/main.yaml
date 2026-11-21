@@ -22,6 +22,8 @@
       host_certificate: "+{{ certificate_check_validity_days }}d"
   register: certificate_check_root_ca_info
   delegate_to: localhost
+  vars:
+    ansible_become: false
   become: false
 
 - name: Check the root CA has not expired
@@ -151,6 +153,8 @@
     force: "{{ certificate_check_cert_stat.stat.exists and not certificate_check_cert_info.valid_at.renewal }}"
   register: certificate_check_cert
   delegate_to: localhost
+  vars:
+    ansible_become: false
   become: false
   no_log: true
 

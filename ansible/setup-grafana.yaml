@@ -86,6 +86,8 @@
 
     - name: Configure Grafana from the control node
       delegate_to: localhost
+      vars:
+        ansible_become: false
       become: false
       block:
         # uri can only verify against a CA file, so the certificate goes into a temporary file. It's needed in
