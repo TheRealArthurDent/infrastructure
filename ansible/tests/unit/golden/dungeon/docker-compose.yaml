@@ -93,7 +93,6 @@ services:
     hostname: healthmonitor
     image: ghcr.io/rafhaanshah/container-mon:v1.1.1
     networks:
-    - siz
     - outbound
     - docker-api
     restart: unless-stopped

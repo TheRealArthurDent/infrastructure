@@ -818,6 +818,7 @@
           - proxy.networks == ['docker-api']
           - compose.networks['docker-api'].internal
           - "'DOCKER_HOST=tcp://docker-socket-proxy:2375' in compose.services.healthmonitor.environment"
+          - compose.services.healthmonitor.networks | sort == ['docker-api', 'outbound']
         fail_msg: "Docker socket mounted by {{ socket_services }}"
 
     - name: Stat stack directories

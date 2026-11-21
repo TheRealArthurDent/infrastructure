@@ -72,6 +72,11 @@ def test_healthmonitor_reads_the_docker_api_through_the_proxy(compose):
     assert "docker-socket-proxy" in healthmonitor["depends_on"]
 
 
+def test_healthmonitor_joins_only_the_networks_it_uses(compose):
+    # The Docker API from the proxy, and the outbound Pi-hole for DNS and the webhook. Nothing in siz talks to it.
+    assert sorted(compose["services"]["healthmonitor"]["networks"]) == ["docker-api", "outbound"]
+
+
 def test_the_agent_reads_the_docker_api_through_the_proxy(dungeon_tree):
     compose = yaml.safe_load(dungeon_tree["docker-compose.yaml"])
     agent = compose["services"]["telegraf-agent"]

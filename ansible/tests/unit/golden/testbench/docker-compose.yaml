@@ -246,7 +246,6 @@ services:
       - docker-socket-proxy
     restart: unless-stopped
     networks:
-      - siz
       - outbound  # internet
       - docker-api
     dns:
