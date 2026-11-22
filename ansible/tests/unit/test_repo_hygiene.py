@@ -35,6 +35,11 @@ def test_pre_commit_scans_for_secrets():
     assert "detect-private-key" in hooks
 
 
+def test_ansible_lint_hook_runs_on_the_python_at_hand():
+    """The upstream hook pins one Python minor version; machines without it (the cloud sandbox) couldn't commit."""
+    assert pre_commit_hook_ids()["ansible-lint"].get("language_version") == "python3"
+
+
 def test_pre_commit_refuses_commits_on_main():
     hook = pre_commit_hook_ids().get("no-commit-to-branch")
     assert hook is not None
