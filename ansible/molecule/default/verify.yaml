@@ -676,6 +676,8 @@
         that:
           - ssh_config_file.stat.mode == '0600'
           - ssh_config_file.stat.pw_name == 'root'
+          # known_hosts is Ansible's: ssh must not add the host keys a server offers after login
+          - "'UpdateHostKeys no' in ssh_lines"
           - is_dungeon or 'Port 2222' in ssh_lines
           - is_dungeon or 'Host offsite' not in ssh_lines
           - not is_dungeon or 'Port 2222' not in ssh_lines

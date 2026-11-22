@@ -1,3 +1,7 @@
+# Ansible owns known_hosts (resticprofile role): ssh must not add the other host keys a server offers after login,
+# or the next run of the role removes them again and reports changed. First, so it holds for every host below.
+UpdateHostKeys no
+
 {% if resticprofile_offsite_enabled | bool %}
 # The offsite target (#60). ssh takes the first value it finds, so this block comes before the global options.
 Host {{ resticprofile_offsite_alias }}
