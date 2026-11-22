@@ -330,3 +330,17 @@ def test_the_backup_dashboard_shows_only_metrics_that_are_written(dungeon):
     assert {"resticprofile_offsite_disk_used_bytes", "resticprofile_backup_last_success_timestamp_seconds"} <= shown
     written = dungeon["resticprofile/config/profiles.yaml"] + dungeon["resticprofile/config/offsite-metrics.sh"]
     assert sorted(m for m in shown if m not in written and m not in RESTICPROFILE_BACKUP_METRICS) == []
+
+
+@pytest.mark.parametrize(
+    "host, overrides",
+    [("raspi", {}), ("testbench", {}), ("dungeon", {}), ("raspi", {"resticprofile_offsite_sources": ["raspi"]})],
+)
+def test_ssh_config_leaves_known_hosts_to_ansible(tmp_path, host, overrides):
+    # Ansible owns known_hosts: if ssh in the container added the other host keys the server offers after login
+    # (UpdateHostKeys, on by default), every run of the role would remove them again and report changed.
+    tree = rendered_tree(tmp_path, host, overrides)
+    lines = [line.strip() for line in tree["resticprofile/ssh_config"].splitlines()]
+    first_host = next((i for i, line in enumerate(lines) if line.startswith("Host ")), len(lines))
+    # Before the first Host block, so it holds for the backup host and the offsite target alike
+    assert "UpdateHostKeys no" in lines[:first_host]

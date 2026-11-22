@@ -1,2 +1,6 @@
+# Ansible owns known_hosts (resticprofile role): ssh must not add the other host keys a server offers after login,
+# or the next run of the role removes them again and reports changed. First, so it holds for every host below.
+UpdateHostKeys no
+
 IdentityFile /root/.ssh/id_ed25519
 Port 1359
