@@ -21,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Spellcheck
-        uses: reviewdog/action-misspell@v1.31.0
+        uses: reviewdog/action-misspell@c846b6b0996029d2d39540c8ffebebbd957072db # v1.31.0
         with:
           reporter: github-pr-review
           # MQTT broker name, not a typo of "mosquito"
@@ -36,7 +36,7 @@ jobs:
           reporter: github-pr-review
 
       - name: YAML lint
-        uses: reviewdog/action-yamllint@v1.26.0
+        uses: reviewdog/action-yamllint@020fba38ce9fed550c704d933aeeb7d6360f7d47 # v1.26.0
         with:
           reporter: github-pr-review
 
