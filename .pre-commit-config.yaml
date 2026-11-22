@@ -36,5 +36,7 @@ repos:
       - id: ansible-lint
         # Renovate only updates additional_dependencies when the language is set explicitly.
         language: python
+        # The hook pins one Python minor version upstream; take the one at hand (ansible-core needs 3.13+).
+        language_version: python3
         additional_dependencies: ['ansible-core==2.22.0']
         entry: ansible-lint --strict ansible/
