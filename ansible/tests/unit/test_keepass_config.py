@@ -183,7 +183,10 @@ LOOKUP_CONDITIONS = {
     "paperless_db_password": "secrets_paperless | bool",
     "paperless_admin_password": "secrets_paperless | bool",
     "monitoring_grafana_admin_password": "'monitoring' in stack_components",
+    "monitoring_agent_password": "'monitoring_agent' in stack_components",
 }
+# Looked up for every writer, only on the host running the monitoring component
+WRITERS = "monitoring_writer_passwords"
 
 
 def keepass_facts():
@@ -195,7 +198,12 @@ def keepass_facts():
 def test_bootstrap_only_looks_up_what_the_host_needs():
     # A lookup of a part the host doesn't run would need an entry in the host's database (dungeon has no pihole).
     facts = keepass_facts()
-    assert set(facts) == set(LOOKUP_CONDITIONS)
+    assert set(facts) == set(LOOKUP_CONDITIONS) | {WRITERS}
+    writers = " ".join(str(facts[WRITERS]).split())
+    assert "{%- if 'monitoring' in stack_components -%} {%- for writer in monitoring_writers -%}" in writers
+    assert "group='Monitoring', title=monitoring_writer_title ~ ' ' ~ writer)" in writers
+    assert "group='Monitoring', title=monitoring_writer_title ~ ' ' ~ inventory_hostname)" in str(
+        facts["monitoring_agent_password"])
     for name, condition in LOOKUP_CONDITIONS.items():
         value = " ".join(str(facts[name]).split())
         assert value.startswith("{{ lookup('keepass'"), name
@@ -259,7 +267,7 @@ def test_testbench_has_its_own_database_with_the_default_titles():
         "resticprofile_offsite_title", "resticprofile_offsite_passphrase_title",
         "opencloud_admin_title",
         "paperless_secret_key_title", "paperless_db_title", "paperless_admin_title",
-        "monitoring_grafana_admin_title",
+        "monitoring_grafana_admin_title", "monitoring_writer_title",
     }
     assert testbench["keepass_database"] == "testbench"
     assert titles.isdisjoint(testbench)
