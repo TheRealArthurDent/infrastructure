@@ -53,6 +53,12 @@ landing_page_services:
     group: Smart home
     icon: mdi-view-dashboard
     monitor: http://iobroker:8091
+  homeassistant:
+    name: Home Assistant
+    description: Smart home
+    group: Smart home
+    icon: home-assistant.png
+    monitor: http://homeassistant:8123
   node-red:
     name: Node-RED
     description: Automations

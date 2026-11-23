@@ -76,6 +76,19 @@ http {
     }
 {% endif %}
 
+{% if 'homeassistant' in reverse_proxy_vhosts %}
+    # smart-home's Home Assistant (smart-home#2)
+    server {
+        listen              443 ssl;
+        listen              [::]:443 ssl;
+        server_name         homeassistant.{{ inventory_hostname }} homeassistant.{{ inventory_hostname }}.*;
+
+        include             snippets/ssl-certificates.conf;
+        include             snippets/ssl-params.conf;
+
+        include             snippets/homeassistant.conf;
+    }
+{% endif %}
 {% if 'deconz' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;

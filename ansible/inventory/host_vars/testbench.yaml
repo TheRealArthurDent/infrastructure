@@ -11,7 +11,7 @@ keepass_database: testbench
 # SANs plus opencloud and paperless (not in the roles' defaults, raspi doesn't run them)
 secrets_opencloud_env: true
 secrets_paperless: true
-reverse_proxy_vhosts: [iobroker, ui, node-red, deconz, deconz-ui, grafana, portainer, nextcloud,
+reverse_proxy_vhosts: [iobroker, ui, node-red, homeassistant, deconz, deconz-ui, grafana, portainer, nextcloud,
                        pihole, outbound, opencloud, paperless]
-certificate_check_subdomains: [pihole, portainer, nextcloud, iobroker, node-red, grafana, outbound, deconz,
-                               deconz-ui, ui, opencloud, paperless]
+certificate_check_subdomains: [pihole, portainer, nextcloud, iobroker, node-red, homeassistant, grafana, outbound,
+                               deconz, deconz-ui, ui, opencloud, paperless]

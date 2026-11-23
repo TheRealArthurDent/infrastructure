@@ -114,7 +114,7 @@ def test_raspi_shows_its_tiles_by_group(raspi):
     assert {group: sorted(entries) for group, entries in tiles(raspi).items()} == {
         "Infrastructure": ["Pi-hole", "Pi-hole outbound", "Portainer"],
         "Monitoring": ["Grafana"],
-        "Smart home": ["Lovelace", "Node-RED", "Phoscon", "Phoscon VNC", "ioBroker"],
+        "Smart home": ["Home Assistant", "Lovelace", "Node-RED", "Phoscon", "Phoscon VNC", "ioBroker"],
     }
 
 
