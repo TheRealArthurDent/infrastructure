@@ -1,295 +1,309 @@
-services:
-  # nginx
+# Merged by the stack role from the components' compose fragments (#14). Don't edit, run the playbook.
+networks:
+  docker-api:
+    internal: true
+    name: docker-api
   nginx:
-    hostname: raspberry
-    container_name: nginx
-    image: nginx:1.31-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8443:8443"
-    volumes:
-      - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
-      - /etc/docker/infrastructure/nginx:/etc/nginx:ro
-      - /etc/docker/infrastructure/nginx/raspi.pem:/etc/nginx/raspi.pem:ro
-      - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
-    networks:
-      nginx:
-      siz:
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
-  # portainer
-  portainer:
-    hostname: portainer
-    container_name: portainer
-    image: portainer/portainer-ce:2.45.2-alpine
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /etc/docker/infrastructure/portainer/data:/data  # TODO move to storage
-    environment:
-      - TRUSTED_ORIGINS=https://portainer.raspi
-    networks:
-      - siz
-    healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "--no-check-certificate", "http://localhost:9000" ]
-  # More info at https://github.com/pi-hole/docker-pi-hole/ and https://docs.pi-hole.net/
-  pihole:
-    hostname: pihole
-    container_name: pihole
-    image: pihole/pihole:2026.10.1
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-    env_file:
-      - /etc/docker/infrastructure/.env
-    environment:
-      TZ: 'Europe/Berlin'
-      FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
-      FTLCONF_dns_listeningMode: 'ALL'  # Answer on every network, their interface order can change (SINGLE broke DNS)
-      FTLCONF_dns_dnssec: 'true'
-      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
-    # Volumes store your data between container upgrades
-    volumes:
-      - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
-    # Recommended but not required (DHCP needs NET_ADMIN)
-    # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
-    #cap_add:
-    #  - NET_ADMIN
-    restart: unless-stopped
-    networks:
-      siz:
-        ipv4_address: 172.30.2.53
-      outbound: {}  # replace with outbound if needed
-    dns:
-      - 127.0.0.1
-      - 172.30.2.52
-      - 9.9.9.9
-    depends_on:
-      - unbound
-  unbound:
-    hostname: unbound
-    container_name: unbound
-    image: klutchell/unbound:v1.26.1
-    restart: unless-stopped
-    networks:
-      siz:
-        ipv4_address: 172.30.2.52
-      nginx: {}
-    dns:
-      - 127.0.0.1
-      - 9.9.9.9
-    healthcheck:
-      test: [ "CMD", "dig", "www.heise.de", "@127.0.0.1" ]
+    name: nginx
   outbound:
-    hostname: outbound
-    container_name: outbound
-    image: pihole/pihole:2026.10.1
-    env_file:
-      - /etc/docker/infrastructure/.outbound.env
-    environment:
-      TZ: 'Europe/Berlin'
-      FTLCONF_dns_upstreams: '172.30.2.52'  # unbound
-      FTLCONF_dns_listeningMode: 'ALL'  # Answer on every network, their interface order can change (SINGLE broke DNS)
-      FTLCONF_dns_dnssec: 'true'
-      FTLCONF_misc_dnsmasq_lines: 'edns-packet-max=1232'
-    # Only a cache: setup-pihole.yaml provisions this Pi-hole, so the volume isn't backed up. It keeps the egress
-    # filter closed when the container is recreated; an empty Pi-hole would allow everything (raspberry#293).
-    volumes:
-      - outbound_pihole:/etc/pihole
-    # Recommended but not required (DHCP needs NET_ADMIN)
-    # https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
-    #cap_add:
-    #  - NET_ADMIN
-    restart: unless-stopped
-    networks:
-      outbound:
-        ipv4_address: 172.30.1.153
-      siz: {}
-    dns:
-      - 127.0.0.1
-      - 172.30.2.52
-      - 9.9.9.9
-    depends_on:
-      - unbound
-  # Backup - resticprofile
-  resticprofile:
-    hostname: resticprofile
-    container_name: resticprofile
-    image: creativeprojects/resticprofile:0.33.1
-    # On stop, let a running backup shut down cleanly so restic removes its repository lock (raspberry#250)
-    init: true
-    stop_grace_period: 2m
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-    secrets:
-      - restic_passphrase
-    environment:
-      TZ: 'Europe/Berlin'
-    volumes:
-      - /etc/docker/infrastructure/resticprofile/.ssh:/root/.ssh # TODO ansible
-      - /etc/docker/infrastructure/resticprofile/ssh_config:/etc/ssh/ssh_config:ro
-      - /etc/docker/infrastructure/resticprofile/config:/etc/resticprofile:ro
-      - /home:/source/home:ro
-      - /etc:/source/etc:ro
-      - /var/lib/docker/volumes:/source/docker-volumes:ro
-      - /var/restore:/restore-target:rw
-      # The clean-slate restore markers of the stacks (raspberry#287)
-      - /var/lib/restic-restore:/restore-state:ro
-      # Prom metrics for telegraf
-      - /var/lib/resticprofile/metrics:/metrics
-    restart: unless-stopped
-    networks:
-      - nginx
-    extra_hosts:
-      dungeon: "192.0.2.10"
-    # Unhealthy when the last successful backup (daily at 03:00) is older than 26h, so healthmonitor
-    # alerts on a missing backup, not only on a failed one (raspberry#259). Also unhealthy before the first backup.
-    # Also unhealthy when the last monthly restore drill (restic-restore drill, host cron) failed or its last
-    # success is older than 35 days (raspberry#288); healthy before the first drill.
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          awk -v now=$$(date +%s)
-          '/^resticprofile_backup_last_success_timestamp_seconds/ { ok = now - $$2 < 26 * 3600 } END { exit !ok }'
-          /metrics/backup_last_success.prom
-          && { [ ! -f /metrics/restore_drill.prom ] || awk -v now=$$(date +%s)
-          '$$1 == "restic_restore_drill_success" { ok = $$2 == 1 }
-          $$1 == "restic_restore_drill_last_success_timestamp_seconds" { last = $$2 }
-          END { exit !(ok && now - last < 35 * 86400) }'
-          /metrics/restore_drill.prom; }
-          && for source in $${RESTICPROFILE_OFFSITE_SOURCES:-}; do
-          awk -v now=$$(date +%s)
-          '/^resticprofile_offsite_last_success_timestamp_seconds/ { ok = now - $$2 < 36 * 3600 } END { exit !ok }'
-          /metrics/offsite_$${source}_last_success.prom
-          && { [ ! -f /metrics/offsite_$${source}_check.prom ] || awk -v now=$$(date +%s)
-          '/^resticprofile_offsite_check_last_success_timestamp_seconds/ { ok = now - $$2 < 35 * 86400 } END { exit !ok }'
-          /metrics/offsite_$${source}_check.prom; }
-          || exit 1; done
-      interval: 10m
-      # Check every 10s during the first minute, so the status is known right after a deploy
-      start_period: 1m
-      start_interval: 10s
-    entrypoint: '/bin/sh'
-    command:
-      - '-c'
-      - |
-        # No backups before every stack's clean-slate restore is done or skipped, or a fresh host's empty or
-        # half-restored state would become the latest snapshot (raspberry#287). restic-restore clean-slate writes the
-        # markers.
-        for stack in infrastructure smart-home; do
-          [ -f /restore-state/$$stack.done ] ||
-            echo "Waiting for /var/lib/restic-restore/$$stack.done to schedule backups"
-          while [ ! -f /restore-state/$$stack.done ]; do sleep 60; done
-        done
-        resticprofile schedule --all || exit 1
-        crond -f &
-        crond_pid=$$!
-        # crond doesn't pass SIGTERM on to its jobs: stop the running job (resticprofile) first and wait for it
-        stop_job() {
-          pkill -TERM -P $$crond_pid
-          while pgrep -P $$crond_pid >/dev/null; do sleep 1; done
-          kill $$crond_pid
-        }
-        trap stop_job TERM INT
-        wait $$crond_pid
-  # Monitoring
-  # The Docker API for the containers that only read it (healthmonitor, telegraf-agent), at
-  # tcp://docker-socket-proxy:2375 in the network docker-api. HAProxy in front of the socket: GET on the container
-  # list, the containers' details and stats, and the engine info; every other path and every POST get a 403.
+    external: true
+    name: outbound
+  siz:
+    external: true
+    name: siz
+secrets:
+  metrics_writer_password:
+    file: /etc/docker/infrastructure/secrets/metrics_writer_password
+  restic_passphrase:
+    file: /etc/docker/infrastructure/secrets/restic_passphrase
+services:
   docker-socket-proxy:
-    hostname: docker-socket-proxy
-    container_name: docker-socket-proxy
-    image: linuxserver/socket-proxy:3.4.7-r0-ls103@sha256:e5d819de59b343c01b2fe7adc7fad3c7a60e5dba08e45f1ac317352bc08599b5
-    environment:
-      CONTAINERS: '1'
-      INFO: '1'
-      POST: '0'
-      # The network docker-api has no IPv6; without it HAProxy would also try to listen on [::]
-      DISABLE_IPV6: '1'
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    read_only: true
-    tmpfs:
-      - /run
     cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    - ALL
+    container_name: docker-socket-proxy
     deploy:
       resources:
         limits:
           memory: 64m
-    restart: unless-stopped
-    networks:
-      - docker-api
-  healthmonitor:
-    hostname: healthmonitor
-    container_name: healthmonitor
-    image: ghcr.io/rafhaanshah/container-mon:v1.1.1
-    env_file:
-      - /etc/docker/infrastructure/.healthmonitor.env
     environment:
-      - CONTAINERMON_CHECK_STOPPED=false
-      # container-mon does not negotiate the API version. 1.44 is the oldest version Docker 29+ accepts
-      # and still within the range of Debian's docker.io 26.x. Drop it once all hosts run docker-ce 28.4+.
-      - DOCKER_API_VERSION=1.44
-      # The Docker API, read-only, from the proxy instead of the socket
-      - DOCKER_HOST=tcp://docker-socket-proxy:2375
-    depends_on:
-      - docker-socket-proxy
-    restart: unless-stopped
+      CONTAINERS: '1'
+      DISABLE_IPV6: '1'
+      INFO: '1'
+      POST: '0'
+    hostname: docker-socket-proxy
+    image: linuxserver/socket-proxy:3.4.7-r0-ls103@sha256:e5d819de59b343c01b2fe7adc7fad3c7a60e5dba08e45f1ac317352bc08599b5
     networks:
-      - outbound  # internet
-      - docker-api
-    dns:
-      - 172.30.1.153
-  # The landing page
-  homepage:
-    hostname: homepage
-    container_name: homepage
-    image: ghcr.io/gethomepage/homepage:v2.8.0
-    user: "1000:1000"
+    - docker-api
     read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
+    restart: unless-stopped
     security_opt:
-      - no-new-privileges:true
-    environment:
-      HOMEPAGE_ALLOWED_HOSTS: "raspi"
-      LOG_TARGETS: stdout
+    - no-new-privileges:true
+    tmpfs:
+    - /run
     volumes:
-      - "/etc/docker/infrastructure/homepage:/app/config:ro"
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  healthmonitor:
+    container_name: healthmonitor
+    depends_on:
+    - docker-socket-proxy
+    dns:
+    - 172.30.1.153
+    env_file:
+    - /etc/docker/infrastructure/.healthmonitor.env
+    environment:
+    - CONTAINERMON_CHECK_STOPPED=false
+    - DOCKER_API_VERSION=1.44
+    - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    hostname: healthmonitor
+    image: ghcr.io/rafhaanshah/container-mon:v1.1.1
+    networks:
+    - outbound
+    - docker-api
+    restart: unless-stopped
+  homepage:
+    cap_drop:
+    - ALL
+    container_name: homepage
     deploy:
       resources:
         limits:
-          memory: "256m"
-    restart: unless-stopped
+          memory: 256m
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: raspi
+      LOG_TARGETS: stdout
+    hostname: homepage
+    image: ghcr.io/gethomepage/homepage:v2.8.0
     networks:
-      - siz
+    - siz
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp
+    user: 1000:1000
+    volumes:
+    - /etc/docker/infrastructure/homepage:/app/config:ro
+  nginx:
+    container_name: nginx
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - http://127.0.0.1:8080/health
+    hostname: raspberry
+    image: nginx:1.31-alpine
+    networks:
+      nginx: null
+      siz: null
+    ports:
+    - 80:80
+    - 443:443
+    - 8443:8443
+    restart: unless-stopped
+    volumes:
+    - /etc/ssl/certs/dhparam.pem:/etc/ssl/certs/dhparam.pem:ro
+    - /etc/docker/infrastructure/nginx:/etc/nginx:ro
+    - /etc/docker/infrastructure/nginx/raspi.pem:/etc/nginx/raspi.pem:ro
+    - /etc/docker/infrastructure/nginx/raspi.key:/etc/nginx/raspi.key:ro
+  outbound:
+    container_name: outbound
+    depends_on:
+    - unbound
+    dns:
+    - 127.0.0.1
+    - 172.30.2.52
+    - 9.9.9.9
+    env_file:
+    - /etc/docker/infrastructure/.outbound.env
+    environment:
+      FTLCONF_dns_dnssec: 'true'
+      FTLCONF_dns_listeningMode: ALL
+      FTLCONF_dns_upstreams: 172.30.2.52
+      FTLCONF_misc_dnsmasq_lines: edns-packet-max=1232
+      TZ: Europe/Berlin
+    hostname: outbound
+    image: pihole/pihole:2026.11.0
+    networks:
+      outbound:
+        ipv4_address: 172.30.1.153
+      siz: {}
+    restart: unless-stopped
+    volumes:
+    - outbound_pihole:/etc/pihole
+  pihole:
+    container_name: pihole
+    depends_on:
+    - unbound
+    dns:
+    - 127.0.0.1
+    - 172.30.2.52
+    - 9.9.9.9
+    env_file:
+    - /etc/docker/infrastructure/.env
+    environment:
+      FTLCONF_dns_dnssec: 'true'
+      FTLCONF_dns_listeningMode: ALL
+      FTLCONF_dns_upstreams: 172.30.2.52
+      FTLCONF_misc_dnsmasq_lines: edns-packet-max=1232
+      TZ: Europe/Berlin
+    hostname: pihole
+    image: pihole/pihole:2026.11.0
+    networks:
+      outbound: {}
+      siz:
+        ipv4_address: 172.30.2.53
+    ports:
+    - 53:53/tcp
+    - 53:53/udp
+    restart: unless-stopped
+    volumes:
+    - /etc/docker/infrastructure/pihole/pihole:/etc/pihole
+  portainer:
+    container_name: portainer
+    environment:
+    - TRUSTED_ORIGINS=https://portainer.raspi
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - --spider
+      - --no-check-certificate
+      - http://localhost:9000
+    hostname: portainer
+    image: portainer/portainer-ce:2.45.4-alpine
+    networks:
+    - siz
+    restart: unless-stopped
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /etc/docker/infrastructure/portainer/data:/data
+  resticprofile:
+    command:
+    - -c
+    - "# No backups before every stack's clean-slate restore is done or skipped, or
+      a fresh host's empty or\n# half-restored state would become the latest snapshot
+      (raspberry#287). restic-restore clean-slate writes the\n# markers.\nfor stack
+      in infrastructure smart-home; do\n  [ -f /restore-state/$$stack.done ] ||\n
+      \   echo \"Waiting for /var/lib/restic-restore/$$stack.done to schedule backups\"\n
+      \ while [ ! -f /restore-state/$$stack.done ]; do sleep 60; done\ndone\nresticprofile
+      schedule --all || exit 1\ncrond -f &\ncrond_pid=$$!\n# crond doesn't pass SIGTERM
+      on to its jobs: stop the running job (resticprofile) first and wait for it\nstop_job()
+      {\n  pkill -TERM -P $$crond_pid\n  while pgrep -P $$crond_pid >/dev/null; do
+      sleep 1; done\n  kill $$crond_pid\n}\ntrap stop_job TERM INT\nwait $$crond_pid\n"
+    container_name: resticprofile
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+    entrypoint: /bin/sh
+    environment:
+      TZ: Europe/Berlin
+    extra_hosts:
+      dungeon: 192.0.2.10
+    healthcheck:
+      interval: 10m
+      start_interval: 10s
+      start_period: 1m
+      test:
+      - CMD-SHELL
+      - awk -v now=$$(date +%s) '/^resticprofile_backup_last_success_timestamp_seconds/
+        { ok = now - $$2 < 26 * 3600 } END { exit !ok }' /metrics/backup_last_success.prom
+        && { [ ! -f /metrics/restore_drill.prom ] || awk -v now=$$(date +%s) '$$1
+        == "restic_restore_drill_success" { ok = $$2 == 1 } $$1 == "restic_restore_drill_last_success_timestamp_seconds"
+        { last = $$2 } END { exit !(ok && now - last < 35 * 86400) }' /metrics/restore_drill.prom;
+        } && for source in $${RESTICPROFILE_OFFSITE_SOURCES:-}; do awk -v now=$$(date
+        +%s) '/^resticprofile_offsite_last_success_timestamp_seconds/ { ok = now -
+        $$2 < 36 * 3600 } END { exit !ok }' /metrics/offsite_$${source}_last_success.prom
+        && { [ ! -f /metrics/offsite_$${source}_check.prom ] || awk -v now=$$(date
+        +%s) '/^resticprofile_offsite_check_last_success_timestamp_seconds/ { ok =
+        now - $$2 < 35 * 86400 } END { exit !ok }' /metrics/offsite_$${source}_check.prom;
+        } || exit 1; done
+    hostname: resticprofile
+    image: creativeprojects/resticprofile:0.33.1
+    init: true
+    networks:
+    - nginx
+    restart: unless-stopped
+    secrets:
+    - restic_passphrase
+    stop_grace_period: 2m
+    volumes:
+    - /etc/docker/infrastructure/resticprofile/.ssh:/root/.ssh
+    - /etc/docker/infrastructure/resticprofile/ssh_config:/etc/ssh/ssh_config:ro
+    - /etc/docker/infrastructure/resticprofile/config:/etc/resticprofile:ro
+    - /home:/source/home:ro
+    - /etc:/source/etc:ro
+    - /var/lib/docker/volumes:/source/docker-volumes:ro
+    - /var/restore:/restore-target:rw
+    - /var/lib/restic-restore:/restore-state:ro
+    - /var/lib/resticprofile/metrics:/metrics
+  telegraf-agent:
+    command:
+    - telegraf
+    - --watch-config
+    - poll
+    container_name: telegraf-agent
+    depends_on:
+    - docker-socket-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    environment:
+      HOST_ETC: /hostfs/etc
+      HOST_MOUNT_PREFIX: /hostfs
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+    extra_hosts:
+      metrics.dungeon: 192.0.2.10
+    healthcheck:
+      interval: 1m
+      retries: 3
+      start_interval: 5s
+      start_period: 1m
+      test:
+      - CMD-SHELL
+      - SSL_CERT_FILE=/hostfs/etc/ssl/certs/rootCA.pem wget -q -O /dev/null https://metrics.dungeon/health
+      timeout: 10s
+    hostname: telegraf-agent
+    image: telegraf:1.40.3-alpine
+    networks:
+    - nginx
+    - docker-api
+    restart: unless-stopped
+    secrets:
+    - metrics_writer_password
+    user: telegraf
+    volumes:
+    - /etc/docker/infrastructure/telegraf:/etc/telegraf:ro
+    - bind:
+        propagation: rslave
+      read_only: true
+      source: /
+      target: /hostfs
+      type: bind
+  unbound:
+    container_name: unbound
+    dns:
+    - 127.0.0.1
+    - 9.9.9.9
+    healthcheck:
+      test:
+      - CMD
+      - dig
+      - www.heise.de
+      - '@127.0.0.1'
+    hostname: unbound
+    image: klutchell/unbound:v1.26.2
+    networks:
+      nginx: {}
+      siz:
+        ipv4_address: 172.30.2.52
+    restart: unless-stopped
 volumes:
   outbound_pihole:
     name: outbound_pihole
-networks:
-  # Only the proxy and its clients; no internet, no nginx
-  docker-api:
-    name: docker-api
-    internal: true
-  nginx:
-    name: nginx
-  siz:
-    name: siz
-    external: true
-  outbound:
-    name: outbound
-    external: true
-
-secrets:
-  restic_passphrase:
-    file: /etc/docker/infrastructure/secrets/restic_passphrase

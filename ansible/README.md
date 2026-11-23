@@ -299,8 +299,8 @@ The `stack` role assembles the Docker stack from component roles: `reverse_proxy
 `monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`, see
 [Monitoring](#monitoring)). Each
 brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
-`docker compose up`. `stack_components` lists the enabled ones and defaults to the first nine; `monitoring` runs on
-one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
+`docker compose up`. `stack_components` lists the enabled ones and defaults to all but `monitoring`, which only the
+host running it lists. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
 listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page, and
 `docker_socket_proxy` for `healthmonitor` and `monitoring_agent`).
 
@@ -310,8 +310,7 @@ POST with 403.
 
 | Host | Components |
 | --- | --- |
-| `raspi` | the first nine |
-| `testbench` | the first nine, `monitoring_agent` |
+| `raspi`, `testbench` | all but `monitoring` |
 | `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `docker_socket_proxy`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
@@ -338,7 +337,7 @@ minutes, and a certificate ending within 21 days (`check-certificates.yaml` rene
 point and the policy are in `configs/grafana.yaml`; `setup-grafana.yaml` writes them through the provisioning API, so
 the UI shows them read-only.
 
-To add a host: put `monitoring_agent` into its `stack_components`, its password into its own database and into the
+To add a host: `monitoring_agent` is in the default `stack_components`; put its password into its own database and into the
 central host's (both `Monitoring/Metrics writer <host>`), and its name into `monitoring_writers`. Then run
 `bootstrap.yaml --tags stack` on the central host first (nginx' password file) and on the new host after. Moving the
 central part to another host: `monitoring_agent_central_host`, the new host's `stack_components`, `monitoring_writers`,

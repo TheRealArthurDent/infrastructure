@@ -22,6 +22,11 @@ def dungeon(tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
+def raspi(tmp_path_factory):
+    return rendered_tree(tmp_path_factory.mktemp("raspi-write-path"), "raspi")
+
+
+@pytest.fixture(scope="module")
 def testbench(tmp_path_factory):
     return rendered_tree(tmp_path_factory.mktemp("testbench-write-path"), "testbench")
 
@@ -83,18 +88,22 @@ def test_the_local_agent_reaches_nginx_by_name_in_siz(dungeon):
     assert "extra_hosts" not in agent
 
 
-def test_testbench_runs_the_agent(testbench):
-    assert "telegraf-agent" in compose(testbench)["services"]
+@pytest.mark.parametrize("host", ["raspi", "testbench"])
+def test_every_host_runs_the_agent(request, host):
+    """Part of the stack's default components."""
+    assert "telegraf-agent" in compose(request.getfixturevalue(host))["services"]
+    assert "monitoring_agent" in yaml.safe_load((ROLES_DIR / "stack/defaults/main.yaml").read_text())["stack_components"]
 
 
-def test_a_remote_agent_reaches_the_central_host_through_the_lan(testbench):
-    agent = compose(testbench)["services"]["telegraf-agent"]
+@pytest.mark.parametrize("host", ["raspi", "testbench"])
+def test_a_remote_agent_reaches_the_central_host_through_the_lan(request, host):
+    agent = compose(request.getfixturevalue(host))["services"]["telegraf-agent"]
     # nginx is the stack's network with a route out (resticprofile reaches dungeon through it too); siz has none
     assert sorted(agent["networks"]) == ["docker-api", "nginx"]
     assert agent["extra_hosts"] == {"metrics.dungeon": DUNGEON_IP}
 
 
-@pytest.mark.parametrize("host", ["dungeon", "testbench"])
+@pytest.mark.parametrize("host", ["dungeon", "raspi", "testbench"])
 def test_every_agent_writes_through_nginx_as_its_host(request, host):
     conf = request.getfixturevalue(host)["telegraf/telegraf.conf"]
     assert 'urls = ["https://metrics.dungeon"]' in conf
@@ -107,7 +116,7 @@ def test_every_agent_writes_through_nginx_as_its_host(request, host):
     assert "insecure_skip_verify" not in conf
 
 
-@pytest.mark.parametrize("host", ["dungeon", "testbench"])
+@pytest.mark.parametrize("host", ["dungeon", "raspi", "testbench"])
 def test_the_agent_reads_its_password_from_a_compose_secret(request, host):
     stack = compose(request.getfixturevalue(host))
     agent = stack["services"]["telegraf-agent"]
@@ -117,7 +126,7 @@ def test_the_agent_reads_its_password_from_a_compose_secret(request, host):
     assert not [value for value in agent["environment"].values() if "PASSWORD" in str(value).upper()]
 
 
-@pytest.mark.parametrize("host", ["dungeon", "testbench"])
+@pytest.mark.parametrize("host", ["dungeon", "raspi", "testbench"])
 def test_the_agent_measures_the_certificate_lifetimes(request, host):
     conf = request.getfixturevalue(host)["telegraf/telegraf.conf"]
     assert "[[inputs.x509_cert]]" in conf
@@ -125,7 +134,7 @@ def test_the_agent_measures_the_certificate_lifetimes(request, host):
             '"/hostfs/etc/ssl/certs/rootCA.pem"]') in conf
 
 
-@pytest.mark.parametrize("host", ["dungeon", "testbench"])
+@pytest.mark.parametrize("host", ["dungeon", "raspi", "testbench"])
 def test_the_agent_turns_unhealthy_when_the_central_host_is_unreachable(request, host):
     """healthmonitor reports an unhealthy container, so a host outside the central one notices its outage."""
     healthcheck = compose(request.getfixturevalue(host))["services"]["telegraf-agent"]["healthcheck"]

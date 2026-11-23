@@ -329,11 +329,11 @@ def test_monitoring_has_memory_limits(dungeon_compose):
         assert dungeon_compose["services"][name]["deploy"]["resources"]["limits"]["memory"], name
 
 
-def test_raspi_runs_no_monitoring(tmp_path):
+def test_raspi_runs_only_the_agent_of_the_monitoring(tmp_path):
     tree = rendered_tree(tmp_path, "raspi")
     services = yaml.safe_load(tree["docker-compose.yaml"])["services"]
-    assert not {"victoriametrics", "grafana", "telegraf-agent"} & set(services)
-    assert "telegraf/telegraf.conf" not in tree
+    assert not {"victoriametrics", "grafana"} & set(services)
+    assert "telegraf-agent" in services
 
 
 @pytest.fixture(scope="module")

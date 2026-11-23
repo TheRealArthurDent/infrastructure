@@ -15,17 +15,3 @@ reverse_proxy_vhosts: [iobroker, ui, node-red, deconz, deconz-ui, grafana, porta
                        pihole, outbound, opencloud, paperless]
 certificate_check_subdomains: [pihole, portainer, nextcloud, iobroker, node-red, grafana, outbound, deconz,
                                deconz-ui, ui, opencloud, paperless]
-
-# The stack's default components plus the monitoring agent (#39), which writes to the central host
-# (monitoring_agent_central_host). raspi gets it too once it is set up again (roles/stack/defaults/main.yaml).
-stack_components:
-  - reverse_proxy
-  - portainer
-  - unbound
-  - pihole
-  - outbound
-  - resticprofile
-  - docker_socket_proxy
-  - healthmonitor
-  - landing_page
-  - monitoring_agent
