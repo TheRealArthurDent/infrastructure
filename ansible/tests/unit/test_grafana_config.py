@@ -70,3 +70,38 @@ def test_every_query_uses_a_data_source_of_the_config(path):
 def test_panels_have_unique_ids(path):
     ids = [panel["id"] for panel in load(path)["panels"]]
     assert len(ids) == len(set(ids))
+
+
+ALERT_RULES = [rule for group in CONFIG["grafana_alert_rule_groups"] for rule in group["rules"]]
+
+
+def test_alert_rule_groups_live_in_folders_of_the_config():
+    folders = {folder["uid"] for folder in CONFIG["grafana_folders"]}
+    for group in CONFIG["grafana_alert_rule_groups"]:
+        assert group["folderUid"] in folders, group["title"]
+        assert isinstance(group["interval"], int) and group["interval"] >= 10, group["title"]
+
+
+def test_alert_rule_uids_are_unique():
+    uids = [rule["uid"] for rule in ALERT_RULES]
+    assert len(uids) == len(set(uids))
+
+
+@pytest.mark.parametrize("rule", ALERT_RULES, ids=lambda rule: rule["uid"])
+def test_alert_rules_query_data_sources_of_the_config(rule):
+    for query in rule["data"]:
+        assert query["datasourceUid"] in DATASOURCE_UIDS | {"__expr__"}, query["refId"]
+        assert query["model"]["refId"] == query["refId"]
+    assert rule["condition"] in {query["refId"] for query in rule["data"]}
+
+
+@pytest.mark.parametrize("rule", ALERT_RULES, ids=lambda rule: rule["uid"])
+def test_alert_rules_keep_grafanas_templates_from_jinja(rule):
+    """Annotations use Grafana's {{ $labels.x }}; unescaped, Ansible would try to render them."""
+    for text in rule.get("annotations", {}).values():
+        if "{{" in text:
+            assert text.startswith("{% raw %}") and text.endswith("{% endraw %}"), text
+
+
+def test_the_notification_policy_sends_to_a_contact_point_of_the_config():
+    assert CONFIG["grafana_notification_policy"]["receiver"] in {point["name"] for point in CONFIG["grafana_contact_points"]}

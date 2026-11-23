@@ -49,12 +49,13 @@ def make_certificates(directory):
     """A throwaway root CA and a certificate for metrics.dungeon signed by it."""
     directory.mkdir()
     openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "rootCA.key", "-out", "rootCA.pem",
-            "-days", "2", "-subj", "/CN=Smoke Root CA", cwd=directory)
+            "-days", "90", "-subj", "/CN=Smoke Root CA", cwd=directory)
     openssl("req", "-newkey", "rsa:2048", "-nodes", "-keyout", "dungeon.key", "-out", "dungeon.csr",
             "-subj", "/CN=dungeon", cwd=directory)
+    # Longer than the certificate alert's 21 days, so it stays quiet
     (directory / "san.ext").write_text("subjectAltName=DNS:dungeon,DNS:metrics.dungeon\n")
     openssl("x509", "-req", "-in", "dungeon.csr", "-CA", "rootCA.pem", "-CAkey", "rootCA.key", "-CAcreateserial",
-            "-out", "dungeon.pem", "-days", "1", "-extfile", "san.ext", cwd=directory)
+            "-out", "dungeon.pem", "-days", "60", "-extfile", "san.ext", cwd=directory)
     for name in ("rootCA.pem", "dungeon.pem", "dungeon.key"):
         (directory / name).chmod(0o644)
 

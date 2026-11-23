@@ -141,7 +141,7 @@ Group/title, with the fields the roles read:
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository, also a key of raspi's repository (offsite copy) |
 | `dungeon` | `Backup/Offsite` | user name, URL (the host name, `https://` and a trailing `/` are cut off), attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
 | `dungeon` | `Backup/Resticprofile Offsite` | password: the passphrase of the offsite repositories |
-| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
+| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (healthmonitor, and Grafana's alerts on the host running the `monitoring` component) |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
 | `raspberry`, `testbench`, `dungeon` | `Monitoring/Metrics writer <host>` | password of the host's monitoring agent for the write path (`Metrics writer raspi` in raspberry, and so on; only hosts running `monitoring_agent`) |
@@ -210,8 +210,9 @@ ansible-playbook setup-pihole.yaml --limit testbench
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbench
 
-# Change Grafana's data sources, folders or dashboards (dungeon, the host running the monitoring component):
-# edit configs/grafana.yaml or configs/grafana/dashboards/, then (check mode reports what it would change)
+# Change Grafana's data sources, folders, dashboards or alerting (contact point, policy, alert rules) (dungeon, the host
+# running the monitoring component): edit configs/grafana.yaml or configs/grafana/dashboards/, then (check mode
+# reports what it would change)
 bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon --check
 bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon
 
@@ -328,9 +329,14 @@ secret Telegraf reads through its Docker secret store, and checks nginx' certifi
 central host the agent reaches nginx in the network `siz`; on any other host through the LAN, at the central host's
 IP, which the role looks up on the Pi.
 
-The agent also reports the lifetime of the host's nginx certificate and of the root CA (`x509_cert_expiry`). Its
-healthcheck fails while `https://metrics.<central host>/health` doesn't answer, so healthmonitor on every other host
-reports an outage of the central host.
+The agent also reports the lifetime of the host's nginx certificate and of the root CA (`x509_cert_expiry`, panel
+*Certificate lifetime* on the Hosts dashboard). Its healthcheck fails while `https://metrics.<central host>/health`
+doesn't answer, so healthmonitor on every other host reports an outage of the central host.
+
+Grafana alerts through Discord (the central host's `Discord/Docker Webhook`): a disk more than 90 % full for 15
+minutes, and a certificate ending within 21 days (`check-certificates.yaml` renews within 30). The rules, the contact
+point and the policy are in `configs/grafana.yaml`; `setup-grafana.yaml` writes them through the provisioning API, so
+the UI shows them read-only.
 
 To add a host: put `monitoring_agent` into its `stack_components`, its password into its own database and into the
 central host's (both `Monitoring/Metrics writer <host>`), and its name into `monitoring_writers`. Then run

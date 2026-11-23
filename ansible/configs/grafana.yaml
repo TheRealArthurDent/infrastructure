@@ -21,3 +21,107 @@ grafana_datasources:
 grafana_folders:
   - uid: infrastructure
     title: Infrastructure
+
+# --- alerting ---------------------------------------------------------------------------------------------------
+# Written through the provisioning API, so the UI shows them as provisioned and doesn't edit them. Grafana's own
+# template syntax ({{ $labels.host }}) is kept from Ansible's Jinja by raw blocks.
+
+# Discord, through the host's webhook (KeePass: Discord/Docker Webhook, like healthmonitor's messages)
+grafana_contact_points:
+  - uid: discord
+    name: Discord
+    type: discord
+    settings:
+      url: "{{ grafana_discord_webhook_url }}"
+      use_discord_username: false
+    disableResolveMessage: false
+
+# Every alert goes to Discord, one message per rule and host
+grafana_notification_policy:
+  receiver: Discord
+  group_by: [grafana_folder, alertname, host]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+
+# Groups of alert rules, each in a folder of grafana_folders and evaluated every interval (seconds). Each rule queries
+# VictoriaMetrics (refId A, an instant query) and fires when the threshold expression (refId C) holds for "for".
+# queryType, intervalMs and maxDataPoints are the values Grafana fills in; listed here, so a second run finds no
+# difference.
+grafana_alert_rule_groups:
+  - folderUid: infrastructure
+    title: Hosts
+    interval: 60
+    rules:
+      # The first alert of the operational monitoring (#39), formerly smart-home's
+      - uid: disk-space
+        title: Disk almost full
+        condition: C
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{% raw %}{{ $labels.host }}: {{ $labels.path }} is {{ humanize $values.A.Value }}% full{% endraw %}"
+        data:
+          - refId: A
+            datasourceUid: victoriametrics
+            queryType: ''
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              expr: max by (host, path) (disk_used_percent)
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ''
+            relativeTimeRange: {from: 0, to: 0}
+            model:
+              refId: C
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [90]}
+      # check-certificates.yaml renews a host certificate within 30 days of its end; one still this close was missed
+      - uid: certificate-lifetime
+        title: Certificate expires soon
+        condition: C
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: >-
+            {% raw %}{{ $labels.host }}: the certificate {{ $labels.common_name }} ({{ $labels.type }}) ends in
+            {{ humanize $values.A.Value }} days{% endraw %}
+        data:
+          - refId: A
+            datasourceUid: victoriametrics
+            queryType: ''
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              refId: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              expr: min by (host, common_name, type) (x509_cert_expiry) / 86400
+              instant: true
+              range: false
+          - refId: C
+            datasourceUid: __expr__
+            queryType: ''
+            relativeTimeRange: {from: 0, to: 0}
+            model:
+              refId: C
+              intervalMs: 1000
+              maxDataPoints: 43200
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [21]}
