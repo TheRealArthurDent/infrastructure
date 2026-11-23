@@ -103,6 +103,8 @@ def rendered_tree(tmp_path, host, extra_vars=None):
         "roles": [f"{role}_defaults" for role in ["stack", *COMPONENTS]],
         "vars": {
             "resticprofile_backup_host_ip": DUNGEON_IP,
+            # Looked up on the Pi by the monitoring_agent role, on hosts other than the central one
+            "monitoring_agent_central_ip": DUNGEON_IP,
             "dungeon_ssh_port": DUNGEON_SSH_PORT,
             # From KeePass on a real run (bootstrap.yaml), for hosts with an offsite copy (#60)
             "resticprofile_offsite_host": "offsite.example.org",

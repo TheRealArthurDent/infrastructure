@@ -622,6 +622,74 @@
           "legendFormat": "{{container_name}}"
         }
       ]
+    },
+    {
+      "id": 13,
+      "type": "bargauge",
+      "title": "Certificate lifetime",
+      "description": "Time left of the host's nginx certificate and of the root CA. check-certificates.yaml renews the host certificate within 30 days of its end.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdurations",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1814400
+              },
+              {
+                "color": "green",
+                "value": 2592000
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoriametrics"
+          },
+          "expr": "min by (common_name, type) (x509_cert_expiry{host=\"$host\"})",
+          "legendFormat": "{{common_name}} ({{type}})",
+          "instant": true,
+          "range": false
+        }
+      ]
     }
   ]
 }

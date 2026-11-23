@@ -1,4 +1,30 @@
 ---
+# The agent writes to the central host through the LAN unless it is the central host itself. IPv4 only: the
+# container's networks have no IPv6.
+- name: Resolve the central host of the monitoring
+  when: not (monitoring_agent_central_is_local | bool) and monitoring_agent_central_ip is not defined
+  block:
+    - name: Look up the central host of the monitoring on the Pi
+      ansible.builtin.command: getent ahostsv4 {{ monitoring_agent_central_host }}
+      register: monitoring_agent_central_getent
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Ensure the central host of the monitoring resolves
+      ansible.builtin.assert:
+        that: monitoring_agent_central_getent.rc == 0
+        fail_msg: >-
+          {{ monitoring_agent_central_host }} does not resolve on {{ inventory_hostname }}; the monitoring agent needs
+          its IP.
+        quiet: true
+
+    # The first address of a STREAM line
+    - name: Remember the IP of the central host of the monitoring
+      ansible.builtin.set_fact:
+        monitoring_agent_central_ip: >-
+          {{ (monitoring_agent_central_getent.stdout_lines | select('search', 'STREAM') | first).split() | first }}
+
 - name: Ensure the Telegraf config directory exists
   ansible.builtin.file:
     path: "{{ monitoring_agent_config_dir }}"
@@ -7,7 +33,7 @@
     group: root
     mode: '0755'
 
-# Holds no secrets: the agent writes to VictoriaMetrics without credentials, inside the network siz.
+# Holds no secrets: the agent reads its password from the Compose secret metrics_writer_password (secrets role).
 - name: Ensure the Telegraf config is present
   ansible.builtin.template:
     src: telegraf/telegraf.conf.j2

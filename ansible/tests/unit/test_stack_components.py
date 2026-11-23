@@ -145,13 +145,16 @@ OFFSITE = "'resticprofile' in stack_components and resticprofile_offsite_enabled
 SSH_DIR = ["'resticprofile' in stack_components",
            "resticprofile_repository_is_sftp | bool or resticprofile_offsite_enabled | bool"]
 # The directory of the Compose secrets, for every component that has one
-SECRETS_DIR = "['resticprofile', 'monitoring'] | intersect(stack_components) | length > 0"
+SECRETS_DIR = "['resticprofile', 'monitoring', 'monitoring_agent'] | intersect(stack_components) | length > 0"
 SECRET_FILES = {
     "/etc/docker/infrastructure/.env": "pihole",
     "/etc/docker/infrastructure/.outbound.env": "outbound",
     "/etc/docker/infrastructure/.healthmonitor.env": "healthmonitor",
     "/etc/docker/infrastructure/secrets": SECRETS_DIR,
     "/etc/docker/infrastructure/secrets/grafana_admin_password": "monitoring",
+    "/etc/docker/infrastructure/secrets/metrics_writer_password": "monitoring_agent",
+    "/etc/docker/infrastructure/nginx": "monitoring",
+    "/etc/docker/infrastructure/nginx/metrics.htpasswd": "monitoring",
     "/etc/docker/infrastructure/secrets/restic_passphrase": "resticprofile",
     "/etc/docker/infrastructure/resticprofile": "resticprofile",
     "/etc/docker/infrastructure/resticprofile/.ssh": SSH_DIR,
@@ -192,7 +195,7 @@ def test_dungeon_renders_only_its_vhosts(tmp_path):
     tree = rendered_tree(tmp_path, "dungeon")
     names = set(re.findall(r"server_name\s+(\S+) ", tree["nginx/nginx.conf"]))
     assert names == {"dungeon", "portainer.dungeon", "outbound.dungeon", "opencloud.dungeon", "paperless.dungeon",
-                     "grafana.dungeon"}
+                     "grafana.dungeon", "metrics.dungeon"}
     assert "listen              8443" not in tree["nginx/nginx.conf"]
     assert "location /health" in tree["nginx/nginx.conf"]
 
@@ -271,7 +274,7 @@ def test_containers_reach_opencloud_through_nginx_without_dns(tmp_path, host):
     """OpenCloud fetches its own OIDC discovery from https://opencloud.<host>; Docker resolves it to nginx in siz."""
     compose = yaml.safe_load(rendered_tree(tmp_path, host)["docker-compose.yaml"])
     siz = compose["services"]["nginx"]["networks"]["siz"]
-    assert siz["aliases"] == [f"opencloud.{host}"]
+    assert f"opencloud.{host}" in siz["aliases"]
     assert "nginx" in compose["services"]["nginx"]["networks"]
 
 
@@ -326,11 +329,11 @@ def test_monitoring_has_memory_limits(dungeon_compose):
         assert dungeon_compose["services"][name]["deploy"]["resources"]["limits"]["memory"], name
 
 
-def test_raspi_runs_no_monitoring(tmp_path):
+def test_raspi_runs_only_the_agent_of_the_monitoring(tmp_path):
     tree = rendered_tree(tmp_path, "raspi")
     services = yaml.safe_load(tree["docker-compose.yaml"])["services"]
-    assert not {"victoriametrics", "grafana", "telegraf-agent"} & set(services)
-    assert "telegraf/telegraf.conf" not in tree
+    assert not {"victoriametrics", "grafana"} & set(services)
+    assert "telegraf-agent" in services
 
 
 @pytest.fixture(scope="module")
@@ -362,10 +365,10 @@ def test_the_agent_reads_the_host_read_only(dungeon_compose):
     assert agent["command"] == ["telegraf", "--watch-config", "poll"]
 
 
-def test_the_agent_writes_to_victoriametrics(dungeon_tree):
+def test_the_agent_writes_as_its_host(dungeon_tree):
+    """Where it writes to: test_monitoring_write_path.py."""
     conf = dungeon_tree["telegraf/telegraf.conf"]
     assert '[[outputs.influxdb]]' in conf
-    assert 'urls = ["http://victoriametrics:8428"]' in conf
     assert "skip_database_creation = true" in conf
     assert 'hostname = "dungeon"' in conf
 

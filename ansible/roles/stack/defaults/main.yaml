@@ -13,8 +13,7 @@ stack_manage_containers: true
 # The components of the stack (#14): each one is a role with its own compose fragment
 # (roles/<component>/templates/docker-compose.yaml.j2) and the config it needs. The stack role imports the roles
 # listed here and merges their fragments into one Compose project. monitoring (the central part of the monitoring,
-# #39) isn't in the default: only the one host running it lists it. Neither is monitoring_agent (Telegraf, #39) yet;
-# raspi gets it once it is set up again.
+# #39) isn't in the default: only the one host running it lists it. monitoring_agent (Telegraf, #39) runs everywhere.
 stack_components:
   - reverse_proxy
   - portainer
@@ -26,6 +25,8 @@ stack_components:
   - docker_socket_proxy
   - healthmonitor
   - landing_page
+  # The agent part of the monitoring (#39), writing to the central host (monitoring_agent_central_host)
+  - monitoring_agent
 
 # The stack's own part of the compose file: the networks it creates in tasks/main.yaml, external for Compose, and
 # nginx, which unbound and resticprofile attach to even on a host without the reverse proxy component.

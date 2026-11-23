@@ -59,6 +59,8 @@ provisioner:
         dhparameter_bits: 1024
         # Like host_vars/raspi.yaml: only hosts in the Argon case run the fan role.
         argon_fan_enabled: true
+        # Like group_vars/all/monitoring.yaml: the agent writes to dungeon, resolved through etc_hosts above
+        monitoring_agent_central_host: dungeon
       dungeon-trixie:
         ansible_user: smarthome
         ansible_become: true
@@ -95,8 +97,8 @@ provisioner:
         # Public, made up
         resticprofile_offsite_host_keys:
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOffsiteHostKeyForMoleculeTestsOnly0000
-        reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
-        certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
+        reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana, metrics]
+        certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana, metrics]
 
 verifier:
   name: ansible

@@ -43,8 +43,11 @@ resticprofile_backup_mount: /media/backup
 # Backups wait for the clean-slate restore of every stack here (its marker in /var/lib/restic-restore/): this one and
 # private-cloud's apps (private-cloud#15), whose deployments wrote their markers
 resticprofile_backup_stacks: ["{{ stack_project_name }}", opencloud, paperless]
-reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
-certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
+# metrics: the agents' write path to the monitoring's central part (#39)
+reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana, metrics]
+certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana, metrics]
+# The hosts whose monitoring agent may write here, each with its own credential (KeePass, ansible/README.md)
+monitoring_writers: [dungeon, raspi, testbench]
 # Offsite copy (#60) of the repositories on the backup SSD; testbench's stays at home. Host, user, key pair and
 # passphrase of the target come from KeePass (ansible/README.md).
 resticprofile_offsite_sources: [raspi, dungeon]

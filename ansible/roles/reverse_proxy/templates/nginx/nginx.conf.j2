@@ -139,6 +139,20 @@ http {
     }
 {% endif %}
 
+{% if 'metrics' in reverse_proxy_vhosts and 'monitoring' in stack_components %}
+    # The agents' write path to the central part of the monitoring (#39)
+    server {
+        listen              443 ssl;
+        listen              [::]:443 ssl;
+        server_name         metrics.{{ inventory_hostname }} metrics.{{ inventory_hostname }}.*;
+
+        include             snippets/ssl-certificates.conf;
+        include             snippets/ssl-params.conf;
+
+        include             snippets/metrics.conf;
+    }
+
+{% endif %}
 {% if 'portainer' in reverse_proxy_vhosts %}
     server {
         listen              443 ssl;

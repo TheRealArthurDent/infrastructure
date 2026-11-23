@@ -17,3 +17,12 @@ reverse_proxy_vhosts:
   - nextcloud
   - pihole
   - outbound
+
+# The vhosts containers in siz reach nginx by (network aliases): private-cloud's OpenCloud, and the write path of the
+# monitoring (metrics, #39) on the host running its central part.
+reverse_proxy_siz_aliases: >-
+  {%- set names = ['opencloud'] | intersect(reverse_proxy_vhosts) -%}
+  {%- if 'monitoring' in stack_components -%}
+  {%-   set names = names + ['metrics'] | intersect(reverse_proxy_vhosts) -%}
+  {%- endif -%}
+  {{ names | product([inventory_hostname]) | map('join', '.') | list }}

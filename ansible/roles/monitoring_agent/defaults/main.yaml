@@ -2,9 +2,23 @@
 # The agent part of the monitoring (#39): Telegraf collects the metrics of its host and its containers and sends them
 # to the central part (the monitoring component). Enabled per host through stack_components.
 
-# Where the agent sends the metrics (InfluxDB line protocol). The default reaches VictoriaMetrics in the network siz of
-# the same host; an agent on another host needs the central part's address.
-monitoring_agent_url: http://victoriametrics:8428
+# The host running the central part (the monitoring component); the inventory names it (group_vars/all/monitoring.yaml).
+monitoring_agent_central_host: "{{ inventory_hostname }}"
+# Derived: whether the central part runs on this host. Then the agent reaches nginx in the network siz by name;
+# otherwise through the LAN, at the central host's IP, which the role looks up on the Pi (set
+# monitoring_agent_central_ip to skip the lookup).
+monitoring_agent_central_is_local: "{{ monitoring_agent_central_host == inventory_hostname }}"
+# Where the agent sends the metrics (InfluxDB line protocol): nginx on the central host, which takes writes only from
+# the hosts in its monitoring_writers, signed in with their user and password.
+monitoring_agent_url: "https://metrics.{{ monitoring_agent_central_host }}"
+monitoring_agent_user: "{{ inventory_hostname }}"
+# The private root CA the central host's certificate is signed with (certificate_check_root_ca_cert_path), as the
+# agent sees it through /hostfs
+monitoring_agent_root_ca: /hostfs/etc/ssl/certs/rootCA.pem
+# Certificates whose lifetime the agent reports (x509_cert_expiry): the host's nginx certificate and the root CA
+monitoring_agent_certificates:
+  - "/hostfs{{ stack_dir }}/nginx/{{ inventory_hostname }}.pem"
+  - "{{ monitoring_agent_root_ca }}"
 # How often the agent collects, and how often it sends
 monitoring_agent_interval: 60s
 # Memory limit of the container (Compose deploy.resources.limits.memory)

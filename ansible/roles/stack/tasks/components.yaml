@@ -31,3 +31,14 @@
     that: "'reverse_proxy' in stack_components or 'landing_page' not in stack_components"
     fail_msg: "landing_page needs reverse_proxy: add reverse_proxy to stack_components or leave landing_page out too"
     quiet: true
+
+# The agents write to the central part through nginx (the metrics vhost, #39).
+- name: Ensure the write path of the monitoring is served wherever its central part runs
+  ansible.builtin.assert:
+    that: >-
+      'monitoring' not in stack_components
+      or ('reverse_proxy' in stack_components and 'metrics' in reverse_proxy_vhosts)
+    fail_msg: >-
+      monitoring needs reverse_proxy with the vhost metrics: add reverse_proxy to stack_components and metrics to
+      reverse_proxy_vhosts (and certificate_check_subdomains), or leave monitoring out too
+    quiet: true

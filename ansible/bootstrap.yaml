@@ -143,6 +143,21 @@
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='Monitoring', title=monitoring_grafana_admin_title)
              if 'monitoring' in stack_components else '' }}
+        monitoring_agent_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Monitoring', title=monitoring_writer_title ~ ' ' ~ inventory_hostname)
+             if 'monitoring_agent' in stack_components else '' }}
+        # The central host needs every writer's password for nginx' password file
+        monitoring_writer_passwords: >-
+          {%- set result = {} -%}
+          {%- if 'monitoring' in stack_components -%}
+          {%-   for writer in monitoring_writers -%}
+          {%-     set _ = result.update({writer: lookup('keepass', db=keepass_db, password=keepass_password,
+                                                        key=keepass_key, group='Monitoring',
+                                                        title=monitoring_writer_title ~ ' ' ~ writer)}) -%}
+          {%-   endfor -%}
+          {%- endif -%}
+          {{ result }}
         opencloud_admin_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='OpenCloud', title=opencloud_admin_title)

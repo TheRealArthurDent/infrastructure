@@ -25,7 +25,8 @@
       tags: always
 
 # Sets up the Grafana of the monitoring component (#39, smart-home#11) from configs/grafana.yaml and
-# configs/grafana/dashboards/: data sources, folders and dashboards, and deletes what Grafana holds beyond them.
+# configs/grafana/dashboards/: data sources, folders, dashboards, contact points, the notification policy and the alert
+# rules, and deletes what Grafana holds beyond them.
 # Grafana is only talked to through its HTTP API, as admin, so everything runs on the control node: nothing connects
 # to the Pi itself. Run it after the stack is up (bootstrap.yaml --tags stack).
 - name: Configure Grafana via its HTTP API
@@ -72,16 +73,31 @@
     - name: Get the KeePass credentials
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
 
-    - name: Get the root CA certificate and the Grafana admin password from KeePass
+    # The monitoring's Discord webhook, for Grafana's contact point
+    - name: Get the root CA certificate, the Grafana admin password and the Discord webhook from KeePass
       ansible.builtin.set_fact:
         grafana_root_ca: "{{ lookup('keepass', db=keepass_ca_db, password=keepass_ca_password,
                                     key=keepass_ca_key, group='Domain', title='rootCA', attachment='rootCA.pem') }}"
         grafana_admin_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Monitoring',
                     title=grafana_admin_title) }}
+        grafana_discord_webhook_id: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Discord',
+                    title=grafana_webhook_title, field='id') }}
+        grafana_discord_webhook_token: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key, group='Discord',
+                    title=grafana_webhook_title, field='token') }}
       vars:
         grafana_admin_title: >-
           {{ monitoring_grafana_admin_title | default(grafana_secrets_defaults.monitoring_grafana_admin_title) }}
+        grafana_webhook_title: >-
+          {{ discord_monitoring_webhook_title | default(grafana_secrets_defaults.discord_monitoring_webhook_title) }}
+      no_log: true
+
+    - name: Build the Discord webhook URL
+      ansible.builtin.set_fact:
+        grafana_discord_webhook_url: >-
+          https://discord.com/api/webhooks/{{ grafana_discord_webhook_id }}/{{ grafana_discord_webhook_token }}
       no_log: true
 
     - name: Configure Grafana from the control node

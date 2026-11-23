@@ -2,8 +2,9 @@
 # Brings Grafana in line with configs/grafana.yaml and configs/grafana/dashboards/ (setup-grafana.yaml). Reads
 # everything first, also in check mode, and reports what it would change; only the writes are skipped there.
 #
-# Needs grafana_api_url, grafana_admin_password, grafana_ca_file, grafana_datasources, grafana_folders and
-# grafana_dashboards (<folder uid>/<dashboard uid> per file).
+# Needs grafana_api_url, grafana_admin_password, grafana_ca_file, grafana_datasources, grafana_folders,
+# grafana_dashboards (<folder uid>/<dashboard uid> per file), grafana_contact_points (with grafana_discord_webhook_url),
+# grafana_notification_policy and grafana_alert_rule_groups.
 - name: Talk to the Grafana API as admin
   module_defaults:
     ansible.builtin.uri:
@@ -214,6 +215,198 @@
         url: "{{ grafana_api_url }}/api/dashboards/uid/{{ item }}"
         method: DELETE
       loop: "{{ grafana_dashboards_to_delete }}"
+      changed_when: true
+
+    # --- alerting: contact points -----------------------------------------------------------------------------
+    # The export decrypts the secure settings (the webhook URL), so a changed one is found too.
+
+    - name: Read the contact points with their settings
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/contact-points/export?decrypt=true&format=json"
+      register: grafana_existing_contact_points
+      check_mode: false
+      no_log: true
+
+    - name: Compare the contact points with the repo
+      ansible.builtin.set_fact:
+        grafana_contact_points_to_create: >-
+          {{ grafana_contact_points | rejectattr('uid', 'in', existing | map(attribute='uid')) | list }}
+        grafana_contact_points_to_update: >-
+          {%- set result = [] -%}
+          {%- for wanted in grafana_contact_points -%}
+          {%-   for have in existing | selectattr('uid', 'eq', wanted.uid) -%}
+          {%-     if have.name != wanted.name or have.type != wanted.type
+                     or have.settings | default({}) != wanted.settings
+                     or have.disableResolveMessage | default(false) != wanted.disableResolveMessage -%}
+          {%-       set _ = result.append(wanted) -%}
+          {%-     endif -%}
+          {%-   endfor -%}
+          {%- endfor -%}
+          {{ result }}
+        grafana_contact_points_to_delete: >-
+          {{ existing | rejectattr('uid', 'in', grafana_contact_points | map(attribute='uid'))
+             | map(attribute='uid') | list }}
+      vars:
+        # One receiver per contact point here, flattened with the contact point's name
+        existing: >-
+          {%- set result = [] -%}
+          {%- for point in grafana_existing_contact_points.json.contactPoints | default([]) -%}
+          {%-   for receiver in point.receivers -%}
+          {%-     set _ = result.append(receiver | combine({'name': point.name})) -%}
+          {%-   endfor -%}
+          {%- endfor -%}
+          {{ result }}
+      no_log: true
+
+    - name: Report the contact point changes
+      ansible.builtin.debug:
+        msg:
+          create: "{{ grafana_contact_points_to_create | map(attribute='uid') | list }}"
+          update: "{{ grafana_contact_points_to_update | map(attribute='uid') | list }}"
+          delete: "{{ grafana_contact_points_to_delete }}"
+
+    - name: Create the contact points
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/contact-points"
+        method: POST
+        body: "{{ item }}"
+        status_code: [200, 202]
+      loop: "{{ grafana_contact_points_to_create }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+      no_log: true
+
+    - name: Update the contact points
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/contact-points/{{ item.uid }}"
+        method: PUT
+        body: "{{ item }}"
+        status_code: [200, 202]
+      loop: "{{ grafana_contact_points_to_update }}"
+      loop_control:
+        label: "{{ item.uid }}"
+      changed_when: true
+      no_log: true
+
+    # --- alerting: notification policy -------------------------------------------------------------------------
+
+    - name: Read the notification policy
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/policies"
+      register: grafana_existing_policy
+      check_mode: false
+
+    - name: Report whether the notification policy changes
+      ansible.builtin.debug:
+        msg: "update: {{ grafana_policy_differs }}"
+      vars:
+        grafana_policy_differs: >-
+          {{ grafana_existing_policy.json | combine(grafana_notification_policy) != grafana_existing_policy.json }}
+
+    - name: Write the notification policy
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/policies"
+        method: PUT
+        body: "{{ grafana_notification_policy }}"
+        status_code: [200, 202]
+      when: grafana_existing_policy.json | combine(grafana_notification_policy) != grafana_existing_policy.json
+      changed_when: true
+
+    # The policy no longer names them, so the contact points the repo lacks can go
+    - name: Delete the contact points the repo lacks
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/contact-points/{{ item }}"
+        method: DELETE
+        status_code: [200, 202, 204]
+      loop: "{{ grafana_contact_points_to_delete }}"
+      changed_when: true
+
+    # --- alerting: rules ---------------------------------------------------------------------------------------
+    # A group is written as a whole: its interval and its rules, which replace the ones Grafana holds in it.
+
+    - name: Read the alert rule groups of the repo
+      ansible.builtin.uri:
+        url: >-
+          {{ grafana_api_url }}/api/v1/provisioning/folder/{{ item.folderUid }}/rule-groups/{{ item.title | urlencode }}
+        status_code: [200, 404]
+      loop: "{{ grafana_alert_rule_groups }}"
+      loop_control:
+        label: "{{ item.folderUid }}/{{ item.title }}"
+      register: grafana_existing_rule_groups
+      check_mode: false
+
+    # A group differs when it is missing, its interval or its rules' uids differ, or one of a rule's fields differs;
+    # Grafana adds fields of its own (id, updated, provenance, ...).
+    - name: Compare the alert rule groups with the repo
+      ansible.builtin.set_fact:
+        grafana_rule_groups_to_write: >-
+          {%- set result = [] -%}
+          {%- for response in grafana_existing_rule_groups.results -%}
+          {%-   set group = response.item -%}
+          {%-   set rules = group.rules | map('combine', {'folderUID': group.folderUid, 'ruleGroup': group.title,
+                                                         'orgID': 1}) | list -%}
+          {%-   set wanted = {'title': group.title, 'folderUid': group.folderUid, 'interval': group.interval,
+                              'rules': rules} -%}
+          {%-   set have = response.json if response.status == 200 else none -%}
+          {%-   set ns = namespace(differs=have is none) -%}
+          {%-   if not ns.differs -%}
+          {%-     set ns.differs = have.interval != group.interval
+                                   or have.rules | map(attribute='uid') | list
+                                      != rules | map(attribute='uid') | list -%}
+          {%-   endif -%}
+          {%-   if not ns.differs -%}
+          {%-     for rule in rules -%}
+          {%-       set have_rule = have.rules | selectattr('uid', 'eq', rule.uid) | first -%}
+          {%-       if have_rule | combine(rule) != have_rule -%}
+          {%-         set ns.differs = true -%}
+          {%-       endif -%}
+          {%-     endfor -%}
+          {%-   endif -%}
+          {%-   if ns.differs -%}
+          {%-     set _ = result.append(wanted) -%}
+          {%-   endif -%}
+          {%- endfor -%}
+          {{ result }}
+
+    - name: Report the alert rule groups to write
+      ansible.builtin.debug:
+        msg: "{{ grafana_rule_groups_to_write | map(attribute='title') | list }}"
+
+    - name: Write the alert rule groups
+      ansible.builtin.uri:
+        url: >-
+          {{ grafana_api_url }}/api/v1/provisioning/folder/{{ item.folderUid }}/rule-groups/{{ item.title | urlencode }}
+        method: PUT
+        body: "{{ item }}"
+      loop: "{{ grafana_rule_groups_to_write }}"
+      loop_control:
+        label: "{{ item.folderUid }}/{{ item.title }}"
+      changed_when: true
+
+    - name: Read all alert rules
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/alert-rules"
+      register: grafana_all_alert_rules
+      check_mode: false
+
+    - name: Find the alert rules the repo lacks
+      ansible.builtin.set_fact:
+        grafana_alert_rules_to_delete: >-
+          {{ grafana_all_alert_rules.json | map(attribute='uid')
+             | reject('in', grafana_alert_rule_groups | map(attribute='rules') | flatten | map(attribute='uid'))
+             | list }}
+
+    - name: Report the alert rules to delete
+      ansible.builtin.debug:
+        msg: "{{ grafana_alert_rules_to_delete }}"
+
+    - name: Delete the alert rules the repo lacks
+      ansible.builtin.uri:
+        url: "{{ grafana_api_url }}/api/v1/provisioning/alert-rules/{{ item }}"
+        method: DELETE
+        status_code: [200, 204]
+      loop: "{{ grafana_alert_rules_to_delete }}"
       changed_when: true
 
     # Last: by now the folders hold no dashboard of the repo. Alert rules in them would go too.

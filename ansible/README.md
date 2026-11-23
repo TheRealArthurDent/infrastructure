@@ -141,16 +141,19 @@ Group/title, with the fields the roles read:
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository, also a key of raspi's repository (offsite copy) |
 | `dungeon` | `Backup/Offsite` | user name, URL (the host name, `https://` and a trailing `/` are cut off), attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
 | `dungeon` | `Backup/Resticprofile Offsite` | password: the passphrase of the offsite repositories |
-| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
+| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (healthmonitor) |
+| `dungeon` | `Discord/Monitoring Webhook` | fields `id` and `token` (Grafana's alerts; only the host running the `monitoring` component) |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
+| `raspberry`, `testbench`, `dungeon` | `Monitoring/Metrics writer <host>` | password of the host's monitoring agent for the write path (`Metrics writer raspi` in raspberry, and so on; only hosts running `monitoring_agent`) |
+| `dungeon` | `Monitoring/Metrics writer <host>` for every host in `monitoring_writers` | the same passwords, copied from the other hosts' databases: the central host writes their hashes into nginx' password file |
 
 Every host reads the same entry names from its own database, and only the entries of the parts it runs
 (`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`, `secrets_paperless`). dungeon's database
 holds nothing of the smart-home stack and no restic key pair (its repository is local). The titles of the Discord,
 restic, OpenCloud and Paperless entries are host variables (`discord_docker_webhook_title`,
-`resticprofile_ssh_key_title`, `resticprofile_passphrase_title`, `monitoring_grafana_admin_title`,
-`opencloud_admin_title`, `paperless_*_title`, defaults in
+`discord_monitoring_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`,
+`monitoring_grafana_admin_title`, `opencloud_admin_title`, `paperless_*_title`, defaults in
 `roles/secrets/defaults/main.yaml`); no host overrides them.
 
 Passwords may hold any printable character (`$`, `{{ }}`, quotes, backslashes, `#`, blanks, umlauts): the secrets role
@@ -208,8 +211,9 @@ ansible-playbook setup-pihole.yaml --limit testbench
 # Prefix any playbook with bin/with-keepass to skip the KeePass prompt (see KeePass above)
 bin/with-keepass ansible-playbook setup-pihole.yaml --limit testbench
 
-# Change Grafana's data sources, folders or dashboards (dungeon, the host running the monitoring component):
-# edit configs/grafana.yaml or configs/grafana/dashboards/, then (check mode reports what it would change)
+# Change Grafana's data sources, folders, dashboards or alerting (contact point, policy, alert rules) (dungeon, the host
+# running the monitoring component): edit configs/grafana.yaml or configs/grafana/dashboards/, then (check mode
+# reports what it would change)
 bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon --check
 bin/with-keepass ansible-playbook setup-grafana.yaml --limit dungeon
 
@@ -293,10 +297,11 @@ The `stack` role assembles the Docker stack from component roles: `reverse_proxy
 `pihole`, `outbound`, `resticprofile` (backups, restore helper), `docker_socket_proxy` (the Docker API, read-only, at
 `tcp://docker-socket-proxy:2375` in the internal network `docker-api`), `healthmonitor`, `landing_page` (see
 [Landing page](#landing-page)), `monitoring` (the central part of the monitoring: VictoriaMetrics and Grafana, #39) and
-`monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`). Each
+`monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`, see
+[Monitoring](#monitoring)). Each
 brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
-`docker compose up`. `stack_components` lists the enabled ones and defaults to the first nine; `monitoring` runs on
-one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
+`docker compose up`. `stack_components` lists the enabled ones and defaults to all but `monitoring`, which only the
+host running it lists. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
 listed with the dependencies they need, e.g. `reverse_proxy` for the vhosts and the landing page, and
 `docker_socket_proxy` for `healthmonitor` and `monitoring_agent`).
 
@@ -306,12 +311,38 @@ POST with 403.
 
 | Host | Components |
 | --- | --- |
-| `raspi`, `testbench` | the first nine |
+| `raspi`, `testbench` | all but `monitoring` |
 | `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `docker_socket_proxy`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
-nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless` and `grafana`, and its resticprofile backs
-up to a local repository on the SSD (see [dungeon](#dungeon)).
+nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless`, `grafana` and `metrics`, and its
+resticprofile backs up to a local repository on the SSD (see [dungeon](#dungeon)).
+
+### Monitoring
+
+The central part (`monitoring`) runs on the host named by `monitoring_agent_central_host`
+(`inventory/group_vars/all/monitoring.yaml`, dungeon for now). Every agent writes to
+`https://metrics.<central host>/write`: nginx there takes writes signed in as one of the hosts in `monitoring_writers`
+(host_vars of the central host) and passes them on to VictoriaMetrics; it serves nothing else of VictoriaMetrics but
+`/health`. Each agent signs in as its host name with its password from `Monitoring/Metrics writer <host>`, a Compose
+secret Telegraf reads through its Docker secret store, and checks nginx' certificate against the root CA. On the
+central host the agent reaches nginx in the network `siz`; on any other host through the LAN, at the central host's
+IP, which the role looks up on the Pi.
+
+The agent also reports the lifetime of the host's nginx certificate and of the root CA (`x509_cert_expiry`, panel
+*Certificate lifetime* on the Hosts dashboard). Its healthcheck fails while `https://metrics.<central host>/health`
+doesn't answer, so healthmonitor on every other host reports an outage of the central host.
+
+Grafana alerts through Discord (the central host's `Discord/Monitoring Webhook`): a disk more than 90 % full for 15
+minutes, and a certificate ending within 21 days (`check-certificates.yaml` renews within 30). The rules, the contact
+point and the policy are in `configs/grafana.yaml`; `setup-grafana.yaml` writes them through the provisioning API, so
+the UI shows them read-only.
+
+To add a host (`monitoring_agent` is in the default `stack_components`): put its password into its own database and
+into the central host's (both `Monitoring/Metrics writer <host>`), and its name into `monitoring_writers`. Then run
+`bootstrap.yaml --tags stack` on the central host first (nginx' password file) and on the new host after. Moving the
+central part to another host: `monitoring_agent_central_host`, the new host's `stack_components`, `monitoring_writers`,
+`reverse_proxy_vhosts` and `certificate_check_subdomains` (`metrics`), then `check-certificates.yaml` there.
 
 ### Landing page
 

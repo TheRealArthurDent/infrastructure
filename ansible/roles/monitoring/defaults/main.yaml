@@ -3,6 +3,11 @@
 # Enabled on one host through stack_components (for now dungeon). Nothing here may assume that host, so the
 # component can move to a dedicated host by changing host_vars.
 
+# The hosts whose monitoring agent may write here (https://metrics.<host>/write through nginx), each signed in as its
+# host name with its own password (secrets role, KeePass group Monitoring)
+monitoring_writers:
+  - "{{ inventory_hostname }}"
+
 # How long VictoriaMetrics keeps the metrics (its -retentionPeriod)
 monitoring_retention_period: 12M
 # Memory limits of the containers (Compose deploy.resources.limits.memory)

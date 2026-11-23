@@ -10,8 +10,9 @@ from test_stack_components import WITHOUT_PIHOLE, run_components_check, undefine
 # What Homepage copies from its skeleton when a file is missing; the config is mounted read-only, so all must exist
 HOMEPAGE_FILES = ["bookmarks.yaml", "custom.css", "custom.js", "docker.yaml", "kubernetes.yaml", "proxmox.yaml",
                   "services.yaml", "settings.yaml", "widgets.yaml"]
-# vhosts that get no tile: Nextcloud doesn't run any more and is going away
-WITHOUT_TILE = {"nextcloud"}
+# vhosts that get no tile: Nextcloud doesn't run any more and is going away; metrics is the monitoring agents' write
+# path (#39), nothing to open in a browser
+WITHOUT_TILE = {"nextcloud", "metrics"}
 
 
 @pytest.fixture(scope="module")

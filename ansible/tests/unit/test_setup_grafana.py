@@ -11,11 +11,13 @@ import json
 import os
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 import pytest
+import yaml
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -28,6 +30,10 @@ ANSIBLE_DIR = Path(__file__).parents[2]
 KEEPASS_PASSWORD = "test-master-password"
 # Anything but ${...} and blanks at the ends, which the secrets role refuses
 PASSWORD = 'grafana $x {{ z }} "q" \'s\' \\b #c'
+# The monitoring's Discord webhook (Discord/Monitoring Webhook), for the contact point; healthmonitor's (Discord/Docker
+# Webhook) sits next to it and must not be used. Nothing is ever sent in the test
+WEBHOOK_ID = "1234567890"
+WEBHOOK_TOKEN = "webhook-token-{{ x }}-LEAKCANARY"
 DASHBOARD = json.loads((ANSIBLE_DIR / "configs/grafana/dashboards/infrastructure/hosts.json").read_text())
 
 needs_docker = pytest.mark.skipif(not docker_available(), reason="no Docker daemon")
@@ -57,6 +63,13 @@ def keepass(tmp_path_factory):
     kp = create_database(str(db), password=KEEPASS_PASSWORD, keyfile=str(keyfile))
     monitoring = kp.add_group(kp.root_group, "Monitoring")
     kp.add_entry(monitoring, "Grafana admin", "", PASSWORD)
+    discord = kp.add_group(kp.root_group, "Discord")
+    webhook = kp.add_entry(discord, "Monitoring Webhook", "", "")
+    webhook.set_custom_property("id", WEBHOOK_ID)
+    webhook.set_custom_property("token", WEBHOOK_TOKEN)
+    docker = kp.add_entry(discord, "Docker Webhook", "", "")
+    docker.set_custom_property("id", "999")
+    docker.set_custom_property("token", "docker-token")
     domain = kp.add_group(kp.root_group, "Domain")
     ca = kp.add_entry(domain, "rootCA", "", "ca-passphrase")
     ca.add_attachment(kp.add_binary(ca_pem()), "rootCA.pem")
@@ -147,6 +160,76 @@ def test_the_first_run_creates_the_data_source_folder_and_dashboard(grafana, app
 def test_the_password_stays_out_of_the_output(applied):
     assert PASSWORD not in output(applied)
     assert KEEPASS_PASSWORD not in output(applied)
+    assert WEBHOOK_TOKEN not in output(applied)
+
+
+def contact_points(grafana):
+    status, export = api(grafana, "GET", "/api/v1/provisioning/contact-points/export?decrypt=true&format=json")
+    assert status == 200, export
+    return {receiver["uid"]: dict(receiver, name=point["name"])
+            for point in export["contactPoints"] for receiver in point["receivers"]}
+
+
+@needs_docker
+def test_alerts_go_to_the_monitorings_discord_webhook(grafana, applied):
+    points = contact_points(grafana)
+    assert set(points) == {"discord"}, points
+    assert points["discord"]["type"] == "discord"
+    assert points["discord"]["settings"]["url"] == f"https://discord.com/api/webhooks/{WEBHOOK_ID}/{WEBHOOK_TOKEN}"
+    status, policy = api(grafana, "GET", "/api/v1/provisioning/policies")
+    assert status == 200 and policy["receiver"] == "Discord", policy
+    assert "host" in policy["group_by"]
+
+
+def alert_rules(grafana):
+    status, rules = api(grafana, "GET", "/api/v1/provisioning/alert-rules")
+    assert status == 200, rules
+    return {rule["uid"]: rule for rule in rules}
+
+
+@needs_docker
+def test_the_alert_rules_watch_disk_space_and_certificates(grafana, applied):
+    rules = alert_rules(grafana)
+    assert set(rules) == {"disk-space", "certificate-lifetime"}
+    for rule in rules.values():
+        assert rule["folderUID"] == "infrastructure" and rule["ruleGroup"] == "Hosts", rule
+        assert rule["provenance"] == "api", rule
+    # Grafana's template syntax reaches Grafana, not Jinja
+    assert rules["disk-space"]["annotations"]["summary"].startswith("{{ $labels.host }}")
+    status, group = api(grafana, "GET", "/api/v1/provisioning/folder/infrastructure/rule-groups/Hosts")
+    assert status == 200 and group["interval"] == 60, group
+
+
+def rule_queries():
+    for group in yaml.safe_load((ANSIBLE_DIR / "configs/grafana.yaml").read_text())["grafana_alert_rule_groups"]:
+        for rule in group["rules"]:
+            for query in rule["data"]:
+                if query["datasourceUid"] != "__expr__":
+                    yield pytest.param(query["model"]["expr"], id=rule["uid"])
+
+
+@needs_docker
+@pytest.mark.parametrize("expr", rule_queries())
+def test_every_alert_rule_finds_the_agents_metrics(grafana, expr):
+    assert '"result":[{' in query_until(grafana["base"], expr, '"result":[{'), expr
+
+
+@needs_docker
+def test_grafana_evaluates_the_alert_rules_without_errors(grafana, applied):
+    """A rule whose query or threshold Grafana can't evaluate ends in the state Error, which alerts too."""
+    rules = []
+    for _ in range(60):
+        status, body = api(grafana, "GET", "/api/prometheus/grafana/api/v1/rules")
+        rules = [rule for group in body["data"]["groups"] for rule in group["rules"]] if status == 200 else []
+        if len(rules) == 2 and all(not rule.get("lastEvaluation", "0001").startswith("0001") for rule in rules):
+            break
+        time.sleep(2)
+    assert len(rules) == 2, rules
+    # Whether the disk rule fires depends on the disks of the machine running the test
+    for rule in rules:
+        assert rule["health"] == "ok", rule
+    certificate = next(rule for rule in rules if rule["name"] == "Certificate expires soon")
+    assert certificate["state"] == "inactive", certificate
 
 
 @needs_docker
@@ -174,6 +257,18 @@ def test_what_the_repo_lacks_is_deleted(grafana, applied, keepass, tmp_path):
     hosts["dashboard"]["title"] = "Changed in the UI"
     assert api(grafana, "POST", "/api/dashboards/db", {
         "dashboard": hosts["dashboard"], "folderUid": "infrastructure", "overwrite": True})[0] == 200
+    # A contact point and a rule beyond the repo, a changed rule and a changed webhook
+    assert api(grafana, "POST", "/api/v1/provisioning/contact-points", {
+        "uid": "extra", "name": "Extra", "type": "webhook", "settings": {"url": "http://nowhere/hook"}})[0] in (200, 202)
+    status, group = api(grafana, "GET", "/api/v1/provisioning/folder/infrastructure/rule-groups/Hosts")
+    extra_rule = dict(group["rules"][0], uid="extra-rule", title="Extra rule")
+    extra_rule.pop("id", None)
+    assert api(grafana, "POST", "/api/v1/provisioning/alert-rules", extra_rule)[0] == 201
+    disk = next(rule for rule in group["rules"] if rule["uid"] == "disk-space")
+    assert api(grafana, "PUT", "/api/v1/provisioning/alert-rules/disk-space", dict(disk, **{"for": "1m"}))[0] == 200
+    discord = {key: contact_points(grafana)["discord"][key] for key in ("uid", "name", "type")}
+    assert api(grafana, "PUT", "/api/v1/provisioning/contact-points/discord", dict(
+        discord, settings={"url": "https://discord.com/api/webhooks/1/old"}))[0] == 202
 
     check = run_playbook(tmp_path, keepass, grafana["url"], args=["--check"])
     assert check.returncode == 0, output(check)
@@ -185,6 +280,11 @@ def test_what_the_repo_lacks_is_deleted(grafana, applied, keepass, tmp_path):
     assert api(grafana, "GET", "/api/dashboards/uid/extra")[0] == 404
     assert api(grafana, "GET", "/api/folders/old")[0] == 404
     assert api(grafana, "GET", "/api/dashboards/uid/hosts")[1]["dashboard"]["title"] == "Hosts"
+    assert set(contact_points(grafana)) == {"discord"}
+    assert contact_points(grafana)["discord"]["settings"]["url"].endswith(WEBHOOK_TOKEN)
+    rules = alert_rules(grafana)
+    assert set(rules) == {"disk-space", "certificate-lifetime"}
+    assert rules["disk-space"]["for"] == "15m"
 
 
 def panel_queries():
