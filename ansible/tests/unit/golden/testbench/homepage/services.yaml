@@ -38,6 +38,11 @@
       icon: node-red.png
       description: Automations
       siteMonitor: http://iobroker:1880
+  - Home Assistant:
+      href: https://homeassistant.testbench
+      icon: home-assistant.png
+      description: Smart home
+      siteMonitor: http://homeassistant:8123
   - Phoscon:
       href: https://deconz.testbench
       icon: phoscon.png

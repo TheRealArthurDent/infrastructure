@@ -401,3 +401,28 @@ def test_the_agent_reads_the_backup_metrics_of_resticprofile(dungeon_tree):
     assert '[[processors.strings.trim_prefix]]' in conf
     assert 'prefix = "resticprofile_"' in conf
     assert 'fieldexclude = ["resticprofile_build_info", "restic_build_info"]' in conf
+
+
+@pytest.mark.parametrize("host", ["raspi", "testbench"])
+def test_homeassistant_vhost_proxies_to_the_container(tmp_path, host):
+    """smart-home's homeassistant container listens on 8123 in the network siz, without TLS (smart-home#2)."""
+    tree = rendered_tree(tmp_path, host)
+    assert "include             snippets/homeassistant.conf;" in server_block_of(tree, f"homeassistant.{host}")
+    snippet = tree["nginx/snippets/homeassistant.conf"]
+    assert "set $homeassistant homeassistant:8123;" in snippet
+    assert "proxy_pass http://$homeassistant;" in snippet
+    # Home Assistant trusts X-Forwarded-For only from the proxy; its frontend needs websockets
+    assert "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;" in snippet
+    assert "proxy_set_header X-Forwarded-Proto https;" in snippet
+    assert 'proxy_set_header Connection "upgrade";' in snippet
+
+
+def test_dungeon_has_no_homeassistant_vhost(tmp_path):
+    tree = rendered_tree(tmp_path, "dungeon")
+    assert "homeassistant." not in tree["nginx/nginx.conf"]
+
+
+def server_block_of(tree, name):
+    conf = tree["nginx/nginx.conf"]
+    start = conf.index(f"server_name         {name} ")
+    return conf[start:conf.index("}", start)]

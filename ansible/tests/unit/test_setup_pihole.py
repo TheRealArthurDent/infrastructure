@@ -766,3 +766,19 @@ def test_outbound_only_resolves_allowed_domains():
     assert ("deny", "regex", ".*") in domains
     # A block list would only cost a gravity download: '.*' already blocks everything.
     assert outbound["block_lists"] == []
+
+
+@pytest.mark.parametrize("host", ["raspi", "testbench"])
+def test_the_lan_pihole_resolves_the_homeassistant_vhost(host):
+    main = next(i for i in configured_instances() if i["name"] == "pihole")
+
+    assert {"domain": f"homeassistant.{host}", "target": host} in main["cname_records"]
+
+
+def test_outbound_allows_what_home_assistant_needs():
+    """smart-home's Home Assistant (smart-home#2): DWD's weather warnings and its repair notices."""
+    outbound = next(i for i in configured_instances() if i["name"] == "outbound" and "raspi" in i["hosts"])
+    allowed = {(d["type"], d["kind"], d["domain"]) for d in outbound["domains"]}
+
+    assert ("allow", "exact", "maps.dwd.de") in allowed
+    assert ("allow", "exact", "alerts.home-assistant.io") in allowed

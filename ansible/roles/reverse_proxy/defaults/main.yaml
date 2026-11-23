@@ -9,6 +9,7 @@ reverse_proxy_vhosts:
   - iobroker
   - ui
   - node-red
+  - homeassistant
   - deconz
   - deconz-ui
   - grafana

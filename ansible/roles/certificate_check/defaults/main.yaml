@@ -21,6 +21,7 @@ certificate_check_subdomains:
   - nextcloud
   - iobroker
   - node-red
+  - homeassistant
   - grafana
   - outbound
   - deconz
