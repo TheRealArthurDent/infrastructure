@@ -26,7 +26,7 @@ grafana_folders:
 # Written through the provisioning API, so the UI shows them as provisioned and doesn't edit them. Grafana's own
 # template syntax ({{ $labels.host }}) is kept from Ansible's Jinja by raw blocks.
 
-# Discord, through the host's webhook (KeePass: Discord/Docker Webhook, like healthmonitor's messages)
+# Discord, through the monitoring's webhook (KeePass: Discord/Monitoring Webhook)
 grafana_contact_points:
   - uid: discord
     name: Discord

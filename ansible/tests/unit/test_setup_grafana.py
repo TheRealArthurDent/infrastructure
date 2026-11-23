@@ -30,7 +30,8 @@ ANSIBLE_DIR = Path(__file__).parents[2]
 KEEPASS_PASSWORD = "test-master-password"
 # Anything but ${...} and blanks at the ends, which the secrets role refuses
 PASSWORD = 'grafana $x {{ z }} "q" \'s\' \\b #c'
-# The host's Discord webhook (Discord/Docker Webhook), for the contact point; nothing is ever sent in the test
+# The monitoring's Discord webhook (Discord/Monitoring Webhook), for the contact point; healthmonitor's (Discord/Docker
+# Webhook) sits next to it and must not be used. Nothing is ever sent in the test
 WEBHOOK_ID = "1234567890"
 WEBHOOK_TOKEN = "webhook-token-{{ x }}-LEAKCANARY"
 DASHBOARD = json.loads((ANSIBLE_DIR / "configs/grafana/dashboards/infrastructure/hosts.json").read_text())
@@ -62,9 +63,13 @@ def keepass(tmp_path_factory):
     kp = create_database(str(db), password=KEEPASS_PASSWORD, keyfile=str(keyfile))
     monitoring = kp.add_group(kp.root_group, "Monitoring")
     kp.add_entry(monitoring, "Grafana admin", "", PASSWORD)
-    webhook = kp.add_entry(kp.add_group(kp.root_group, "Discord"), "Docker Webhook", "", "")
+    discord = kp.add_group(kp.root_group, "Discord")
+    webhook = kp.add_entry(discord, "Monitoring Webhook", "", "")
     webhook.set_custom_property("id", WEBHOOK_ID)
     webhook.set_custom_property("token", WEBHOOK_TOKEN)
+    docker = kp.add_entry(discord, "Docker Webhook", "", "")
+    docker.set_custom_property("id", "999")
+    docker.set_custom_property("token", "docker-token")
     domain = kp.add_group(kp.root_group, "Domain")
     ca = kp.add_entry(domain, "rootCA", "", "ca-passphrase")
     ca.add_attachment(kp.add_binary(ca_pem()), "rootCA.pem")
@@ -166,7 +171,7 @@ def contact_points(grafana):
 
 
 @needs_docker
-def test_alerts_go_to_the_hosts_discord_webhook(grafana, applied):
+def test_alerts_go_to_the_monitorings_discord_webhook(grafana, applied):
     points = contact_points(grafana)
     assert set(points) == {"discord"}, points
     assert points["discord"]["type"] == "discord"

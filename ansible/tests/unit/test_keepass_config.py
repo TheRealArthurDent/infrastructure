@@ -263,7 +263,8 @@ def test_testbench_has_its_own_database_with_the_default_titles():
     defaults = yaml.safe_load((ANSIBLE_DIR / "roles" / "secrets" / "defaults" / "main.yaml").read_text())
     titles = {name for name in defaults if name.endswith("_title")}
     assert titles == {
-        "discord_docker_webhook_title", "resticprofile_ssh_key_title", "resticprofile_passphrase_title",
+        "discord_docker_webhook_title", "discord_monitoring_webhook_title",
+        "resticprofile_ssh_key_title", "resticprofile_passphrase_title",
         "resticprofile_offsite_title", "resticprofile_offsite_passphrase_title",
         "opencloud_admin_title",
         "paperless_secret_key_title", "paperless_db_title", "paperless_admin_title",

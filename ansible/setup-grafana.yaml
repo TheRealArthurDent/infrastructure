@@ -73,7 +73,7 @@
     - name: Get the KeePass credentials
       ansible.builtin.import_tasks: tasks/keepass_credentials.yaml
 
-    # The Discord webhook of the host (as healthmonitor's), for Grafana's contact point
+    # The monitoring's Discord webhook, for Grafana's contact point
     - name: Get the root CA certificate, the Grafana admin password and the Discord webhook from KeePass
       ansible.builtin.set_fact:
         grafana_root_ca: "{{ lookup('keepass', db=keepass_ca_db, password=keepass_ca_password,
@@ -91,7 +91,7 @@
         grafana_admin_title: >-
           {{ monitoring_grafana_admin_title | default(grafana_secrets_defaults.monitoring_grafana_admin_title) }}
         grafana_webhook_title: >-
-          {{ discord_docker_webhook_title | default(grafana_secrets_defaults.discord_docker_webhook_title) }}
+          {{ discord_monitoring_webhook_title | default(grafana_secrets_defaults.discord_monitoring_webhook_title) }}
       no_log: true
 
     - name: Build the Discord webhook URL

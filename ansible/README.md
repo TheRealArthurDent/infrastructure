@@ -141,7 +141,8 @@ Group/title, with the fields the roles read:
 | `dungeon` | `Backup/Resticprofile` | password: the passphrase of dungeon's own restic repository, also a key of raspi's repository (offsite copy) |
 | `dungeon` | `Backup/Offsite` | user name, URL (the host name, `https://` and a trailing `/` are cut off), attachments `id_ed25519` and `id_ed25519.pub`: the offsite target and the key pair it accepts |
 | `dungeon` | `Backup/Resticprofile Offsite` | password: the passphrase of the offsite repositories |
-| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (healthmonitor, and Grafana's alerts on the host running the `monitoring` component) |
+| `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` (healthmonitor) |
+| `dungeon` | `Discord/Monitoring Webhook` | fields `id` and `token` (Grafana's alerts; only the host running the `monitoring` component) |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
 | `raspberry`, `testbench`, `dungeon` | `Monitoring/Metrics writer <host>` | password of the host's monitoring agent for the write path (`Metrics writer raspi` in raspberry, and so on; only hosts running `monitoring_agent`) |
@@ -151,8 +152,8 @@ Every host reads the same entry names from its own database, and only the entrie
 (`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`, `secrets_paperless`). dungeon's database
 holds nothing of the smart-home stack and no restic key pair (its repository is local). The titles of the Discord,
 restic, OpenCloud and Paperless entries are host variables (`discord_docker_webhook_title`,
-`resticprofile_ssh_key_title`, `resticprofile_passphrase_title`, `monitoring_grafana_admin_title`,
-`opencloud_admin_title`, `paperless_*_title`, defaults in
+`discord_monitoring_webhook_title`, `resticprofile_ssh_key_title`, `resticprofile_passphrase_title`,
+`monitoring_grafana_admin_title`, `opencloud_admin_title`, `paperless_*_title`, defaults in
 `roles/secrets/defaults/main.yaml`); no host overrides them.
 
 Passwords may hold any printable character (`$`, `{{ }}`, quotes, backslashes, `#`, blanks, umlauts): the secrets role
@@ -332,7 +333,7 @@ The agent also reports the lifetime of the host's nginx certificate and of the r
 *Certificate lifetime* on the Hosts dashboard). Its healthcheck fails while `https://metrics.<central host>/health`
 doesn't answer, so healthmonitor on every other host reports an outage of the central host.
 
-Grafana alerts through Discord (the central host's `Discord/Docker Webhook`): a disk more than 90 % full for 15
+Grafana alerts through Discord (the central host's `Discord/Monitoring Webhook`): a disk more than 90 % full for 15
 minutes, and a certificate ending within 21 days (`check-certificates.yaml` renews within 30). The rules, the contact
 point and the policy are in `configs/grafana.yaml`; `setup-grafana.yaml` writes them through the provisioning API, so
 the UI shows them read-only.
