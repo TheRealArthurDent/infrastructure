@@ -34,6 +34,7 @@
           INFLUXDB_WRITE_PASSWORD: "{{ influxdb_write_password }}"
           GRAFANA_PASSWORD: "{{ grafana_password }}"
           MOSQUITTO_PASSWD: "{{ mosquitto_password }}"
+          MOSQUITTO_HOMEASSISTANT_PASSWD: "{{ mosquitto_homeassistant_password }}"
           DECONZ_VNC_PASSWORD: "{{ deconz_vnc_password }}"
           DECONZ_DEVICE_TYPE: ttyACM0
           GITHUB_USER: test-user

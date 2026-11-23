@@ -160,7 +160,7 @@ def test_unconfigured_database_has_empty_paths(monkeypatch):
 SMART_HOME_KEYS = {
     "iobroker_states_redis_port", "iobroker_objects_redis_port", "influxdb_admin_password", "influxdb_read_password",
     "influxdb_write_password", "grafana_password", "mosquitto_password", "deconz_vnc_password", "nodered_github_user",
-    "nodered_github_email",
+    "nodered_github_email", "mosquitto_homeassistant_password",
 }
 # The facts of the "Read secrets from KeePass" task -> the condition that switches their lookup on
 SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"

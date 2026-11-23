@@ -127,6 +127,11 @@
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home', title='mosquitto')
              if secrets_smart_home_env | bool else '' }}
+        # Home Assistant's own Mosquitto user (smart-home#2)
+        mosquitto_homeassistant_password: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='smart-home', title='mosquitto homeassistant')
+             if secrets_smart_home_env | bool else '' }}
         deconz_vnc_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/deconz - Phoscon-GW', title='Deconz VNC')
