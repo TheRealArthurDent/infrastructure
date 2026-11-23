@@ -59,8 +59,8 @@ def secrets_tasks(out):
 
 
 # KeePass entries the secrets role writes into .env files; the InfluxDB and VNC ones take fewer characters.
-GENERAL = ["pihole", "outbound", "webhook_id", "webhook_token", "restic", "grafana", "mosquitto", "github_user",
-           "github_email", "opencloud"]
+GENERAL = ["pihole", "outbound", "webhook_id", "webhook_token", "restic", "grafana", "mosquitto",
+           "mosquitto_homeassistant", "github_user", "github_email", "opencloud"]
 SPECIAL = {"influx_admin": AWKWARD_INFLUXDB, "influx_read": AWKWARD_INFLUXDB, "influx_write": AWKWARD_INFLUXDB,
            "vnc": AWKWARD_VNC}
 # Three runs give every awkward value at least one general entry.
@@ -105,6 +105,7 @@ def make_kdbx(path, values):
     entry(influx, "Influx write", values["influx_write"])
     entry(smart_home, "Grafana", values["grafana"])
     entry(smart_home, "mosquitto", values["mosquitto"])
+    entry(smart_home, "mosquitto homeassistant", values["mosquitto_homeassistant"])
     entry(group("deconz - Phoscon-GW", smart_home), "Deconz VNC", values["vnc"])
     entry(group("GitHub"), "NodeRed", username=values["github_user"], email=values["github_email"])
     entry(group("OpenCloud"), defaults["opencloud_admin_title"], values["opencloud"])
@@ -170,6 +171,7 @@ def test_awkward_keepass_values_reach_compose_unchanged(tmp_path, offset):
             "INFLUXDB_WRITE_PASSWORD": values["influx_write"],
             "GRAFANA_PASSWORD": values["grafana"],
             "MOSQUITTO_PASSWD": values["mosquitto"],
+            "MOSQUITTO_HOMEASSISTANT_PASSWD": values["mosquitto_homeassistant"],
             "DECONZ_VNC_PASSWORD": values["vnc"],
             "DECONZ_DEVICE_TYPE": "ttyACM0",
             "GITHUB_USER": values["github_user"],
@@ -195,6 +197,7 @@ def test_every_awkward_value_is_covered():
     ("vnc", "back\\slash"),
     ("pihole", "line\nbreak"),
     ("mosquitto", "tab\there"),
+    ("mosquitto_homeassistant", "line\nbreak"),
 ])
 def test_values_the_consumers_cant_take_are_refused(tmp_path, entry, value):
     values = {**secrets(0), entry: value}

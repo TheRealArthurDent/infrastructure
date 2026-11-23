@@ -131,6 +131,7 @@ Group/title, with the fields the roles read:
 | `raspberry`, `testbench` | `smart-home/ioBroker/States Redis`, `smart-home/ioBroker/Objects Redis` | field `port` |
 | `raspberry`, `testbench` | `smart-home/Influx DB/Influx admin`, `.../Influx read`, `.../Influx write` | passwords of the InfluxDB users |
 | `raspberry`, `testbench` | `smart-home/Grafana`, `smart-home/mosquitto` | passwords |
+| `raspberry`, `testbench` | `smart-home/mosquitto homeassistant` | password of Home Assistant's Mosquitto user `homeassistant` |
 | `raspberry`, `testbench` | `smart-home/deconz - Phoscon-GW/Deconz VNC` | password of deCONZ' VNC |
 | `raspberry`, `testbench` | `GitHub/NodeRed` | fields `username` and `email` |
 | `raspberry` | `Domain/rootCA` | the root CA (`keepass_ca_database`): password, attachments `rootCA.pem` and `rootCA.key` |
