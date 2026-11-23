@@ -337,8 +337,8 @@ minutes, and a certificate ending within 21 days (`check-certificates.yaml` rene
 point and the policy are in `configs/grafana.yaml`; `setup-grafana.yaml` writes them through the provisioning API, so
 the UI shows them read-only.
 
-To add a host: `monitoring_agent` is in the default `stack_components`; put its password into its own database and into the
-central host's (both `Monitoring/Metrics writer <host>`), and its name into `monitoring_writers`. Then run
+To add a host (`monitoring_agent` is in the default `stack_components`): put its password into its own database and
+into the central host's (both `Monitoring/Metrics writer <host>`), and its name into `monitoring_writers`. Then run
 `bootstrap.yaml --tags stack` on the central host first (nginx' password file) and on the new host after. Moving the
 central part to another host: `monitoring_agent_central_host`, the new host's `stack_components`, `monitoring_writers`,
 `reverse_proxy_vhosts` and `certificate_check_subdomains` (`metrics`), then `check-certificates.yaml` there.
