@@ -17,10 +17,13 @@ services:
     networks:
       nginx:
       siz:
-        # {% if 'opencloud' in reverse_proxy_vhosts +%}
-        # private-cloud's OpenCloud calls its own URL (OpenID Connect): Docker resolves it to nginx, without Pi-hole.
+        # {% if reverse_proxy_siz_aliases | length > 0 +%}
+        # Names that containers in siz reach nginx by, without Pi-hole: private-cloud's OpenCloud calls its own URL
+        # (OpenID Connect), the monitoring agent of this host writes to metrics.<host> (#39).
         aliases:
-          - opencloud.{{ inventory_hostname }}
+          # {% for alias in reverse_proxy_siz_aliases +%}
+          - "{{ alias }}"
+          # {% endfor +%}
         # {% endif +%}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]

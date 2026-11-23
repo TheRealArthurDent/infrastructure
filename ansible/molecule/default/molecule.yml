@@ -95,8 +95,8 @@ provisioner:
         # Public, made up
         resticprofile_offsite_host_keys:
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOffsiteHostKeyForMoleculeTestsOnly0000
-        reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana]
-        certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana]
+        reverse_proxy_vhosts: [portainer, outbound, opencloud, paperless, grafana, metrics]
+        certificate_check_subdomains: [portainer, outbound, opencloud, paperless, grafana, metrics]
 
 verifier:
   name: ansible

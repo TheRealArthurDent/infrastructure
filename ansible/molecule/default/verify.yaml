@@ -1388,11 +1388,87 @@
           ansible.builtin.assert:
             that:
               - "'hostname = \"' ~ inventory_hostname ~ '\"' in conf"
-              - "'urls = [\"http://victoriametrics:8428\"]' in conf"
+              - "'urls = [\"https://metrics.' ~ inventory_hostname ~ '\"]' in conf"
+              - "'username = \"' ~ inventory_hostname ~ '\"' in conf"
+              - agent.secrets == ['metrics_writer_password']
               - "'endpoint = \"tcp://docker-socket-proxy:2375\"' in conf"
               - "'docker-api' in agent.networks"
               - agent.user == 'telegraf'
             fail_msg: "{{ conf }} {{ agent }}"
+
+        - name: Stat the agent's password for the write path
+          ansible.builtin.stat:
+            path: /etc/docker/infrastructure/secrets/metrics_writer_password
+          register: metrics_writer_secret
+
+        - name: Read the agent's password for the write path
+          ansible.builtin.slurp:
+            src: /etc/docker/infrastructure/secrets/metrics_writer_password
+          register: metrics_writer_secret_content
+          no_log: true
+
+        # Telegraf's Docker secret store reads the file as it is, as the image's user telegraf (100)
+        - name: Check the agent's password is the KeePass value, readable by Telegraf only
+          ansible.builtin.assert:
+            that:
+              - metrics_writer_secret.stat.uid == 100
+              - metrics_writer_secret.stat.mode == '0400'
+              - metrics_writer_secret_content.content | b64decode == monitoring_agent_password
+            fail_msg: "metrics_writer_password: {{ metrics_writer_secret.stat }}"
+          no_log: true
+
+    - name: Run the checks of the write path on the host with the monitoring component
+      when: "'monitoring' in stack_components | default([])"
+      block:
+        - name: Stat the writers file of nginx
+          ansible.builtin.stat:
+            path: /etc/docker/infrastructure/nginx/metrics.htpasswd
+          register: metrics_htpasswd
+
+        # nginx' workers (group 101 in the nginx image) read it on every request
+        - name: Check the writers file is readable by nginx' workers only
+          ansible.builtin.assert:
+            that:
+              - metrics_htpasswd.stat.pw_name == 'root'
+              - metrics_htpasswd.stat.gid == 101
+              - metrics_htpasswd.stat.mode == '0640'
+            fail_msg: "metrics.htpasswd: {{ metrics_htpasswd.stat }}"
+
+        - name: Read the writers file of nginx
+          ansible.builtin.slurp:
+            src: /etc/docker/infrastructure/nginx/metrics.htpasswd
+          register: metrics_htpasswd_content
+
+        - name: Check the writers file lists each writer once, as SHA-512 crypt
+          vars:
+            lines: "{{ metrics_htpasswd_content.content | b64decode | trim | split('\n') }}"
+          ansible.builtin.assert:
+            that:
+              - lines | map('regex_replace', ':.*$', '') | list == monitoring_writer_passwords.keys() | list
+              - lines | select('match', '^[^:]+:\\$6\\$[./0-9A-Za-z]{1,16}\\$[./0-9A-Za-z]{86}$') | list | length
+                == lines | length
+            fail_msg: "{{ lines | map('regex_replace', ':.*$', '') | list }}"
+
+        # openssl, not the filter the role uses: the hash must be one that crypt() and so nginx take for the password
+        - name: Hash each writer's password again with the salt of its line
+          ansible.builtin.command:
+            cmd: openssl passwd -6 -salt {{ item.split('$')[2] }} -stdin
+            stdin: "{{ monitoring_writer_passwords[item.split(':')[0]] }}"
+            stdin_add_newline: false
+          loop: "{{ metrics_htpasswd_content.content | b64decode | trim | split('\n') }}"
+          register: metrics_htpasswd_rehashed
+          changed_when: false
+          no_log: true
+
+        - name: Check nginx accepts each writer's password
+          ansible.builtin.assert:
+            that: item.stdout == item.item.split(':', 1)[1]
+            fail_msg: "{{ item.item.split(':')[0] }}: the hash in metrics.htpasswd doesn't match its password"
+            quiet: true
+          loop: "{{ metrics_htpasswd_rehashed.results }}"
+          loop_control:
+            label: "{{ item.item.split(':')[0] }}"
+          no_log: true
 
     - name: Run the checks on the hosts with the landing page
       # raspi's profile uses the default components, which verify doesn't load

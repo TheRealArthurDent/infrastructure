@@ -27,7 +27,34 @@ services:
           memory: "{{ monitoring_agent_memory_limit }}"
     depends_on:
       - docker-socket-proxy
+    # Its password for the write path, read by Telegraf's Docker secret store
+    secrets:
+      - metrics_writer_password
     restart: unless-stopped
+    # Unhealthy while the central host's write path is unreachable, so healthmonitor reports an outage of the central
+    # host from every other host (its own monitoring can't). busybox' wget checks the certificate against the
+    # system's CA bundle unless SSL_CERT_FILE names another.
+    healthcheck:
+      test: ["CMD-SHELL", "SSL_CERT_FILE={{ monitoring_agent_root_ca }} wget -q -O /dev/null {{ monitoring_agent_url }}/health"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 1m
+      start_interval: 5s
     networks:
+      # {% if monitoring_agent_central_is_local | bool +%}
+      # nginx of this host, by its alias metrics.<host>
       - siz
+      # {% else +%}
+      # The stack's network with a route out, to the central host
+      - nginx
+      # {% endif +%}
       - docker-api
+    # {% if not (monitoring_agent_central_is_local | bool) +%}
+    extra_hosts:
+      "metrics.{{ monitoring_agent_central_host }}": "{{ monitoring_agent_central_ip }}"
+    # {% endif +%}
+
+secrets:
+  metrics_writer_password:
+    file: /etc/docker/infrastructure/secrets/metrics_writer_password

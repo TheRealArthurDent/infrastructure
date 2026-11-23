@@ -1,0 +1,5 @@
+---
+# The host running the central part of the monitoring (#39, the monitoring component in its stack_components). Every
+# agent writes to it at https://metrics.<this host>; moving the central part to another host means changing this,
+# that host's stack_components, monitoring_writers, reverse_proxy_vhosts and certificate_check_subdomains.
+monitoring_agent_central_host: dungeon

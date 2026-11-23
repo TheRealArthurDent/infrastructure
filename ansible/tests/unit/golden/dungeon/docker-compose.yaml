@@ -14,6 +14,8 @@ networks:
 secrets:
   grafana_admin_password:
     file: /etc/docker/infrastructure/secrets/grafana_admin_password
+  metrics_writer_password:
+    file: /etc/docker/infrastructure/secrets/metrics_writer_password
   restic_offsite_passphrase:
     file: /etc/docker/infrastructure/secrets/restic_offsite_passphrase
   restic_passphrase:
@@ -142,6 +144,7 @@ services:
       siz:
         aliases:
         - opencloud.dungeon
+        - metrics.dungeon
     ports:
     - 80:80
     - 443:443
@@ -169,7 +172,7 @@ services:
       FTLCONF_misc_dnsmasq_lines: edns-packet-max=1232
       TZ: Europe/Berlin
     hostname: outbound
-    image: pihole/pihole:2026.10.1
+    image: pihole/pihole:2026.11.0
     networks:
       outbound:
         ipv4_address: 172.30.1.153
@@ -190,7 +193,7 @@ services:
       - --no-check-certificate
       - http://localhost:9000
     hostname: portainer
-    image: portainer/portainer-ce:2.45.2-alpine
+    image: portainer/portainer-ce:2.45.4-alpine
     networks:
     - siz
     restart: unless-stopped
@@ -279,12 +282,23 @@ services:
       HOST_MOUNT_PREFIX: /hostfs
       HOST_PROC: /hostfs/proc
       HOST_SYS: /hostfs/sys
+    healthcheck:
+      interval: 1m
+      retries: 3
+      start_interval: 5s
+      start_period: 1m
+      test:
+      - CMD-SHELL
+      - SSL_CERT_FILE=/hostfs/etc/ssl/certs/rootCA.pem wget -q -O /dev/null https://metrics.dungeon/health
+      timeout: 10s
     hostname: telegraf-agent
     image: telegraf:1.40.3-alpine
     networks:
     - siz
     - docker-api
     restart: unless-stopped
+    secrets:
+    - metrics_writer_password
     user: telegraf
     volumes:
     - /etc/docker/infrastructure/telegraf:/etc/telegraf:ro
@@ -306,7 +320,7 @@ services:
       - www.heise.de
       - '@127.0.0.1'
     hostname: unbound
-    image: klutchell/unbound:v1.26.1
+    image: klutchell/unbound:v1.26.2
     networks:
       nginx: {}
       siz:

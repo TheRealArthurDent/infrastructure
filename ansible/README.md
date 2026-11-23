@@ -144,6 +144,8 @@ Group/title, with the fields the roles read:
 | `dungeon` | `Discord/Docker Webhook` | fields `id` and `token` |
 | `dungeon` | `Pihole/outbound` | password of dungeon's outbound Pi-hole |
 | `dungeon` | `Monitoring/Grafana admin` | password of the monitoring Grafana's user `admin` (only the host running the `monitoring` component) |
+| `raspberry`, `testbench`, `dungeon` | `Monitoring/Metrics writer <host>` | password of the host's monitoring agent for the write path (`Metrics writer raspi` in raspberry, and so on; only hosts running `monitoring_agent`) |
+| `dungeon` | `Monitoring/Metrics writer <host>` for every host in `monitoring_writers` | the same passwords, copied from the other hosts' databases: the central host writes their hashes into nginx' password file |
 
 Every host reads the same entry names from its own database, and only the entries of the parts it runs
 (`stack_components`, `secrets_smart_home_env`, `secrets_opencloud_env`, `secrets_paperless`). dungeon's database
@@ -293,7 +295,8 @@ The `stack` role assembles the Docker stack from component roles: `reverse_proxy
 `pihole`, `outbound`, `resticprofile` (backups, restore helper), `docker_socket_proxy` (the Docker API, read-only, at
 `tcp://docker-socket-proxy:2375` in the internal network `docker-api`), `healthmonitor`, `landing_page` (see
 [Landing page](#landing-page)), `monitoring` (the central part of the monitoring: VictoriaMetrics and Grafana, #39) and
-`monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`). Each
+`monitoring_agent` (Telegraf with the metrics of the host and its containers, sent to `monitoring_agent_url`, see
+[Monitoring](#monitoring)). Each
 brings its compose fragment and config; `stack` merges the fragments, runs the clean-slate restore and
 `docker compose up`. `stack_components` lists the enabled ones and defaults to the first nine; `monitoring` runs on
 one host only, which lists it. To run fewer on a host, set it in `inventory/host_vars/<host>.yaml` (components must be
@@ -306,12 +309,34 @@ POST with 403.
 
 | Host | Components |
 | --- | --- |
-| `raspi`, `testbench` | the first nine |
+| `raspi` | the first nine |
+| `testbench` | the first nine, `monitoring_agent` |
 | `dungeon` | `reverse_proxy`, `portainer`, `unbound`, `outbound`, `resticprofile`, `docker_socket_proxy`, `healthmonitor`, `landing_page` (no LAN Pi-hole), `monitoring`, `monitoring_agent` |
 
 dungeon also has the host role `backup_target` (SSD mount, `restic` user), which is not part of the `stack` tag. Its
-nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless` and `grafana`, and its resticprofile backs
-up to a local repository on the SSD (see [dungeon](#dungeon)).
+nginx serves the vhosts `portainer`, `outbound`, `opencloud`, `paperless`, `grafana` and `metrics`, and its
+resticprofile backs up to a local repository on the SSD (see [dungeon](#dungeon)).
+
+### Monitoring
+
+The central part (`monitoring`) runs on the host named by `monitoring_agent_central_host`
+(`inventory/group_vars/all/monitoring.yaml`, dungeon for now). Every agent writes to
+`https://metrics.<central host>/write`: nginx there takes writes signed in as one of the hosts in `monitoring_writers`
+(host_vars of the central host) and passes them on to VictoriaMetrics; it serves nothing else of VictoriaMetrics but
+`/health`. Each agent signs in as its host name with its password from `Monitoring/Metrics writer <host>`, a Compose
+secret Telegraf reads through its Docker secret store, and checks nginx' certificate against the root CA. On the
+central host the agent reaches nginx in the network `siz`; on any other host through the LAN, at the central host's
+IP, which the role looks up on the Pi.
+
+The agent also reports the lifetime of the host's nginx certificate and of the root CA (`x509_cert_expiry`). Its
+healthcheck fails while `https://metrics.<central host>/health` doesn't answer, so healthmonitor on every other host
+reports an outage of the central host.
+
+To add a host: put `monitoring_agent` into its `stack_components`, its password into its own database and into the
+central host's (both `Monitoring/Metrics writer <host>`), and its name into `monitoring_writers`. Then run
+`bootstrap.yaml --tags stack` on the central host first (nginx' password file) and on the new host after. Moving the
+central part to another host: `monitoring_agent_central_host`, the new host's `stack_components`, `monitoring_writers`,
+`reverse_proxy_vhosts` and `certificate_check_subdomains` (`metrics`), then `check-certificates.yaml` there.
 
 ### Landing page
 

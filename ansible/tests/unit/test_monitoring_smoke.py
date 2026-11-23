@@ -6,11 +6,13 @@ secret unchanged and reaches VictoriaMetrics, and the agent delivers the host's 
 where Docker runs (CI), skipped elsewhere.
 """
 import base64
+import json
+import subprocess
 import time
 
 import pytest
 
-from monitoring_stack import docker_available, exec_in, monitoring_stack, query_until
+from monitoring_stack import WRITER_PASSWORD, docker_available, exec_in, monitoring_stack, query_until
 
 # Characters Compose would interpolate or a .env file would need quoted; ${...} is ruled out by the secrets role
 PASSWORD = 'smoke $x {{ z }} "q" \'s\' \\b #c'
@@ -83,3 +85,57 @@ def test_the_agent_delivers_the_backup_metrics_under_their_own_names(stack):
     assert '"source":"raspi"' in timestamp
     # Build info is no series of its own
     assert '"result":[]' in query_until(stack, '{__name__=~".*build_info"}', '"result":[]')
+
+
+def write_through_nginx(stack, user, password, path="/write"):
+    """A write as an agent sends it, through nginx (from the agent's container, which trusts the smoke root CA)."""
+    token = base64.b64encode(f"{user}:{password}".encode()).decode()
+    return exec_in(stack, "telegraf-agent", "sh", "-c",
+                   f'SSL_CERT_FILE=/smoke-ca/rootCA.pem wget -q -O /dev/null --header "Authorization: Basic {token}" '
+                   f'--post-data "smoke_nginx,host={user} value=7" https://metrics.dungeon{path}')
+
+
+def test_the_agent_writes_through_nginx_with_its_credential(stack):
+    """The agent's metrics above already came this way; this checks the writer's own write is accepted."""
+    write = write_through_nginx(stack, "dungeon", WRITER_PASSWORD)
+    assert write.returncode == 0, write.stderr
+
+
+@pytest.mark.parametrize("user, password", [("dungeon", "wrong"), ("raspi", WRITER_PASSWORD), ("", "")])
+def test_nginx_refuses_writes_without_the_writers_credential(stack, user, password):
+    write = write_through_nginx(stack, user, password)
+    assert write.returncode != 0
+    assert "401" in write.stderr
+
+
+@pytest.mark.parametrize("path", ["/api/v1/query?query=up", "/api/v1/admin/tsdb/delete_series?match[]=up",
+                                  "/api/v1/import", "/metrics", "/write/../api/v1/export"])
+def test_nginx_serves_nothing_else_of_victoriametrics(stack, path):
+    write = write_through_nginx(stack, "dungeon", WRITER_PASSWORD, path)
+    assert write.returncode != 0
+    assert "404" in write.stderr or "400" in write.stderr, write.stderr
+
+
+def test_the_agent_is_healthy_while_the_central_host_answers(stack):
+    status = subprocess.run([*stack, "ps", "--format", "{{.Service}} {{.Health}}"], capture_output=True, text=True)
+    assert "telegraf-agent healthy" in status.stdout, status.stdout
+
+
+def test_the_agent_reports_the_certificate_lifetimes(stack):
+    result = query_until(stack, "x509_cert_expiry", "rootCA.pem")
+    assert '"source":"file:///smoke-ca/dungeon.pem"' in result and '"type":"leaf"' in result
+    assert '"source":"file:///smoke-ca/rootCA.pem"' in result and '"type":"root"' in result
+
+
+def test_the_agents_healthcheck_fails_while_the_central_host_is_down(stack):
+    """What turns the agent unhealthy, so healthmonitor reports the outage: its healthcheck command, nginx paused."""
+    inspect = subprocess.run([*stack, "ps", "-q", "telegraf-agent"], capture_output=True, text=True, check=True)
+    test = subprocess.run(["docker", "inspect", "--format", "{{json .Config.Healthcheck.Test}}", inspect.stdout.strip()],
+                          capture_output=True, text=True, check=True)
+    command = json.loads(test.stdout)[1]
+    assert exec_in(stack, "telegraf-agent", "sh", "-c", command).returncode == 0
+    subprocess.run([*stack, "pause", "nginx"], check=True, capture_output=True)
+    try:
+        assert exec_in(stack, "telegraf-agent", "sh", "-c", f"timeout 15 {command}").returncode != 0
+    finally:
+        subprocess.run([*stack, "unpause", "nginx"], check=True, capture_output=True)
