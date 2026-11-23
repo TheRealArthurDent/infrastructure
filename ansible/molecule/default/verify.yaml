@@ -798,8 +798,11 @@
           - "'server_name         grafana.' ~ inventory_hostname ~ ' ' in nginx_conf"
           - compose.services.grafana.secrets == ['grafana_admin_password']
           - compose.secrets.grafana_admin_password.file == '/etc/docker/infrastructure/secrets/grafana_admin_password'
-          # private-cloud's OpenCloud reaches its own URL through nginx without DNS
-          - compose.services.nginx.networks.siz.aliases == ['opencloud.' ~ inventory_hostname]
+          # private-cloud's OpenCloud reaches its own URL through nginx without DNS, the local agent the write path
+          - >-
+            compose.services.nginx.networks.siz.aliases
+            == ['opencloud.' ~ inventory_hostname, 'metrics.' ~ inventory_hostname]
+          - "'server_name         metrics.' ~ inventory_hostname ~ ' ' in nginx_conf"
         fail_msg: "Unexpected stack config for dungeon: {{ compose.services.keys() | sort }} {{ profiles }}"
       when: is_dungeon
 
