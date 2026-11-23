@@ -1,0 +1,33 @@
+name: zizmor
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# A new push to a PR cancels the run for the previous one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lint the workflows
+        # The zizmor version of the pre-commit hook, so local runs and CI agree.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(grep -A2 'zizmorcore/zizmor-pre-commit' .pre-commit-config.yaml | sed -n 's/^ *rev: v//p')"
+          pipx run "zizmor==${version}" --no-progress --format github .

@@ -18,8 +18,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: read  # paths-filter lists the PR's files
-  checks: write  # publish test reports as check runs
 
 jobs:
   # Which jobs a PR needs. Outside PRs the filter doesn't run, its outputs are empty and every job runs; jobs
@@ -28,6 +26,9 @@ jobs:
     name: Changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read  # paths-filter lists the PR's files
     outputs:
       lint: ${{ steps.filter.outputs.lint }}
       unit: ${{ steps.filter.outputs.unit }}
@@ -63,6 +64,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Python
@@ -88,9 +90,14 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.unit != 'false' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write  # publish test reports as check runs
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -127,9 +134,14 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.molecule != 'false' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write  # publish test reports as check runs
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

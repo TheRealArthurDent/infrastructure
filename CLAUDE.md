@@ -89,6 +89,7 @@ Reports land in `test-results/` (JUnit XML). CI (`.github/workflows/ci.yaml`) ru
 on every PR, weekly on `main` and on demand. Its `changes` job skips the jobs a PR doesn't touch (docs-only PRs run
 none of them); a skipped job counts as passed for required checks, a workflow skipped by `on.paths` would block the
 merge, so never filter by `on.paths` (`test_rulesets.py` checks this). `pytest -n auto` runs the tests in parallel.
+`zizmor.yaml` lints the workflows with zizmor, in the version of its pre-commit hook.
 
 When writing or changing Ansible roles, follow the `ansible-role` skill in `.claude/skills/`.
 
