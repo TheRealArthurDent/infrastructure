@@ -3,6 +3,8 @@
 ansible-core==2.22.0
 ansible-lint==26.11.0
 pykeepass==4.2.0
+# password_hash (secrets role) where ansible-core finds no libcrypt on the control node
+passlib==1.7.4
 
 # Tests
 molecule==26.11.0
