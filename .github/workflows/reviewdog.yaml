@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Spellcheck
         uses: reviewdog/action-misspell@c846b6b0996029d2d39540c8ffebebbd957072db # v1.31.0
@@ -31,7 +33,7 @@ jobs:
           ignore: mosquitto
 
       - name: Action lint
-        uses: reviewdog/action-actionlint@v1.84.1
+        uses: reviewdog/action-actionlint@ae857e78c1b42b3d0a49637181b09d3d56d402b4 # v1.84.1
         with:
           reporter: github-pr-review
 
@@ -41,6 +43,6 @@ jobs:
           reporter: github-pr-review
 
       - name: Markdown lint
-        uses: reviewdog/action-markdownlint@v0.33.1
+        uses: reviewdog/action-markdownlint@584c3e89347d0b16ede47c73ae199550a02b1b37 # v0.33.1
         with:
           reporter: github-pr-review
