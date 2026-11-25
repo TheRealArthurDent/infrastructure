@@ -10,7 +10,7 @@ landing_page_config_dir: "{{ stack_dir }}/homepage"
 landing_page_memory_limit: 256m
 
 # The tile of each vhost (reverse_proxy_vhosts), shown when nginx serves the vhost on the host. Keys are the vhost
-# names; a vhost without an entry gets no tile (nextcloud: no longer running, going away).
+# names; a vhost without an entry gets no tile.
 #   name, description: what the tile shows
 #   group:   one of landing_page_groups
 #   icon:    a file of github.com/homarr-labs/dashboard-icons (the browser loads it from jsDelivr) or mdi-<name>

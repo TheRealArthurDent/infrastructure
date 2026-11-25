@@ -35,8 +35,6 @@ pihole_instances:
         target: "raspi"
       - domain: "outbound.raspi"
         target: "raspi"
-      - domain: "nextcloud.raspi"
-        target: "raspi"
       - domain: "iobroker.raspi"
         target: "raspi"
       - domain: "ui.raspi"
@@ -55,8 +53,6 @@ pihole_instances:
         target: "raspi"
       - domain: "outbound.dungeon"
         target: "dungeon"
-      - domain: "nextcloud.dungeon"
-        target: "dungeon"
       - domain: "portainer.dungeon"
         target: "dungeon"
       - domain: "opencloud.dungeon"
@@ -65,15 +61,11 @@ pihole_instances:
         target: "dungeon"
       - domain: "grafana.dungeon"
         target: "dungeon"
-      - domain: "nextcloud.erika"
-        target: "erika"
       - domain: "portainer.erika"
         target: "erika"
       - domain: "pihole.testbench"
         target: "testbench"
       - domain: "outbound.testbench"
-        target: "testbench"
-      - domain: "nextcloud.testbench"
         target: "testbench"
       - domain: "iobroker.testbench"
         target: "testbench"
@@ -140,7 +132,7 @@ pihole_instances:
         comment: "For TrackTitan"
         groups: ["Rennknecht"]
 
-  # Egress filter for the containers on the outbound network (smart-home, nextcloud, healthmonitor, Paperless): it
+  # Egress filter for the containers on the outbound network (smart-home, healthmonitor, Paperless): it
   # denies everything and allows only what they need (raspberry#293). The containers use it as their DNS server.
   - name: "outbound"
     hosts: ["raspi", "testbench"]
