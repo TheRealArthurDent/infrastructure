@@ -166,18 +166,6 @@ http {
     }
 {% endif %}
 
-{% if 'nextcloud' in reverse_proxy_vhosts %}
-    server {
-        listen              443 ssl;
-        listen              [::]:443 ssl;
-        server_name         nextcloud.{{ inventory_hostname }} nextcloud.{{ inventory_hostname }}.*;
-
-        include             snippets/ssl-certificates.conf;
-        include             snippets/ssl-params.conf;
-
-        include             snippets/nextcloud.conf;
-    }
-{% endif %}
 {% if 'opencloud' in reverse_proxy_vhosts %}
     # private-cloud's OpenCloud (opencloud/docker-compose.yaml there)
     server {

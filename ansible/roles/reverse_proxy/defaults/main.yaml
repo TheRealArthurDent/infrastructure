@@ -14,7 +14,6 @@ reverse_proxy_vhosts:
   - deconz-ui
   - grafana
   - portainer
-  - nextcloud
   - pihole
   - outbound
 
