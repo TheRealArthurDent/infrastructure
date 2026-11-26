@@ -39,6 +39,9 @@
           DECONZ_DEVICE_TYPE: ttyACM0
           GITHUB_USER: test-user
           GITHUB_EMAIL: test@example.com
+          HOMEASSISTANT_DISCORD_WEBHOOK_URL: >-
+            https://discord.com/api/webhooks/{{ homeassistant_discord_webhook_id }}/{{
+            homeassistant_discord_webhook_token }}
       - file: /etc/docker/opencloud/.env
         hosts: dungeon
         keys:

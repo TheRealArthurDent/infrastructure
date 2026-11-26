@@ -132,6 +132,15 @@
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home', title='mosquitto homeassistant')
              if secrets_smart_home_env | bool else '' }}
+        # Home Assistant's notifications to Discord (smart-home#2)
+        homeassistant_discord_webhook_id: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Discord', title=discord_homeassistant_webhook_title, field='id')
+             if secrets_smart_home_env | bool else '' }}
+        homeassistant_discord_webhook_token: >-
+          {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
+                    group='Discord', title=discord_homeassistant_webhook_title, field='token')
+             if secrets_smart_home_env | bool else '' }}
         deconz_vnc_password: >-
           {{ lookup('keepass', db=keepass_db, password=keepass_password, key=keepass_key,
                     group='smart-home/deconz - Phoscon-GW', title='Deconz VNC')

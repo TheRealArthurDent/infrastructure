@@ -60,7 +60,8 @@ def secrets_tasks(out):
 
 # KeePass entries the secrets role writes into .env files; the InfluxDB and VNC ones take fewer characters.
 GENERAL = ["pihole", "outbound", "webhook_id", "webhook_token", "restic", "grafana", "mosquitto",
-           "mosquitto_homeassistant", "github_user", "github_email", "opencloud"]
+           "mosquitto_homeassistant", "github_user", "github_email", "opencloud", "ha_webhook_id",
+           "ha_webhook_token"]
 SPECIAL = {"influx_admin": AWKWARD_INFLUXDB, "influx_read": AWKWARD_INFLUXDB, "influx_write": AWKWARD_INFLUXDB,
            "vnc": AWKWARD_VNC}
 # Three runs give every awkward value at least one general entry.
@@ -92,8 +93,10 @@ def make_kdbx(path, values):
     pihole = group("Pihole")
     entry(pihole, "pihole", values["pihole"])
     entry(pihole, "outbound", values["outbound"])
-    entry(group("Discord"), defaults["discord_docker_webhook_title"],
-          id=values["webhook_id"], token=values["webhook_token"])
+    discord = group("Discord")
+    entry(discord, defaults["discord_docker_webhook_title"], id=values["webhook_id"], token=values["webhook_token"])
+    entry(discord, defaults["discord_homeassistant_webhook_title"],
+          id=values["ha_webhook_id"], token=values["ha_webhook_token"])
     entry(group("Backup"), defaults["resticprofile_passphrase_title"], values["restic"])
     smart_home = group("smart-home")
     iobroker = group("ioBroker", smart_home)
@@ -176,6 +179,8 @@ def test_awkward_keepass_values_reach_compose_unchanged(tmp_path, offset):
             "DECONZ_DEVICE_TYPE": "ttyACM0",
             "GITHUB_USER": values["github_user"],
             "GITHUB_EMAIL": values["github_email"],
+            "HOMEASSISTANT_DISCORD_WEBHOOK_URL":
+                f"https://discord.com/api/webhooks/{values['ha_webhook_id']}/{values['ha_webhook_token']}",
         },
         "opencloud_.env": {"OPENCLOUD_ADMIN_PASSWORD": values["opencloud"]},
     }
@@ -198,6 +203,7 @@ def test_every_awkward_value_is_covered():
     ("pihole", "line\nbreak"),
     ("mosquitto", "tab\there"),
     ("mosquitto_homeassistant", "line\nbreak"),
+    ("ha_webhook_token", "line\nbreak"),
 ])
 def test_values_the_consumers_cant_take_are_refused(tmp_path, entry, value):
     values = {**secrets(0), entry: value}

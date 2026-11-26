@@ -160,7 +160,8 @@ def test_unconfigured_database_has_empty_paths(monkeypatch):
 SMART_HOME_KEYS = {
     "iobroker_states_redis_port", "iobroker_objects_redis_port", "influxdb_admin_password", "influxdb_read_password",
     "influxdb_write_password", "grafana_password", "mosquitto_password", "deconz_vnc_password", "nodered_github_user",
-    "nodered_github_email", "mosquitto_homeassistant_password",
+    "nodered_github_email", "mosquitto_homeassistant_password", "homeassistant_discord_webhook_id",
+    "homeassistant_discord_webhook_token",
 }
 # The facts of the "Read secrets from KeePass" task -> the condition that switches their lookup on
 SFTP = "'resticprofile' in stack_components and resticprofile_repository_is_sftp"
@@ -210,6 +211,9 @@ def test_bootstrap_only_looks_up_what_the_host_needs():
         assert value.endswith(f"if {condition} else '' }}}}"), name
     assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_id"])
     assert "title=discord_docker_webhook_title" in str(facts["discord_docker_webhook_token"])
+    for field in ("id", "token"):
+        assert f"group='Discord', title=discord_homeassistant_webhook_title, field='{field}'" in " ".join(
+            str(facts[f"homeassistant_discord_webhook_{field}"]).split())
     assert "group='OpenCloud', title=opencloud_admin_title" in str(facts["opencloud_admin_password"])
     for name, title in (("paperless_secret_key", "paperless_secret_key_title"),
                         ("paperless_db_password", "paperless_db_title"),
@@ -263,7 +267,7 @@ def test_testbench_has_its_own_database_with_the_default_titles():
     defaults = yaml.safe_load((ANSIBLE_DIR / "roles" / "secrets" / "defaults" / "main.yaml").read_text())
     titles = {name for name in defaults if name.endswith("_title")}
     assert titles == {
-        "discord_docker_webhook_title", "discord_monitoring_webhook_title",
+        "discord_docker_webhook_title", "discord_monitoring_webhook_title", "discord_homeassistant_webhook_title",
         "resticprofile_ssh_key_title", "resticprofile_passphrase_title",
         "resticprofile_offsite_title", "resticprofile_offsite_passphrase_title",
         "opencloud_admin_title",

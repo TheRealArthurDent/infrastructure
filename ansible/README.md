@@ -133,6 +133,7 @@ Group/title, with the fields the roles read:
 | `raspberry`, `testbench` | `smart-home/Grafana`, `smart-home/mosquitto` | passwords |
 | `raspberry`, `testbench` | `smart-home/mosquitto homeassistant` | password of Home Assistant's Mosquitto user `homeassistant` |
 | `raspberry`, `testbench` | `smart-home/deconz - Phoscon-GW/Deconz VNC` | password of deCONZ' VNC |
+| `raspberry`, `testbench` | `Discord/Home Assistant Webhook` | fields `id` and `token`: the webhook of Home Assistant's notifications (smart-home's `HOMEASSISTANT_DISCORD_WEBHOOK_URL`) |
 | `raspberry`, `testbench` | `GitHub/NodeRed` | fields `username` and `email` |
 | `raspberry` | `Domain/rootCA` | the root CA (`keepass_ca_database`): password, attachments `rootCA.pem` and `rootCA.key` |
 | `testbench`, `dungeon` | `OpenCloud/admin` | password: the initial password of OpenCloud's user `admin` (private-cloud) |
