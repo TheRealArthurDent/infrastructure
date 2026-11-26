@@ -131,6 +131,10 @@ pihole_instances:
         kind: "exact"
         comment: "For TrackTitan"
         groups: ["Rennknecht"]
+      - domain: "firebaseinstallations.googleapis.com"
+        type: "allow"
+        kind: "exact"
+        comment: "Push notifications on Android (Firebase), e.g. for the Home Assistant app"
 
   # Egress filter for the containers on the outbound network (smart-home, healthmonitor, Paperless): it
   # denies everything and allows only what they need (raspberry#293). The containers use it as their DNS server.
